@@ -253,3 +253,47 @@ func TestAerialSyncDoesNotRecloneExistingClones(t *testing.T) {
 		t.Errorf("clone calls = %v, want one", fixture.cloner.calls)
 	}
 }
+
+func TestAerialClonesFolderThatIsNotAFolderIsLeftAlone(t *testing.T) {
+	tests := []struct {
+		name  string
+		place func(t *testing.T, clonesDir, elsewhere string)
+	}{
+		{"a symlink to another folder", func(t *testing.T, clonesDir, elsewhere string) {
+			if err := os.Symlink(elsewhere, clonesDir); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"a plain file", func(t *testing.T, clonesDir, _ string) {
+			mustWrite(t, clonesDir, "not a folder")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture := newAerialsFixture(t, "C1")
+			saveConfig(t, fixture.paths, "builtin.default", "cities", 0)
+			elsewhere := t.TempDir()
+			precious := filepath.Join(elsewhere, "keep.txt")
+			mustWrite(t, precious, "user file")
+			if err := os.MkdirAll(filepath.Dir(fixture.paths.AerialClonesDir), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			tt.place(t, fixture.paths.AerialClonesDir, elsewhere)
+
+			fixture.daemon.Step(1_000, false)
+
+			if _, err := os.Stat(precious); err != nil {
+				t.Errorf("file behind the link was deleted: %v", err)
+			}
+			if len(fixture.cloner.calls) != 0 {
+				t.Errorf("clone calls = %v, want none", fixture.cloner.calls)
+			}
+			if len(*fixture.logs) != 1 {
+				t.Errorf("logs = %q, want one line", *fixture.logs)
+			}
+			if id, _ := backgroundOf(t, fixture.paths); id != "builtin.matrix" {
+				t.Errorf("background = %s, want the Matrix fallback", id)
+			}
+		})
+	}
+}

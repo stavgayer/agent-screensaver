@@ -32,8 +32,14 @@ func wantedAerials(background view.ResolvedExt, locations aerials.Locations) []a
 // named <asset id>.mov, and returns the clone paths sorted. A clone is
 // removed when its video is no longer wanted, including when its source was
 // deleted: a clone of a deleted file keeps the disk blocks alive. A video
-// that cannot be cloned is skipped and logged; it is never copied.
+// that cannot be cloned is skipped and logged; it is never copied. If dir
+// exists but is not a real folder (a symlink, a file), nothing is deleted or
+// cloned, so a link can never point the deletion at someone else's files.
 func syncAerialClones(wanted []aerials.Asset, dir string, cloner platform.FileCloner, logf func(string, ...any)) []string {
+	if info, err := os.Lstat(dir); err == nil && !info.IsDir() {
+		logf("aerials: %s is not a folder; leaving it alone", dir)
+		return []string{}
+	}
 	sources := make(map[string]string, len(wanted))
 	for _, asset := range wanted {
 		sources[asset.ID+".mov"] = asset.Path
