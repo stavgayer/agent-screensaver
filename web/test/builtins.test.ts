@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Card, Limit } from "../src/api.ts";
 import { displayName, formatResetDate } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
-import { orderLimits, ringCaption, ringPercent } from "../src/builtins/limit-rings/logic.ts";
+import { orderLimits, ringCaption, ringCaptionLines, ringPercent } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha, numberOption } from "../src/builtins/matrix/logic.ts";
 import { taskCards, taskLabel } from "../src/builtins/task-row/logic.ts";
 
@@ -162,6 +162,22 @@ describe("ringCaption", () => {
     const edge = limit("claude", "week", { updated_at_ms: NOW_MS - 15 * MINUTE_MS });
     assert.equal(ringCaption(edge, NOW_MS), "Claude week");
   });
+});
+
+describe("ringCaptionLines", () => {
+  const resetsAtS = (NOW_MS + 100 * MINUTE_MS) / 1000;
+  const cases: Array<[string, Limit, { name: string; detail: string }]> = [
+    ["splits the name from the reset time", limit("claude", "5h", { resets_at: resetsAtS }), { name: "Claude 5h", detail: "1h40m" }],
+    ["has an empty detail when there is nothing to add", limit("claude", "week"), { name: "Claude week", detail: "" }],
+    [
+      "keeps every detail on the second line",
+      limit("claude", "5h", { resets_at: resetsAtS, updated_at_ms: NOW_MS - 20 * MINUTE_MS }),
+      { name: "Claude 5h", detail: "1h40m · updated 20m ago" },
+    ],
+  ];
+  for (const [name, input, expected] of cases) {
+    it(name, () => assert.deepEqual(ringCaptionLines(input, NOW_MS), expected));
+  }
 });
 
 describe("ringPercent", () => {

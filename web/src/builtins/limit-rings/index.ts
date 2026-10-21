@@ -1,17 +1,28 @@
 import type { ComponentExt, Limit, ViewState } from "../../api.ts";
 import { ringLevel } from "../../format.ts";
-import { orderLimits, ringCaption, ringPercent } from "./logic.ts";
+import { orderLimits, ringCaption, ringCaptionLines, ringPercent } from "./logic.ts";
 
+// Captions are two short lines that never wrap: the name, then the reset time in a quieter tone.
 const STYLE = `
-.rings { display: flex; justify-content: flex-end; gap: 1.8vmin; }
-.ring-item { text-align: center; max-width: 14vmin; }
-.ring { --ring: var(--accent, #00e07a); width: 8.5vmin; height: 8.5vmin; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 2vmin;
-  background: conic-gradient(var(--ring) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.15) 0); }
+.rings { display: flex; justify-content: flex-end; align-items: flex-start; gap: 3vmin; }
+.ring-item { display: flex; flex-direction: column; align-items: center; text-align: center; white-space: nowrap; }
+.ring { --ring: var(--accent, #00e07a); width: 9vmin; height: 9vmin; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  font-size: 2.3vmin; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  background: conic-gradient(var(--ring) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.16) 0); } /* taste-skill-ignore: the conic fill is the ring's arc (the chart itself) */
 .ring.warn { --ring: #e0c000; }
 .ring.high { --ring: #ff5040; }
-.ring .inner { width: 78%; height: 78%; border-radius: 50%; background: #000; display: grid; place-items: center; }
-.ring-caption { margin-top: 0.6vmin; font-size: 1.6vmin; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; }
+.ring .inner { width: 80%; height: 80%; border-radius: 50%; background: #000; display: grid; place-items: center; }
+.ring-name { margin-top: 1.2vmin; font-size: 1.9vmin; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
+.ring-detail { margin-top: 0.3vmin; font-size: 1.7vmin; color: rgba(255, 255, 255, 0.68); font-variant-numeric: tabular-nums; }
+.ring-name, .ring-detail { line-height: 1.25; text-shadow: 0 0 0.8vmin #000, 0 0 0.3vmin #000; } /* taste-skill-ignore: a static dark halo keeps captions legible over the rain */
 `;
+
+function textLine(className: string, text: string): HTMLElement {
+  const element = document.createElement("div");
+  element.className = className;
+  element.textContent = text;
+  return element;
+}
 
 function createRing(limit: Limit, nowMs: number): HTMLElement {
   const percent = ringPercent(limit.used_percent);
@@ -24,10 +35,10 @@ function createRing(limit: Limit, nowMs: number): HTMLElement {
   inner.className = "inner";
   inner.textContent = `${percent}%`;
   ring.appendChild(inner);
-  const caption = document.createElement("div");
-  caption.className = "ring-caption";
-  caption.textContent = ringCaption(limit, nowMs);
-  item.append(ring, caption);
+  const { name, detail } = ringCaptionLines(limit, nowMs);
+  item.append(ring, textLine("ring-name", name));
+  // An empty detail still takes its line, so rings with and without a reset time line up.
+  item.appendChild(textLine("ring-detail", detail === "" ? "\u00a0" : detail));
   return item;
 }
 

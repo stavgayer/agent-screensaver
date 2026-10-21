@@ -20,14 +20,25 @@ export function orderLimits(limits: Limit[]): Limit[] {
   );
 }
 
-/** Text under a ring: "Claude 5h · 1h40m", "Codex plan · resets 3 Nov", or "Claude week · updated 20m ago" when the data is old. */
-export function ringCaption(limit: Limit, nowMs: number): string {
+/** The parts of a ring's caption: the name, then the reset time and the data age when they apply. */
+function captionParts(limit: Limit, nowMs: number): string[] {
   const parts = [`${displayName(limit.source)} ${limit.window}`];
   if (limit.window === "5h") parts.push(formatResetIn(limit.resets_at, nowMs));
   if (limit.window === "plan") parts.push(formatResetLabel(limit.resets_at, nowMs));
   const age = nowMs - limit.updated_at_ms;
   if (age > STALE_AFTER_MS) parts.push(`updated ${formatDuration(age)} ago`);
-  return parts.filter((part) => part !== "").join(" · ");
+  return parts.filter((part) => part !== "");
+}
+
+/** Text under a ring: "Claude 5h · 1h40m", "Codex plan · resets 3 Nov", or "Claude week · updated 20m ago" when the data is old. */
+export function ringCaption(limit: Limit, nowMs: number): string {
+  return captionParts(limit, nowMs).join(" · ");
+}
+
+/** The caption on two lines, so the name never breaks: { name: "Claude 5h", detail: "1h40m" }. */
+export function ringCaptionLines(limit: Limit, nowMs: number): { name: string; detail: string } {
+  const [name, ...details] = captionParts(limit, nowMs);
+  return { name, detail: details.join(" · ") };
 }
 
 /** Whole percent for the ring, kept inside 0..100 so a bad value cannot break the drawing. */

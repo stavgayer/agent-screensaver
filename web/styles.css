@@ -3,7 +3,9 @@
   --fg: #e8e8e8;
   --muted: #8a8a8a;
   --gap: 4vmin;
-  --fade: 0.6s;
+  --fade: 0.5s;
+  /* A strong ease-out: things that arrive start fast and settle, which reads as deliberate. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 * { box-sizing: border-box; }
@@ -14,7 +16,10 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  /* SF Pro on the Mac; WebKit switches to the Display cut at large sizes by itself. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  /* Light text on a dark ground looks heavy with subpixel smoothing. */
+  -webkit-font-smoothing: antialiased;
   cursor: none;
 }
 
@@ -32,11 +37,11 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  transition: opacity var(--fade) ease, transform var(--fade) ease;
+  transition: opacity var(--fade) var(--ease-out), transform var(--fade) var(--ease-out);
 }
 
 /* Components fade in, so a region that changes with the mode does not pop. */
-.region > .entering { animation: appear var(--fade) ease both; }
+.region > .entering { animation: appear var(--fade) var(--ease-out) both; }
 
 @keyframes appear {
   from { opacity: 0; transform: translateY(1vmin); }
@@ -54,10 +59,17 @@ html, body {
   bottom: 1.5vmin;
   font-size: 1.6vmin;
   color: var(--muted);
+  text-shadow: 0 0 0.6vmin #000; /* taste-skill-ignore: a dark halo keeps the line legible over the rain */
 }
 
 #service-line[hidden] { display: none; }
 
+/* Reduced motion keeps the fade, which helps follow the change, and drops the travel. */
+@keyframes appear-still {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .region > .entering { animation: none; }
+  .region > .entering { animation-name: appear-still; }
 }
