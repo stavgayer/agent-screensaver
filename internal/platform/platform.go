@@ -3,6 +3,8 @@
 // (suffix _darwin, _linux, _windows), so the daemon never imports OS code.
 package platform
 
+import "encoding/json"
+
 // SaverWatcher says whether the screen saver is on screen right now.
 type SaverWatcher interface {
 	Active() bool
@@ -27,4 +29,30 @@ type ServiceManager interface {
 // (another volume, a file system without clones) it returns an error.
 type FileCloner interface {
 	Clone(src, dst string) error
+}
+
+// PageHandler answers one call from a page shown in a SettingsWindow: the
+// method name and its JSON parameters in, a result to encode as JSON or an
+// error out. It is called on the main thread, one call at a time.
+type PageHandler func(method string, params json.RawMessage) (any, error)
+
+// SettingsWindow shows a local web page in a native window and lets the page
+// call Go. Run opens the page (a file inside readAccess, which is the only
+// folder the page may load from), blocks until the user closes the window,
+// and must be called from the main goroutine.
+type SettingsWindow interface {
+	Run(page, readAccess string, handle PageHandler) error
+}
+
+// FileRequest says what an open-file dialog offers.
+type FileRequest struct {
+	Prompt  string   // the dialog's message
+	Types   []string // file name extensions without the dot; empty means any file
+	Folders bool     // folders can be chosen too
+}
+
+// FilePicker shows the system's open-file dialog. ok is false when the user
+// cancels.
+type FilePicker interface {
+	PickFile(request FileRequest) (path string, ok bool, err error)
 }
