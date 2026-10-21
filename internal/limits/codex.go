@@ -1,0 +1,182 @@
+package limits
+
+// Codex limits come from `codex app-server`, which speaks newline-delimited
+// JSON-RPC (no "jsonrpc" field) on stdin and stdout. Checked against
+// codex-cli 0.144.4, whose JSON schema comes from
+// `codex app-server generate-json-schema`. The handshake, in order:
+//
+//  1. client request      {"id":1,"method":"initialize","params":{"clientInfo":{"name":"agent-screensaver","version":"1"}}}
+//  2. server response     {"id":1,"result":{"userAgent":...,"codexHome":...}}
+//  3. client notification {"method":"initialized"}
+//  4. client request      {"id":2,"method":"account/rateLimits/read"}
+//  5. server response     {"id":2,"result":{"rateLimits":{"primary":{...},"secondary":{...}},...}}
+//
+// The server may send notifications (lines without "id") in between; they
+// are skipped. This only reads: no Codex state or config is written.
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+	"strconv"
+	"syscall"
+	"time"
+
+	"agent-screensaver/internal/event"
+)
+
+const (
+	codexBinary       = "codex"
+	rateLimitsRequest = 2
+	liveTimeout       = 10 * time.Second
+	// Resets above this are milliseconds: as seconds it would be year 33658.
+	millisecondsThreshold = int64(1e12)
+	handshake             = `{"id":1,"method":"initialize","params":{"clientInfo":{"name":"agent-screensaver","version":"1"}}}` + "\n" +
+		`{"method":"initialized"}` + "\n" +
+		`{"id":2,"method":"account/rateLimits/read"}` + "\n"
+)
+
+// Codex reads limits through the Codex app-server.
+type Codex struct {
+	Bin string
+}
+
+// Source implements Provider.
+func (Codex) Source() string { return codexBinary }
+
+// Read starts the app-server, asks for the rate limits and stops it again.
+// The child runs in its own process group and the whole group is killed on
+// return, so no Codex process is left behind.
+func (codex Codex) Read(ctx context.Context) ([]event.LimitReading, error) {
+	cmd := exec.CommandContext(ctx, codex.Bin, "app-server")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return killGroup(cmd) }
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("codex stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("codex stdout: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start codex app-server: %w", err)
+	}
+	defer func() {
+		_ = killGroup(cmd)
+		_ = cmd.Wait()
+	}()
+
+	if _, err := io.WriteString(stdin, handshake); err != nil {
+		return nil, fmt.Errorf("write codex handshake: %w", err)
+	}
+	result, err := awaitResult(stdout, rateLimitsRequest)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("read codex rate limits: %w", ctx.Err())
+		}
+		return nil, err
+	}
+	return ParseCodexRateLimits(result), nil
+}
+
+func killGroup(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return nil
+	}
+	return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+}
+
+type rpcMessage struct {
+	ID     *int            `json:"id"`
+	Result json.RawMessage `json:"result"`
+	Error  *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// awaitResult reads lines until the response to request id arrives.
+func awaitResult(stdout io.Reader, id int) (json.RawMessage, error) {
+	reader := bufio.NewReader(stdout)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if message, ok := decodeResponse(line, id); ok {
+			if message.Error != nil {
+				return nil, fmt.Errorf("codex rate limits request failed: %s", message.Error.Message)
+			}
+			return message.Result, nil
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("codex app-server closed before answering")
+			}
+			return nil, fmt.Errorf("read codex output: %w", err)
+		}
+	}
+}
+
+// decodeResponse accepts only valid JSON lines that carry the wanted id;
+// logs and notifications fall through.
+func decodeResponse(line []byte, id int) (rpcMessage, bool) {
+	var message rpcMessage
+	if json.Unmarshal(line, &message) != nil || message.ID == nil || *message.ID != id {
+		return rpcMessage{}, false
+	}
+	return message, true
+}
+
+type rateLimitWindow struct {
+	UsedPercent *float64 `json:"usedPercent"`
+	ResetsAt    *int64   `json:"resetsAt"`
+}
+
+type rateLimitsResult struct {
+	RateLimits struct {
+		Primary   *rateLimitWindow `json:"primary"`
+		Secondary *rateLimitWindow `json:"secondary"`
+	} `json:"rateLimits"`
+}
+
+// ParseCodexRateLimits turns the result of `account/rateLimits/read` into
+// readings: primary is the 5 hour window, secondary the weekly one. A window
+// that is absent or has no percent is skipped.
+func ParseCodexRateLimits(resp []byte) []event.LimitReading {
+	var result rateLimitsResult
+	if json.Unmarshal(resp, &result) != nil {
+		return nil
+	}
+	var readings []event.LimitReading
+	for _, entry := range []struct {
+		window event.Window
+		data   *rateLimitWindow
+	}{
+		{event.FiveHour, result.RateLimits.Primary},
+		{event.Week, result.RateLimits.Secondary},
+	} {
+		if reading, ok := toReading(entry.window, entry.data); ok {
+			readings = append(readings, reading)
+		}
+	}
+	return readings
+}
+
+func toReading(window event.Window, data *rateLimitWindow) (event.LimitReading, bool) {
+	if data == nil || data.UsedPercent == nil {
+		return event.LimitReading{}, false
+	}
+	reading := event.LimitReading{Window: window, UsedPercent: min(max(*data.UsedPercent, 0), 100)}
+	if data.ResetsAt != nil {
+		seconds := *data.ResetsAt
+		if seconds > millisecondsThreshold {
+			seconds /= 1000
+		}
+		reading.ResetsAt = &seconds
+	}
+	return reading, true
+}
+
+func formatInt(value int64) string { return strconv.FormatInt(value, 10) }
