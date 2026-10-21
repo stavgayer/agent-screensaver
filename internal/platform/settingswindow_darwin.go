@@ -13,8 +13,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"unsafe"
 )
+
+// Cocoa must run on the main thread. A package init runs there; locking it
+// keeps the main goroutine on it for Run, whatever other packages do.
+func init() { runtime.LockOSThread() }
 
 const settingsWindowTitle = "Agent Screen Saver"
 

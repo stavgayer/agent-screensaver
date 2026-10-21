@@ -10,6 +10,11 @@ static const CGFloat kWidth = 960, kHeight = 640, kMinWidth = 720, kMinHeight = 
 
 static NSWindow *gWindow;
 static WKWebView *gWebView;
+static NSURL *gPageURL;
+
+static BOOL IsSettingsPage(NSURL *url) {
+  return url.isFileURL && [url.URLByStandardizingPath.path isEqualToString:gPageURL.URLByStandardizingPath.path];
+}
 
 @interface AGSSettingsController : NSObject <WKScriptMessageHandler, WKNavigationDelegate, NSWindowDelegate>
 @end
@@ -19,6 +24,10 @@ static WKWebView *gWebView;
 // The page posts {id, method, params}; Go gets it as one JSON string.
 - (void)userContentController:(WKUserContentController *)controller
       didReceiveScriptMessage:(WKScriptMessage *)message {
+  // WebKit gives the "ags" handler to every frame, and the preview frame runs
+  // third-party extension scripts. Only the settings page itself may call
+  // Go, or an extension could change settings or remove extensions.
+  if (!message.frameInfo.isMainFrame || !IsSettingsPage(message.frameInfo.request.URL)) return;
   NSData *json = nil;
   if ([NSJSONSerialization isValidJSONObject:message.body]) {
     json = [NSJSONSerialization dataWithJSONObject:message.body options:0 error:nil];
@@ -140,9 +149,9 @@ void RunSettingsWindow(const char *title, const char *page, const char *readAcce
     gWindow.contentView = gWebView;
     [gWindow center];
 
-    NSURL *pageURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:page]];
+    gPageURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:page]];
     NSURL *accessURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:readAccess] isDirectory:YES];
-    [gWebView loadFileURL:pageURL allowingReadAccessToURL:accessURL];
+    [gWebView loadFileURL:gPageURL allowingReadAccessToURL:accessURL];
     [NSApp run];
   }
 }
