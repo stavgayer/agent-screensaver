@@ -18,6 +18,7 @@ import (
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 	"agent-screensaver/internal/settings"
+	"agent-screensaver/internal/settingsui"
 	"agent-screensaver/internal/tray"
 )
 
@@ -54,6 +55,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runSetup(name, args[1:], os.Stdin, stdout, stderr)
 	case "tray":
 		return runTray(args[1:], stderr)
+	case "settings":
+		return runSettingsWindow(args[1:], stderr)
 	}
 	if cli.IsSettingsCommand(name) {
 		return runSettings(name, args[1:], stdout, stderr)
@@ -169,6 +172,28 @@ func runTray(args []string, stderr io.Writer) int {
 	p := paths.ForHome(home)
 	if err := tray.Run(ctx, p, settings.Service{Paths: p}, tray.NewSettingsLauncher(executable)); err != nil {
 		fmt.Fprintf(stderr, "agent-screensaver tray: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// runSettingsWindow shows the settings window until the user closes it. Like
+// the tray, it runs on the main goroutine, which the window needs.
+func runSettingsWindow(args []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("settings", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver settings: %v\n", err)
+		return 1
+	}
+	p := paths.ForHome(home)
+	err = settingsui.Open(p, settings.Service{Paths: p}, platform.NewFilePicker(), platform.NewSettingsWindow())
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver settings: %v\n", err)
 		return 1
 	}
 	return 0
