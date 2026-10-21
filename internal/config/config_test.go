@@ -64,3 +64,37 @@ func TestDefault(t *testing.T) {
 }
 
 func ptr(text string) *string { return &text }
+
+func TestLoadStrict(t *testing.T) {
+	dir := t.TempDir()
+	broken := filepath.Join(dir, "broken.json")
+	if err := os.WriteFile(broken, []byte("{nope"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	partial := filepath.Join(dir, "partial.json")
+	if err := os.WriteFile(partial, []byte(`{"privacy": true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+		privacy bool
+	}{
+		{"missing file gives defaults", filepath.Join(dir, "absent.json"), false, false},
+		{"invalid JSON is an error", broken, true, false},
+		{"unreadable path is an error", dir, true, false},
+		{"partial file keeps other defaults", partial, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := LoadStrict(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && (cfg.Privacy != tt.privacy || cfg.Theme != Default().Theme) {
+				t.Errorf("cfg = %+v", cfg)
+			}
+		})
+	}
+}

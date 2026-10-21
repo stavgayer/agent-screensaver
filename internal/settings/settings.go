@@ -107,11 +107,13 @@ func (s Service) SetOption(extID, key, raw string) error {
 		return fmt.Errorf("option %s %s: %w", extID, key, err)
 	}
 	if spec.Kind == extensions.OptionFile {
-		if value, err = s.copyIntoMedia(extID, value.(string)); err != nil {
+		if value, err = s.copyIntoMedia(extID, key, value.(string)); err != nil {
 			return fmt.Errorf("option %s %s: %w", extID, key, err)
 		}
 	}
-	return s.update(func(cfg *config.Config) error {
+	var previous any
+	err = s.update(func(cfg *config.Config) error {
+		previous = cfg.Options[extID][key]
 		if cfg.Options == nil {
 			cfg.Options = map[string]map[string]any{}
 		}
@@ -121,6 +123,10 @@ func (s Service) SetOption(extID, key, raw string) error {
 		cfg.Options[extID][key] = value
 		return nil
 	})
+	if err == nil && previous != value {
+		s.removeMediaCopy(extID, key, previous) // the replaced copy is garbage now
+	}
+	return err
 }
 
 // ResetOption drops the user's value so the manifest default applies again.
@@ -133,17 +139,26 @@ func (s Service) ResetOption(extID, key string) error {
 	if _, declared := ext.Manifest.Options[key]; key != "" && !declared {
 		return fmt.Errorf("extension %q has no option %q", extID, key)
 	}
-	return s.update(func(cfg *config.Config) error {
-		if key == "" {
-			delete(cfg.Options, extID)
-			return nil
+	var dropped map[string]any
+	err = s.update(func(cfg *config.Config) error {
+		dropped = map[string]any{}
+		for name, value := range cfg.Options[extID] {
+			if key == "" || name == key {
+				dropped[name] = value
+				delete(cfg.Options[extID], name)
+			}
 		}
-		delete(cfg.Options[extID], key)
 		if len(cfg.Options[extID]) == 0 {
 			delete(cfg.Options, extID)
 		}
 		return nil
 	})
+	if err == nil {
+		for name, value := range dropped {
+			s.removeMediaCopy(extID, name, value)
+		}
+	}
+	return err
 }
 
 // SetPrivacy turns privacy mode on or off.
@@ -158,9 +173,13 @@ func (s Service) SetPrivacy(on bool) error {
 // sound; an empty one keeps the current sound.
 func (s Service) SetSound(on bool, file string) error {
 	if file != "" {
-		if _, err := os.Stat(file); err != nil {
+		// The daemon plays the sound from outside the sandbox, so the file
+		// stays where it is; only its absolute path is stored.
+		absolute, err := existingFile(file)
+		if err != nil {
 			return fmt.Errorf("sound file: %w", err)
 		}
+		file = absolute
 	}
 	return s.update(func(cfg *config.Config) error {
 		cfg.Sound = on
@@ -195,7 +214,10 @@ func (s Service) RemoveExtension(id string) error {
 // update loads the config, applies change and saves it. When change or the
 // save fails, the file on disk is untouched.
 func (s Service) update(change func(cfg *config.Config) error) error {
-	cfg := config.Load(s.Paths.ConfigFile)
+	cfg, err := config.LoadStrict(s.Paths.ConfigFile)
+	if err != nil {
+		return err
+	}
 	if err := change(&cfg); err != nil {
 		return err
 	}
@@ -272,11 +294,36 @@ func existingFile(path string) (string, error) {
 	return absolute, nil
 }
 
-// copyIntoMedia copies source to MediaDir/<extID>/<base name>, replacing an
-// older copy, and returns the new absolute path. It writes a temp file and
-// renames it, so a failed copy never leaves a half-written media file.
-func (s Service) copyIntoMedia(extID, source string) (string, error) {
-	folder := filepath.Join(s.Paths.MediaDir, extID)
+// mediaFolder is where the copies of one option live. One folder per option
+// keeps two options with same-named source files from overwriting each other.
+func (s Service) mediaFolder(extID, key string) string {
+	return filepath.Join(s.Paths.MediaDir, extID, key)
+}
+
+// removeMediaCopy deletes the file a file option pointed at, but only when it
+// is inside that option's own media folder, so a stored path can never make
+// us delete something else.
+func (s Service) removeMediaCopy(extID, key string, stored any) {
+	path, ok := stored.(string)
+	if !ok || path == "" {
+		return
+	}
+	folder := s.mediaFolder(extID, key)
+	if relative, err := filepath.Rel(folder, path); err != nil || !filepath.IsLocal(relative) {
+		return
+	}
+	_ = os.Remove(path) // best effort: a stale copy is harmless
+}
+
+// copyIntoMedia copies source to MediaDir/<extID>/<key>/<base name>,
+// replacing an older copy, and returns the new absolute path. It writes a
+// temp file and renames it, so a failed copy never leaves a half-written
+// media file.
+func (s Service) copyIntoMedia(extID, key, source string) (string, error) {
+	if key != filepath.Base(key) || !filepath.IsLocal(key) {
+		return "", fmt.Errorf("option name %q cannot be used as a folder name", key)
+	}
+	folder := s.mediaFolder(extID, key)
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		return "", fmt.Errorf("create media folder: %w", err)
 	}

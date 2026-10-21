@@ -3,7 +3,9 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -41,6 +43,24 @@ func Load(path string) Config {
 		return Default()
 	}
 	return cfg
+}
+
+// LoadStrict is for code that changes the file: a missing file gives
+// Default(), but an unreadable or invalid one is an error, so a user's damaged
+// settings are never silently replaced by defaults.
+func LoadStrict(path string) (Config, error) {
+	cfg := Default()
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return cfg, nil
+	}
+	if err != nil {
+		return Config{}, fmt.Errorf("read config: %w", err)
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return Config{}, fmt.Errorf("config %s is not valid JSON: %w", path, err)
+	}
+	return cfg, nil
 }
 
 // Save writes the config to path through a temp file and a rename, so a

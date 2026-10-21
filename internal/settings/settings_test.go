@@ -18,7 +18,8 @@ const backgroundManifest = `{
     "color":  {"type": "color",   "default": "#00ff66"},
     "mode":   {"type": "enum",    "default": "soft", "values": ["soft", "hard"]},
     "title":  {"type": "string",  "default": "hi"},
-    "image":  {"type": "file",    "default": ""}
+    "image":  {"type": "file",    "default": ""},
+    "logo":   {"type": "file",    "default": ""}
   }
 }`
 
@@ -167,7 +168,7 @@ func TestFileOptionCopiesIntoMedia(t *testing.T) {
 	if err := service.SetOption("acme.rain", "image", source); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(service.Paths.MediaDir, "acme.rain", "photo.png")
+	want := filepath.Join(service.Paths.MediaDir, "acme.rain", "image", "photo.png")
 	if got := loadConfig(service).Options["acme.rain"]["image"]; got != want {
 		t.Fatalf("stored %v, want the copied path %s", got, want)
 	}
@@ -178,6 +179,103 @@ func TestFileOptionCopiesIntoMedia(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertFileContent(t, want, "second")
+}
+
+func TestFileOptionsDoNotCollide(t *testing.T) {
+	service := newService(t)
+	installFixtures(t, service)
+	first := writeFile(t, filepath.Join(t.TempDir(), "photo.png"), "from a")
+	second := writeFile(t, filepath.Join(t.TempDir(), "photo.png"), "from b")
+	if err := service.SetOption("acme.rain", "image", first); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetOption("acme.rain", "logo", second); err != nil {
+		t.Fatal(err)
+	}
+	options := loadConfig(service).Options["acme.rain"]
+	imagePath, logoPath := options["image"].(string), options["logo"].(string)
+	if imagePath == logoPath {
+		t.Fatalf("both options share %s", imagePath)
+	}
+	assertFileContent(t, imagePath, "from a")
+	assertFileContent(t, logoPath, "from b")
+
+	// Replacing with a differently named file removes the old copy.
+	third := writeFile(t, filepath.Join(t.TempDir(), "other.png"), "from c")
+	if err := service.SetOption("acme.rain", "image", third); err != nil {
+		t.Fatal(err)
+	}
+	assertMissing(t, imagePath)
+	assertFileContent(t, logoPath, "from b")
+
+	// Reset removes the copy too, one option or all.
+	newImage := loadConfig(service).Options["acme.rain"]["image"].(string)
+	if err := service.ResetOption("acme.rain", "image"); err != nil {
+		t.Fatal(err)
+	}
+	assertMissing(t, newImage)
+	if err := service.ResetOption("acme.rain", ""); err != nil {
+		t.Fatal(err)
+	}
+	assertMissing(t, logoPath)
+}
+
+func TestMediaCleanupStaysInsideOptionFolder(t *testing.T) {
+	service := newService(t)
+	installFixtures(t, service)
+	outside := writeFile(t, filepath.Join(t.TempDir(), "keep.txt"), "keep")
+	config := loadConfig(service)
+	config.Options = map[string]map[string]any{"acme.rain": {"image": outside}}
+	if err := config.Save(service.Paths.ConfigFile); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ResetOption("acme.rain", "image"); err != nil {
+		t.Fatal(err)
+	}
+	assertFileContent(t, outside, "keep")
+}
+
+func assertMissing(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("%s should be gone, stat error = %v", path, err)
+	}
+}
+
+func TestSetSoundStoresAbsoluteRegularFile(t *testing.T) {
+	service := newService(t)
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "chime.aiff"), "sound")
+	t.Chdir(dir)
+	if err := service.SetSound(true, "chime.aiff"); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadConfig(service).SoundFile; !filepath.IsAbs(got) || filepath.Base(got) != "chime.aiff" {
+		t.Errorf("stored %q, want an absolute path to chime.aiff", got)
+	}
+}
+
+func TestSetSoundRejectsDirectory(t *testing.T) {
+	service := newService(t)
+	if err := service.SetSound(true, t.TempDir()); err == nil {
+		t.Fatal("expected an error for a directory")
+	}
+	if _, err := os.Stat(service.Paths.ConfigFile); !os.IsNotExist(err) {
+		t.Errorf("nothing may be written, stat error = %v", err)
+	}
+}
+
+func TestCorruptConfigIsNotOverwritten(t *testing.T) {
+	service := newService(t)
+	if err := os.MkdirAll(filepath.Dir(service.Paths.ConfigFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const broken = "{not json"
+	writeFile(t, service.Paths.ConfigFile, broken)
+	if err := service.SetPrivacy(true); err == nil {
+		t.Fatal("expected an error")
+	}
+	assertFileContent(t, service.Paths.ConfigFile, broken)
 }
 
 func TestFileOptionRejectsDirectory(t *testing.T) {
@@ -358,8 +456,8 @@ func TestSnapshotShowsSchemasAndValues(t *testing.T) {
 	if rain.Builtin || !byID["builtin.glow"].Builtin {
 		t.Error("Builtin flag is wrong")
 	}
-	if len(rain.Manifest.Options) != 6 {
-		t.Errorf("option schemas = %d, want 6", len(rain.Manifest.Options))
+	if len(rain.Manifest.Options) != 7 {
+		t.Errorf("option schemas = %d, want 7", len(rain.Manifest.Options))
 	}
 	if rain.Values["speed"] != 3.0 || rain.Values["mode"] != "soft" || rain.Values["glow"] != false {
 		t.Errorf("merged values = %v, want speed overlaid and defaults kept", rain.Values)
