@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Local files only: no network, no inline script. The preview frame is the runtime page next door. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file: 'self'; style-src file: 'self'; img-src file: data:; frame-src file:; connect-src 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Agent Screen Saver</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <nav class="sidebar" aria-label="Settings">
+    <ul>
+      <li><button type="button" data-view="appearance">Theme &amp; background</button></li>
+      <li><button type="button" data-view="options">Extension options</button></li>
+      <li><button type="button" data-view="extensions">Extensions</button></li>
+      <li><button type="button" data-view="general">General</button></li>
+    </ul>
+  </nav>
+  <main class="content">
+    <header class="view-header">
+      <h1 id="view-title">Theme &amp; background</h1>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </header>
+    <section id="preview" class="preview" hidden>
+      <div class="preview-screen">
+        <p class="preview-empty" id="preview-empty" hidden>The preview appears when the service is running.</p>
+      </div>
+      <div class="preview-summary">
+        <h2 id="preview-theme"></h2>
+        <p id="preview-detail"></p>
+        <p class="hint">This is the real screen saver, with what your agents are doing right now.</p>
+      </div>
+    </section>
+    <div id="view" class="view"></div>
+  </main>
+  <script src="settings.js"></script>
+</body>
+</html>

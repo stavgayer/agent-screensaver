@@ -2,7 +2,7 @@
 // extensions into ../build/extensions. Run from web/ with `npm run build`.
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,6 +28,25 @@ async function buildRuntime() {
 }
 
 /**
+ * The settings window's page goes to `build/runtime/settings/`. Its live
+ * preview is `build/runtime/preview.html`: the screen saver's own page plus
+ * one script that takes the state from the settings page, so the preview is
+ * the real runtime and its markup is never copied by hand.
+ */
+async function buildSettings() {
+  const outSettings = join(outRuntime, "settings");
+  mkdirSync(outSettings, { recursive: true });
+  for (const name of ["settings", "preview"]) {
+    await build({ ...common, entryPoints: [join(root, "settings", `${name}.ts`)], outfile: join(outSettings, `${name}.js`) });
+  }
+  for (const file of ["index.html", "settings.css"]) copyFileSync(join(root, "settings", file), join(outSettings, file));
+  const runtimeTag = '<script src="runtime.js"></script>';
+  const page = readFileSync(join(root, "index.html"), "utf8");
+  if (!page.includes(runtimeTag)) throw new Error(`index.html has no ${runtimeTag}`);
+  writeFileSync(join(outRuntime, "preview.html"), page.replace(runtimeTag, `${runtimeTag}\n  <script src="settings/preview.js"></script>`));
+}
+
+/**
  * Every folder under the repo's `extensions/` is copied to `build/extensions/<id>/`.
  * A built-in with code (`src/builtins/<name>/index.ts`) is bundled to
  * `build/extensions/builtin.<name>/index.js` next to its manifest.
@@ -49,4 +68,5 @@ async function buildBuiltins() {
 }
 
 await buildRuntime();
+await buildSettings();
 await buildBuiltins();

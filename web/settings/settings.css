@@ -1,0 +1,332 @@
+/* The settings window. Built to sit among macOS settings windows: the system
+   face at 13px, grouped panels, a quiet sidebar, light and dark from the
+   system. Decisions are recorded in docs/design/settings.md. */
+
+:root {
+  color-scheme: light dark;
+  --ground: #f2f2f4;
+  --sidebar: #e8e8eb;
+  --panel: #ffffff;
+  --line: #e3e3e6;
+  --control-line: #c9c9ce;
+  --ink: #1d1d1f;
+  --secondary: #636366; /* 6.0:1 on the panel, 5.4:1 on the ground */
+  --selected: rgb(0 0 0 / 0.08);
+  --accent: #007aff;
+  --danger: #c4281c;
+  --notice-ground: #fff8e6;
+  --notice-ink: #7a4b00;
+  --screen: #000000;
+  --radius-panel: 10px;
+  --radius-control: 6px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@supports (color: AccentColor) {
+  :root { --accent: AccentColor; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #1e1e20;
+    --sidebar: #28282b;
+    --panel: #2c2c2f;
+    --line: #3a3a3e;
+    --control-line: #4c4c51;
+    --ink: #f5f5f7;
+    --secondary: #a6a6ab; /* 5.7:1 on the panel */
+    --selected: rgb(255 255 255 / 0.1);
+    --danger: #ff6b5e;
+    --notice-ground: #3a2f16;
+    --notice-ink: #f5d48a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  background: var(--ground);
+  color: var(--ink);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+input, select, button { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+h1, h2, p { margin: 0; }
+
+/* ---------- sidebar ---------- */
+
+.sidebar {
+  background: var(--sidebar);
+  padding: 16px 10px;
+  overflow-y: auto;
+}
+
+.sidebar ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+
+.sidebar button {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  text-align: left;
+}
+
+.sidebar button[aria-current="page"] { background: var(--selected); font-weight: 600; }
+
+/* ---------- content ---------- */
+
+.content {
+  overflow-y: auto;
+  padding: 0 28px 32px;
+}
+
+/* The title and the save status stay in view while the page scrolls. */
+.view-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 20px 0 12px;
+  background: var(--ground);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+
+/* The status has a fixed height and fades, so saving never moves the page. */
+.status {
+  min-height: 18px;
+  color: var(--secondary);
+  opacity: 0;
+  transition: opacity 150ms var(--ease-out);
+  text-align: right;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.status.visible { opacity: 1; }
+.status[data-kind="error"] { color: var(--danger); }
+
+/* One capped column, centred, so a wide window keeps equal margins. */
+.view-header, .preview, .view { width: 100%; max-width: 760px; margin-inline: auto; }
+
+.view { display: grid; gap: 24px; }
+
+.group { display: grid; gap: 8px; }
+
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+  padding: 0 4px;
+}
+
+h2 { font-size: 13px; font-weight: 600; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+.row + .row { border-top: 1px solid var(--line); }
+
+.row-text { display: grid; gap: 2px; min-width: 0; }
+.row-label { overflow-wrap: anywhere; }
+.row-description { color: var(--secondary); font-size: 12px; }
+.row-error { color: var(--danger); font-size: 12px; -webkit-user-select: text; user-select: text; }
+.panel > .row-error { padding: 10px 14px 0; }
+.row-control { flex: none; display: flex; align-items: center; gap: 8px; }
+
+.muted { color: var(--secondary); }
+
+.empty { color: var(--secondary); }
+
+.notice {
+  margin: 0 14px 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--notice-ground);
+  color: var(--notice-ink);
+}
+
+/* ---------- controls ---------- */
+
+.button {
+  min-height: 24px;
+  padding: 2px 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  transition: transform 120ms var(--ease-out);
+}
+.button:active { transform: scale(0.97); }
+.button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 500; }
+.button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.group-header .button { border-color: transparent; background: transparent; color: var(--accent); padding: 2px 4px; }
+
+select, input[type="number"], input[type="text"] {
+  min-height: 24px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  padding: 2px 8px;
+}
+select { max-width: 260px; }
+input[type="number"] { width: 88px; text-align: right; font-variant-numeric: tabular-nums; }
+input[type="text"] { width: 220px; -webkit-user-select: text; user-select: text; }
+input[type="color"] { width: 44px; height: 24px; padding: 0; border: 0; background: none; }
+
+/* A switch is a checkbox drawn as macOS draws one, so it keeps the checkbox's
+   keyboard and screen reader behavior. */
+.switch {
+  appearance: none;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border-radius: 9px;
+  background: var(--control-line);
+  transition: background-color 150ms ease;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 150ms var(--ease-out);
+}
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(14px); }
+
+.file { display: flex; align-items: center; gap: 8px; }
+.file-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--secondary);
+}
+
+.confirm { display: flex; gap: 8px; }
+
+/* ---------- theme gallery ---------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 16px;
+  padding: 14px;
+}
+
+.tile { display: grid; gap: 4px; justify-items: start; }
+.tile input { position: absolute; opacity: 0; pointer-events: none; }
+
+.tile-screen {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 6px;
+  background: var(--screen);
+  outline: 1px solid var(--line);
+  outline-offset: 0;
+}
+.tile-clock {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 2px solid var(--tile-accent);
+  line-height: 1.1;
+}
+.tile input:checked + .tile-screen { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tile input:focus-visible + .tile-screen { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+.tile input:checked:focus-visible + .tile-screen { outline-color: var(--accent); }
+.tile-name { font-weight: 500; padding-top: 4px; }
+.tile-meta { color: var(--secondary); font-size: 12px; }
+
+/* ---------- the live preview ---------- */
+
+.preview {
+  display: grid;
+  grid-template-columns: minmax(280px, 400px) 1fr;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.preview[hidden] { display: none; }
+
+.preview-screen {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--screen);
+  outline: 1px solid var(--line);
+}
+.preview-screen iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;
+}
+.preview-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #c7c7cc;
+  text-align: center;
+}
+.preview-empty[hidden] { display: none; }
+.preview-summary { display: grid; gap: 6px; }
+.preview-summary h2 { font-size: 17px; }
+.preview-summary p { color: var(--secondary); }
+.preview-summary .hint { font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .switch, .switch::after, .button, .status { transition: none; }
+}
