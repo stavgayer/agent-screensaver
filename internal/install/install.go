@@ -23,6 +23,8 @@ import (
 const (
 	// DaemonLabel names the launchd service that runs the daemon.
 	DaemonLabel = "dev.agentscreensaver.daemon"
+	// TrayLabel names the launchd service that runs the menu bar app.
+	TrayLabel = "dev.agentscreensaver.tray"
 
 	backupSuffix  = ".agent-screensaver.bak"
 	binaryName    = "agent-screensaver"
@@ -108,7 +110,10 @@ func Plan(home string) []PlannedStep {
 				"Point the Claude status line in " + path + " at agent-screensaver (your command is saved and still runs)"})
 		}
 	}
-	return append(steps, PlannedStep{"service", "Start the daemon at every login (launch agent " + DaemonLabel + ")"})
+	return append(steps,
+		PlannedStep{"service", "Start the daemon at every login (launch agent " + DaemonLabel + ")"},
+		PlannedStep{"tray", "Show the menu bar icon at every login (launch agent " + TrayLabel + ")"},
+	)
 }
 
 // PlanUninstall lists what Uninstall will do, read from the install record.
@@ -179,7 +184,7 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, err
 	// user file is touched, so a failure later still leaves uninstall (and a
 	// retry) able to find and restore everything. The service is listed before
 	// it is installed for the same reason: a failed bootstrap can leave a plist.
-	record := Record{Bin: where.bin, PreviousStatusline: previous, Saver: where.saver, Services: []string{DaemonLabel}}
+	record := Record{Bin: where.bin, PreviousStatusline: previous, Saver: where.saver, Services: []string{DaemonLabel, TrayLabel}}
 	for _, target := range hookInstallers() {
 		record.Agents = append(record.Agents, target.name)
 	}
@@ -196,6 +201,9 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, err
 	}
 	if _, err := sm.Install(DaemonLabel, []string{where.bin, "daemon"}); err != nil {
 		return Record{}, fmt.Errorf("install service %s: %w", DaemonLabel, err)
+	}
+	if _, err := sm.Install(TrayLabel, []string{where.bin, "tray"}); err != nil {
+		return Record{}, fmt.Errorf("install service %s: %w", TrayLabel, err)
 	}
 	return record, nil
 }

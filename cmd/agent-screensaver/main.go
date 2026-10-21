@@ -17,6 +17,8 @@ import (
 	"agent-screensaver/internal/limits"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
+	"agent-screensaver/internal/settings"
+	"agent-screensaver/internal/tray"
 )
 
 // subcommands lists every subcommand, in the order shown in the usage text.
@@ -50,6 +52,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runDaemon(args[1:], stderr)
 	case "install", "uninstall":
 		return runSetup(name, args[1:], os.Stdin, stdout, stderr)
+	case "tray":
+		return runTray(args[1:], stderr)
 	}
 	if cli.IsSettingsCommand(name) {
 		return runSettings(name, args[1:], stdout, stderr)
@@ -136,6 +140,35 @@ func runDaemon(args []string, stderr io.Writer) int {
 	platform.RunMainLoop(finished)
 	if runErr != nil {
 		fmt.Fprintf(stderr, "agent-screensaver daemon: %v\n", runErr)
+		return 1
+	}
+	return 0
+}
+
+// runTray shows the menu bar icon until the user quits it or the process gets
+// SIGINT or SIGTERM. The main goroutine is already locked to the main thread
+// (the platform package does that in init), which the tray needs.
+func runTray(args []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("tray", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver tray: %v\n", err)
+		return 1
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver tray: %v\n", err)
+		return 1
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	p := paths.ForHome(home)
+	if err := tray.Run(ctx, p, settings.Service{Paths: p}, tray.NewSettingsLauncher(executable)); err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver tray: %v\n", err)
 		return 1
 	}
 	return 0

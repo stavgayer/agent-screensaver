@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -293,7 +294,7 @@ func TestUninstallRestoresEverything(t *testing.T) {
 			}
 		})
 	}
-	if len(sm.uninstalled) != 1 || sm.uninstalled[0] != DaemonLabel {
+	if !slices.Equal(sm.uninstalled, []string{DaemonLabel, TrayLabel}) {
 		t.Errorf("uninstalled services = %v", sm.uninstalled)
 	}
 	p := paths.ForHome(home)
@@ -499,7 +500,7 @@ func TestUninstallAfterFailedServiceInstallStillRemovesService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(sm.uninstalled) != 1 || sm.uninstalled[0] != DaemonLabel {
+	if !slices.Equal(sm.uninstalled, []string{DaemonLabel, TrayLabel}) {
 		t.Errorf("uninstalled services = %v", sm.uninstalled)
 	}
 }
@@ -585,5 +586,22 @@ func TestUninstallRemovesAerialClonesOnly(t *testing.T) {
 	}
 	if _, err := os.Stat(userMedia); err != nil {
 		t.Errorf("the user's media was deleted: %v", err)
+	}
+}
+
+func TestInstallAddsTrayService(t *testing.T) {
+	home := t.TempDir()
+	sm := &fakeServices{}
+	record := apply(t, home, sm)
+
+	if got := sm.installed[TrayLabel]; len(got) != 2 || got[0] != record.Bin || got[1] != "tray" {
+		t.Errorf("tray args = %v, want [%s tray]", got, record.Bin)
+	}
+	if !slices.Contains(record.Services, TrayLabel) {
+		t.Errorf("record services = %v, want %s in it", record.Services, TrayLabel)
+	}
+	steps := Plan(home)
+	if !slices.ContainsFunc(steps, func(step PlannedStep) bool { return strings.Contains(step.Description, TrayLabel) }) {
+		t.Errorf("plan does not mention %s: %v", TrayLabel, steps)
 	}
 }

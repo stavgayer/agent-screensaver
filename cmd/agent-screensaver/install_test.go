@@ -54,8 +54,8 @@ func TestInstallPromptDecidesWhetherToProceed(t *testing.T) {
 	}{
 		{"declined", "n\n", nil, 1, 0},
 		{"empty answer", "\n", nil, 1, 0},
-		{"accepted", "y\n", nil, 0, 1},
-		{"yes flag skips the prompt", "", []string{"--yes"}, 0, 1},
+		{"accepted", "y\n", nil, 0, 2},
+		{"yes flag skips the prompt", "", []string{"--yes"}, 0, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestInstallPromptDecidesWhetherToProceed(t *testing.T) {
 				t.Fatalf("exit %d, installs %d\n%s", code, services.installed, stdout)
 			}
 			_, err := os.Stat(filepath.Join(home, ".claude", "settings.json"))
-			if (err == nil) != (tt.wantInstalled == 1) {
+			if (err == nil) != (tt.wantInstalled > 0) {
 				t.Errorf("settings file exists = %v", err == nil)
 			}
 			if !strings.Contains(stdout.String(), "Proceed?") && tt.stdin != "" {
@@ -105,7 +105,7 @@ func TestUninstallRemovesWhatInstallAdded(t *testing.T) {
 		t.Fatalf("uninstall exit %d\n%s", code, stdout)
 	}
 
-	if services.removed != 1 {
+	if services.removed != 2 {
 		t.Errorf("services removed = %d", services.removed)
 	}
 	if _, err := os.Stat(filepath.Join(home, "Library", "Screen Savers", "AgentScreensaver.saver")); !os.IsNotExist(err) {
