@@ -79,11 +79,16 @@ static BOOL IsSettingsPage(NSURL *url) {
 - (void)webView:(WKWebView *)webView
     decidePolicyForNavigationAction:(WKNavigationAction *)action
                     decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
-  // The preview scheme is only for the preview frame, never for the page.
+  // file: is only for the page, and the preview scheme only for the preview
+  // frame, so the sandboxed frame cannot navigate itself to a file.
   NSString *scheme = action.request.URL.scheme;
-  BOOL preview = [scheme isEqualToString:@"ags-preview"] && !action.targetFrame.isMainFrame;
-  BOOL local = [scheme isEqualToString:@"file"] || [scheme isEqualToString:@"about"] || preview;
-  decisionHandler(local ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+  WKFrameInfo *target = action.targetFrame;
+  BOOL mainFrame = target != nil && target.isMainFrame;
+  BOOL subframe = target != nil && !target.isMainFrame;
+  BOOL allowed = (mainFrame && [scheme isEqualToString:@"file"]) ||
+                 (subframe && [scheme isEqualToString:@"ags-preview"]) ||
+                 [scheme isEqualToString:@"about"];
+  decisionHandler(allowed ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
 }
 
 // The window is shown once the page has drawn, so it never flashes white in
