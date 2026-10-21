@@ -54,5 +54,5 @@ export interface ComponentExt {
   unmount(): void;
 }
 
-/** An extension's entry module: `export default function create(): BackgroundExt | ComponentExt`. */
+/** What an entry file passes to `window.agentScreensaver.register(create)`. */
 export type CreateExtension = () => BackgroundExt | ComponentExt;

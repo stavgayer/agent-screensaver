@@ -206,11 +206,11 @@ export interface ComponentExt {
   unmount(): void;
 }
 
-/** An extension's entry module: `export default function create(): BackgroundExt | ComponentExt`. */
+/** What an entry file passes to `window.agentScreensaver.register(create)`. */
 export type CreateExtension = () => BackgroundExt | ComponentExt;
 ```
 
-The `entry` file is a JavaScript module. It exports a function named `create` as its default export. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. The types above describe each method and the data it receives.
+The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. The types above describe each method and the data it receives.
 
 ## Install, list and remove
 

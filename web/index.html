@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file: 'self'; style-src file: 'self' 'unsafe-inline'; img-src file: data:; media-src file:; font-src file:; connect-src 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Screensaver</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="mode-idle">
+  <div id="background"></div>
+  <main id="screen">
+    <section id="region-top-left" class="region"></section>
+    <section id="region-top-right" class="region"></section>
+    <section id="region-center" class="region"></section>
+    <section id="region-bottom" class="region"></section>
+  </main>
+  <div id="service-line" hidden>service not running</div>
+  <script src="runtime.js"></script>
+</body>
+</html>

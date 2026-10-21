@@ -1,0 +1,59 @@
+:root {
+  --bg: #000;
+  --fg: #e8e8e8;
+  --muted: #8a8a8a;
+  --gap: 4vmin;
+  --fade: 0.6s;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  cursor: none;
+}
+
+#background, #screen {
+  position: fixed;
+  inset: 0;
+}
+
+#background > div { width: 100%; height: 100%; }
+
+#screen { pointer-events: none; }
+
+.region {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  transition: opacity var(--fade) ease, transform var(--fade) ease;
+}
+
+/* Components fade in, so a region that changes with the mode does not pop. */
+.region > div { animation: appear var(--fade) ease both; }
+
+@keyframes appear {
+  from { opacity: 0; transform: translateY(1vmin); }
+  to { opacity: 1; transform: none; }
+}
+
+#region-top-left { top: var(--gap); left: var(--gap); align-items: flex-start; }
+#region-top-right { top: var(--gap); right: var(--gap); align-items: flex-end; }
+#region-center { inset: 0; align-items: center; justify-content: center; }
+#region-bottom { left: var(--gap); right: var(--gap); bottom: var(--gap); align-items: stretch; }
+
+#service-line {
+  position: fixed;
+  right: var(--gap);
+  bottom: 1.5vmin;
+  font-size: 1.6vmin;
+  color: var(--muted);
+}
+
+#service-line[hidden] { display: none; }
