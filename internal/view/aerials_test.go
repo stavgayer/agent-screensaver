@@ -57,8 +57,8 @@ func TestResolveAerials(t *testing.T) {
 			"builtin.aerials", "file:///x/builtin.aerials/index.js",
 			map[string]any{"group": "space", "dim": 0.25, "files": []string{
 				"file:///d/media/aerials/A.mov", "file:///d/Application%20Support/B.mov"}}},
-		{"no clones falls back to Matrix with its defaults", "builtin.aerials", true, nil,
-			"builtin.matrix", "file:///x/builtin.matrix/index.js", map[string]any{"speed": 1.0}},
+		{"no clones falls back to Matrix with the user's Matrix options", "builtin.aerials", true, nil,
+			"builtin.matrix", "file:///x/builtin.matrix/index.js", map[string]any{"speed": 2.0}},
 		{"no clones and no Matrix keeps aerials with no files", "builtin.aerials", false, []string{},
 			"builtin.aerials", "file:///x/builtin.aerials/index.js",
 			map[string]any{"group": "space", "dim": 0.25, "files": []string{}}},
@@ -96,6 +96,40 @@ func TestBackgroundIsTheThemeChoiceBeforeFallback(t *testing.T) {
 			got := Background(cfg, tt.installed)
 			if got.ID != tt.wantID || got.Options["group"] != tt.wantGroup {
 				t.Errorf("Background = %s %v, want %s with group %v", got.ID, got.Options, tt.wantID, tt.wantGroup)
+			}
+		})
+	}
+}
+
+func TestResolveBackgroundOverride(t *testing.T) {
+	clones := []string{"/d/media/aerials/A.mov"}
+	tests := []struct {
+		name       string
+		override   string
+		clones     []string
+		wantID     string
+		wantOption map[string]any
+	}{
+		{"no override uses the theme's background", "", clones, "t.bg", map[string]any{}},
+		{"installed background overrides the theme", "builtin.aerials", clones, "builtin.aerials",
+			map[string]any{"group": "space", "dim": 0.25, "files": []string{"file:///d/media/aerials/A.mov"}}},
+		{"override still falls back to Matrix with the user's options", "builtin.aerials", nil, "builtin.matrix",
+			map[string]any{"speed": 2.0}},
+		{"unknown id uses the theme's background", "nobody.none", clones, "t.bg", map[string]any{}},
+		{"a non-background id uses the theme's background", "t.layout", clones, "t.bg", map[string]any{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Background = tt.override
+			cfg.Options = map[string]map[string]any{"builtin.aerials": {"group": "space"}, "builtin.matrix": {"speed": 2.0}}
+			installed := aerialsInstalled("t.bg", true)
+			got := Resolve(cfg, installed, tt.clones).Background
+			if got.ID != tt.wantID || !reflect.DeepEqual(got.Options, tt.wantOption) {
+				t.Errorf("background = %s %#v, want %s %#v", got.ID, got.Options, tt.wantID, tt.wantOption)
+			}
+			if before := Background(cfg, installed); tt.override == "builtin.aerials" && before.ID != "builtin.aerials" {
+				t.Errorf("Background = %s, want the override before the fallback", before.ID)
 			}
 		})
 	}

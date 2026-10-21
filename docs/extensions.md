@@ -130,6 +130,8 @@ A theme picks a background and a layout, and sets style values. It needs no entr
 | `layout` | The id of a layout. Required. |
 | `style` | An object with style values, such as colors, fonts and sizes. |
 
+A user can replace the theme's background with any installed background: `agent-screensaver background set <id>`. `background set default` goes back to the theme's background. The theme's options for a background still apply when the user picks that same background.
+
 ```json
 {
   "id": "acme.night",
@@ -224,9 +226,9 @@ The `entry` file is one classic script. It must not use `import` or `export`. If
 
 `builtin.aerials` plays Apple aerial videos that macOS has already downloaded. It has three options: `group` (`cities`, `landscapes`, `space` or `underwater`; default `cities`), `fit` and `dim`, the same as `builtin.video`.
 
-The service gives the background one more option, `files`: a list of `file://` URLs of the videos to play. You cannot set it yourself. The background plays the list in a shuffled order and crossfades from one video to the next. When no video of the group is downloaded, the service shows `builtin.matrix` with its default options instead. `option set builtin.aerials group <group>` then prints how to get the videos: pick the group once in System Settings → Screen Saver, and macOS downloads them.
+The service gives the background one more option, `files`: a list of `file://` URLs of the videos to play. You cannot set it yourself. The background plays the list in a shuffled order and crossfades from one video to the next. When no video of the group is downloaded, the service shows `builtin.matrix` instead, with the user's Matrix options. `option set builtin.aerials group <group>` then prints how to get the videos: pick the group once in System Settings → Screen Saver, and macOS downloads them.
 
-A theme uses it like any other background: `"background": { "id": "builtin.aerials", "options": { "group": "space" } }`.
+A theme uses it like any other background: `"background": { "id": "builtin.aerials", "options": { "group": "space" } }`. A user can also pick it without a theme: `agent-screensaver background set builtin.aerials`.
 
 ## Install, list and remove
 

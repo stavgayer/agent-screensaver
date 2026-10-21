@@ -65,7 +65,7 @@ func Resolve(cfg config.Config, installed []extensions.Installed, aerialClones [
 		result.Style = maps.Clone(specs[0].Style)
 	}
 	if background, ok := byID.resolveBackground(cfg, specs); ok {
-		result.Background = byID.useAerialClones(background, aerialClones)
+		result.Background = byID.useAerialClones(cfg, background, aerialClones)
 	}
 	if layout, ok := byID.resolveLayout(specs); ok {
 		byID.applyLayout(&result, cfg, layout.Manifest.Layout)
@@ -113,14 +113,14 @@ func (byID index) theme(cfg config.Config) (extensions.Installed, []extensions.T
 }
 
 // useAerialClones gives the aerials background its videos as file URLs.
-// With none, the screen shows Matrix with its defaults instead of black, so
-// a missing or moved Apple folder fails quietly.
-func (byID index) useAerialClones(background ResolvedExt, clones []string) ResolvedExt {
+// With none, the screen shows Matrix with the user's Matrix options instead
+// of black, so a missing or moved Apple folder fails quietly.
+func (byID index) useAerialClones(cfg config.Config, background ResolvedExt, clones []string) ResolvedExt {
 	if background.ID != aerials.ExtensionID {
 		return background
 	}
 	if matrix, ok := byID.find(matrixID, extensions.TypeBackground); ok && len(clones) == 0 {
-		return ResolvedExt{ID: matrixID, EntryURL: entryURL(matrix), Options: mergeOptions(matrix.Manifest.Options)}
+		return resolveExt(matrix, cfg, nil)
 	}
 	files := make([]string, 0, len(clones))
 	for _, clone := range clones {
@@ -203,15 +203,31 @@ func (byID index) find(id string, kind extensions.Type) (extensions.Installed, b
 	return ext, ok && ext.Manifest.Type == kind
 }
 
-// resolveBackground uses the first spec whose background is installed, so a
-// broken theme still gets the default background.
+// resolveBackground uses the user's background when it is installed, then
+// the first spec whose background is installed, so a broken theme still gets
+// the default background. Options merge the same way for both: manifest
+// defaults, the theme's values for that background, then the user's.
 func (byID index) resolveBackground(cfg config.Config, specs []extensions.ThemeSpec) (ResolvedExt, bool) {
+	if ext, ok := byID.find(cfg.Background, extensions.TypeBackground); ok {
+		return resolveExt(ext, cfg, themeOptionsFor(cfg.Background, specs)), true
+	}
 	for _, spec := range specs {
 		if ext, ok := byID.find(spec.Background.ID, extensions.TypeBackground); ok {
 			return resolveExt(ext, cfg, spec.Background.Options), true
 		}
 	}
 	return ResolvedExt{}, false
+}
+
+// themeOptionsFor returns the options the theme sets for background id, if
+// the theme uses that background.
+func themeOptionsFor(id string, specs []extensions.ThemeSpec) map[string]any {
+	for _, spec := range specs {
+		if spec.Background.ID == id {
+			return spec.Background.Options
+		}
+	}
+	return nil
 }
 
 func (byID index) resolveLayout(specs []extensions.ThemeSpec) (extensions.Installed, bool) {

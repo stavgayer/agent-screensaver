@@ -42,6 +42,7 @@ Change settings with `agent-screensaver` commands, run from the unzipped folder.
 | Command | Example |
 | --- | --- |
 | `theme` | `./agent-screensaver theme set builtin.default` |
+| `background` | `./agent-screensaver background set builtin.aerials` |
 | `option` | `./agent-screensaver option set builtin.matrix color "#00ff66"` |
 | `privacy` | `./agent-screensaver privacy on` |
 | `sound` | `./agent-screensaver sound on` |

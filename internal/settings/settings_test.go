@@ -481,3 +481,55 @@ func TestMediaFolderGuardRejectsBadOptionNames(t *testing.T) {
 		})
 	}
 }
+
+func TestSetBackground(t *testing.T) {
+	tests := []struct {
+		name    string
+		id      string
+		want    string
+		wantErr bool
+	}{
+		{"installed background", "acme.rain", "acme.rain", false},
+		{"unknown id", "acme.missing", "acme.rain", true},
+		{"installed but not a background", "acme.dark", "acme.rain", true},
+		{"empty id resets to the theme's", "", "", false},
+	}
+	service := newService(t)
+	installFixtures(t, service)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := service.SetBackground(tt.id)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("SetBackground(%q) error = %v, want error %v", tt.id, err, tt.wantErr)
+			}
+			if got := loadConfig(service).Background; got != tt.want {
+				t.Errorf("stored background = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetBackgroundKeepsCorruptConfig(t *testing.T) {
+	service := newService(t)
+	installFixtures(t, service)
+	writeFile(t, service.Paths.ConfigFile, "{broken")
+
+	if err := service.SetBackground("acme.rain"); err == nil {
+		t.Fatal("want an error for a corrupt config")
+	}
+	if data, _ := os.ReadFile(service.Paths.ConfigFile); string(data) != "{broken" {
+		t.Errorf("config overwritten: %q", data)
+	}
+}
+
+func TestSnapshotShowsActiveBackground(t *testing.T) {
+	service := newService(t)
+	installFixtures(t, service)
+	if err := service.SetTheme("acme.dark"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := service.Snapshot()
+	if err != nil || snapshot.Background != "acme.rain" {
+		t.Errorf("active background = %q (err %v), want the theme's acme.rain", snapshot.Background, err)
+	}
+}

@@ -14,7 +14,8 @@ import (
 // default, so older files keep working when new settings are added.
 type Config struct {
 	Theme              string                    `json:"theme"`
-	Options            map[string]map[string]any `json:"options"` // extension id -> option key -> value
+	Background         string                    `json:"background"` // "" = the theme's background
+	Options            map[string]map[string]any `json:"options"`    // extension id -> option key -> value
 	Sound              bool                      `json:"sound"`
 	SoundFile          string                    `json:"sound_file"`
 	Privacy            bool                      `json:"privacy"`

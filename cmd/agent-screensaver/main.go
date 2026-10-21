@@ -22,7 +22,7 @@ import (
 // subcommands lists every subcommand, in the order shown in the usage text.
 var subcommands = []string{
 	"hook", "statusline", "daemon", "install", "uninstall", "theme",
-	"option", "privacy", "sound", "fps", "ext", "tray", "settings",
+	"background", "option", "privacy", "sound", "fps", "ext", "tray", "settings",
 }
 
 // version is set at build time with -ldflags "-X main.version=...".

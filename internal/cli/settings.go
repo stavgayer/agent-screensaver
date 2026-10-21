@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/settings"
 )
@@ -15,12 +16,13 @@ type commandHandler func(service settings.Service, args []string, stdout io.Writ
 
 // settingsCommands maps each top-level settings command to its handler.
 var settingsCommands = map[string]commandHandler{
-	"theme":   runTheme,
-	"option":  runOption,
-	"privacy": runPrivacy,
-	"sound":   runSound,
-	"fps":     runFPS,
-	"ext":     runExt,
+	"theme":      runTheme,
+	"background": runBackground,
+	"option":     runOption,
+	"privacy":    runPrivacy,
+	"sound":      runSound,
+	"fps":        runFPS,
+	"ext":        runExt,
 }
 
 // IsSettingsCommand reports whether name is handled by Settings.
@@ -29,8 +31,8 @@ func IsSettingsCommand(name string) bool {
 	return ok
 }
 
-// Settings runs one settings command (theme, option, privacy, sound, fps or
-// ext) and returns the exit code: 0 on success, 1 with a message on stderr
+// Settings runs one settings command (theme, background, option, privacy,
+// sound, fps or ext) and returns the exit code: 0 on success, 1 with a message on stderr
 // when it fails. The logic lives in settings.Service; this is only parsing
 // and printing.
 func Settings(command string, args []string, stdout, stderr io.Writer, p paths.Paths) int {
@@ -62,6 +64,51 @@ func runTheme(service settings.Service, args []string, stdout io.Writer) error {
 		return nil
 	}
 	return usageError("theme list | theme set <id>")
+}
+
+// defaultBackground is the word that goes back to the theme's background.
+const defaultBackground = "default"
+
+func runBackground(service settings.Service, args []string, stdout io.Writer) error {
+	switch {
+	case len(args) == 1 && args[0] == "list":
+		return listBackgrounds(service, stdout)
+	case len(args) == 2 && args[0] == "set":
+		id := args[1]
+		if id == defaultBackground {
+			id = ""
+		}
+		if err := service.SetBackground(id); err != nil {
+			return err
+		}
+		if id == "" {
+			fmt.Fprintln(stdout, "background: default (the theme's)")
+		} else {
+			fmt.Fprintf(stdout, "background: %s\n", id)
+		}
+		return nil
+	}
+	return usageError("background list | background set <id> | background set default")
+}
+
+// listBackgrounds prints one background id per line, with a "*" after the
+// one in effect.
+func listBackgrounds(service settings.Service, stdout io.Writer) error {
+	snapshot, err := service.Snapshot()
+	if err != nil {
+		return err
+	}
+	for _, info := range snapshot.Extensions {
+		if info.Manifest.Type != extensions.TypeBackground {
+			continue
+		}
+		marker := ""
+		if info.Manifest.ID == snapshot.Background {
+			marker = " *"
+		}
+		fmt.Fprintf(stdout, "%s%s\n", info.Manifest.ID, marker)
+	}
+	return nil
 }
 
 func runOption(service settings.Service, args []string, stdout io.Writer) error {

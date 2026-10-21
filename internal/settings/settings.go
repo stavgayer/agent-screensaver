@@ -18,6 +18,7 @@ import (
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/paths"
+	"agent-screensaver/internal/view"
 )
 
 const (
@@ -34,6 +35,7 @@ type Service struct {
 // Snapshot is everything a settings screen needs in one read.
 type Snapshot struct {
 	Config     config.Config   `json:"config"`
+	Background string          `json:"background"` // the background in effect: the user's or the theme's
 	Extensions []ExtensionInfo `json:"extensions"`
 }
 
@@ -58,7 +60,7 @@ func (s Service) Snapshot() (Snapshot, error) {
 			Builtin:  strings.HasPrefix(manifest.ID, builtinPrefix),
 		})
 	}
-	return Snapshot{Config: cfg, Extensions: infos}, nil
+	return Snapshot{Config: cfg, Background: view.Background(cfg, installed).ID, Extensions: infos}, nil
 }
 
 // currentValues overlays the user's options on the manifest defaults. Stored
@@ -110,6 +112,24 @@ func (s Service) SetTheme(id string) error {
 	}
 	return s.update(func(cfg *config.Config) error {
 		cfg.Theme = id
+		return nil
+	})
+}
+
+// SetBackground makes an installed background replace the theme's. An empty
+// id goes back to the theme's background.
+func (s Service) SetBackground(id string) error {
+	if id != "" {
+		ext, err := s.find(id)
+		if err != nil {
+			return err
+		}
+		if ext.Manifest.Type != extensions.TypeBackground {
+			return fmt.Errorf("%q is a %s, not a background", id, ext.Manifest.Type)
+		}
+	}
+	return s.update(func(cfg *config.Config) error {
+		cfg.Background = id
 		return nil
 	})
 }
