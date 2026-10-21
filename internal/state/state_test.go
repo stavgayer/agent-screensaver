@@ -123,14 +123,14 @@ func TestApply(t *testing.T) {
 			want: nil,
 		},
 		{
-			name: "ended keeps finished card",
+			name: "ended keeps finished card without bumping updated at",
 			events: []event.Event{
 				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
 				claudeEvent("s1", event.KindFinished, 2000, "", ""),
 				claudeEvent("s1", event.KindEnded, 3000, "", ""),
 			},
 			want: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Project: "api",
-				Title: "Fix bug", StartedAtMs: 1000, UpdatedAtMs: 3000}},
+				Title: "Fix bug", StartedAtMs: 1000, UpdatedAtMs: 2000}},
 		},
 		{
 			name:   "ended for unknown session does nothing",
@@ -157,7 +157,68 @@ func TestApply(t *testing.T) {
 				claudeEvent("s1", event.KindToolIntent, 2000, "", "Old intent"),
 			},
 			want: []Card{{Source: "claude", Session: "s1", Kind: KindRunning, Project: "api",
-				Title: "Fix bug", Request: "Old intent", StartedAtMs: 5000, UpdatedAtMs: 5000}},
+				Title: "Fix bug", StartedAtMs: 5000, UpdatedAtMs: 5000}},
+		},
+		{
+			name: "approval then tool intent returns to running",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
+				claudeEvent("s1", event.KindApproval, 2000, "", ""),
+				claudeEvent("s1", event.KindToolIntent, 3000, "", "Edit b.go"),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindRunning, Project: "api",
+				Title: "Fix bug", Request: "Edit b.go", StartedAtMs: 1000, UpdatedAtMs: 3000}},
+		},
+		{
+			name: "late approval does not flip running card",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
+				claudeEvent("s1", event.KindResumed, 3000, "", ""),
+				claudeEvent("s1", event.KindApproval, 2000, "", "Old prompt"),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindRunning, Project: "api",
+				Title: "Fix bug", StartedAtMs: 1000, UpdatedAtMs: 3000}},
+		},
+		{
+			name: "late tool intent does not clear approval",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
+				claudeEvent("s1", event.KindApproval, 3000, "", "Run it"),
+				claudeEvent("s1", event.KindToolIntent, 2000, "", "Older intent"),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindApproval, Project: "api",
+				Title: "Fix bug", Request: "Run it", StartedAtMs: 1000, UpdatedAtMs: 3000,
+				ApprovalSinceMs: ptr(3000)}},
+		},
+		{
+			name: "late event may fill an empty project only",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 5000, "", "Fix bug"),
+				claudeEvent("s1", event.KindToolIntent, 2000, "api", "Old"),
+				claudeEvent("s1", event.KindToolIntent, 1000, "other", "Older"),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindRunning, Project: "api",
+				Title: "Fix bug", StartedAtMs: 5000, UpdatedAtMs: 5000}},
+		},
+		{
+			name: "tool intent keeps finished card finished",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
+				claudeEvent("s1", event.KindFinished, 2000, "", ""),
+				claudeEvent("s1", event.KindToolIntent, 3000, "", "Edit"),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Project: "api",
+				Title: "Fix bug", Request: "Edit", StartedAtMs: 1000, UpdatedAtMs: 3000}},
+		},
+		{
+			name: "finished clears approval time",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
+				claudeEvent("s1", event.KindApproval, 2000, "", ""),
+				claudeEvent("s1", event.KindFinished, 3000, "", ""),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Project: "api",
+				Title: "Fix bug", StartedAtMs: 1000, UpdatedAtMs: 3000}},
 		},
 		{
 			name: "limits event never creates a card",
@@ -258,6 +319,8 @@ func TestTick(t *testing.T) {
 		{"approval kept exactly at 10 min", []Card{card(KindApproval, 0)}, ApprovalUnknownAfterMs, []Card{card(KindApproval, 0)}},
 		{"approval becomes unknown after 10 min", []Card{card(KindApproval, 0)}, 11 * minuteMs, []Card{card(KindUnknown, 0)}},
 		{"running kept at 59 min", []Card{card(KindRunning, 0)}, 59 * minuteMs, []Card{card(KindRunning, 0)}},
+		{"running kept exactly at 60 min", []Card{card(KindRunning, 0)}, NoActivityAfterMs, []Card{card(KindRunning, 0)}},
+		{"running no activity at 60 min plus 1 ms", []Card{card(KindRunning, 0)}, NoActivityAfterMs + 1, []Card{card(KindNoActivity, 0)}},
 		{"running becomes no activity after 60 min", []Card{card(KindRunning, 0)}, 61 * minuteMs, []Card{card(KindNoActivity, 0)}},
 		{"unknown stays unknown at 5 h", []Card{card(KindUnknown, 0)}, 5 * 60 * minuteMs, []Card{card(KindUnknown, 0)}},
 		{"any card removed after 12 h running", []Card{card(KindRunning, 0)}, RemoveAfterMs + 1, nil},
@@ -277,6 +340,35 @@ func TestTick(t *testing.T) {
 			current.Tick(tt.now)
 			if !sameCards(current.Cards, tt.want) {
 				t.Fatalf("cards:\n got  %+v\n want %+v", current.Cards, tt.want)
+			}
+		})
+	}
+}
+
+func TestToolIntentRevivesDemotedCard(t *testing.T) {
+	tests := []struct {
+		name   string
+		demote CardKind
+		idleMs int64
+	}{
+		{"unknown then tool intent returns to running", KindUnknown, 11 * minuteMs},
+		{"no activity then tool intent returns to running", KindNoActivity, 61 * minuteMs},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var current State
+			current.Apply(claudeEvent("s1", event.KindStarted, 0, "api", "Fix bug"))
+			if tt.demote == KindUnknown {
+				current.Apply(claudeEvent("s1", event.KindApproval, 0, "", ""))
+			}
+			current.Tick(tt.idleMs)
+			if got := current.Cards[0].Kind; got != tt.demote {
+				t.Fatalf("after tick kind = %s, want %s", got, tt.demote)
+			}
+			current.Apply(claudeEvent("s1", event.KindToolIntent, tt.idleMs, "", "Edit"))
+			card := current.Cards[0]
+			if card.Kind != KindRunning || card.ApprovalSinceMs != nil || card.Request != "Edit" {
+				t.Fatalf("card = %+v, want running, no approval time, request Edit", card)
 			}
 		})
 	}

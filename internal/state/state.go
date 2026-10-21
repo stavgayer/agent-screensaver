@@ -64,11 +64,8 @@ func (s *State) Apply(incoming event.Event) {
 		return
 	}
 	index := s.findCard(incoming.Source, incoming.Session)
-	if incoming.Kind == event.KindEnded && (index < 0 || s.Cards[index].Kind != KindFinished) {
-		// A finished card stays so its result remains visible until the TTL.
-		if index >= 0 {
-			s.Cards = slices.Delete(s.Cards, index, index+1)
-		}
+	if incoming.Kind == event.KindEnded {
+		s.applyEnded(index)
 		return
 	}
 	if index < 0 {
@@ -76,10 +73,23 @@ func (s *State) Apply(incoming event.Event) {
 		index = len(s.Cards) - 1
 	}
 	card := &s.Cards[index]
-	applyToCard(card, incoming)
-	card.UpdatedAtMs = max(card.UpdatedAtMs, incoming.AtMs)
-	if incoming.Project != "" {
+	// Hooks are separate processes, so an old event can arrive after a newer
+	// one. It may only fill a missing project, never rewrite the card.
+	late := incoming.AtMs < card.UpdatedAtMs
+	if !late {
+		applyToCard(card, incoming)
+	}
+	if incoming.Project != "" && (!late || card.Project == "") {
 		card.Project = incoming.Project
+	}
+	card.UpdatedAtMs = max(card.UpdatedAtMs, incoming.AtMs)
+}
+
+// applyEnded drops a card, except a finished one: it stays so its result
+// remains visible until the TTL, which counts from the finish.
+func (s *State) applyEnded(index int) {
+	if index >= 0 && s.Cards[index].Kind != KindFinished {
+		s.Cards = slices.Delete(s.Cards, index, index+1)
 	}
 }
 
@@ -119,6 +129,11 @@ func applyToCard(card *Card, incoming event.Event) {
 		card.ApprovalSinceMs = nil
 	case event.KindToolIntent:
 		card.Request = incoming.Title
+		if card.Kind != KindFinished {
+			// A new tool attempt means the approval was answered or denied.
+			card.Kind = KindRunning
+			card.ApprovalSinceMs = nil
+		}
 	case event.KindApproval:
 		card.Kind = KindApproval
 		since := incoming.AtMs
@@ -131,6 +146,7 @@ func applyToCard(card *Card, incoming event.Event) {
 		card.ApprovalSinceMs = nil
 	case event.KindFinished:
 		card.Kind = KindFinished
+		card.ApprovalSinceMs = nil
 	}
 }
 
