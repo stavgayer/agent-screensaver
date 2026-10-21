@@ -21,3 +21,10 @@ type ServiceManager interface {
 	Install(label string, args []string) (path string, err error)
 	Uninstall(label string) error
 }
+
+// FileCloner makes dst a copy-on-write clone of src that shares its disk
+// blocks. It never falls back to a real copy: when cloning is not possible
+// (another volume, a file system without clones) it returns an error.
+type FileCloner interface {
+	Clone(src, dst string) error
+}
