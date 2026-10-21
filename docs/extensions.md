@@ -147,7 +147,70 @@ A theme picks a background and a layout, and sets style values. It needs no entr
 
 ## The web API
 
-This section will be filled in with Task 2.1. The web API is what your `entry` file can call. Until then, do not rely on any API.
+These are the types an extension is written against. The API version is `1`, the same number as `api` in the manifest.
+
+```ts
+/** Version of the extension API. A manifest must declare this exact number. */
+export const API_VERSION = 1;
+
+export type Region = "top-left" | "top-right" | "center" | "bottom";
+export type Mode = "idle" | "attention" | "secondary";
+export type CardKind = "approval" | "running" | "finished" | "unknown" | "no_activity";
+
+/** One agent session. Field names match the service's state.json. */
+export interface Card {
+  source: string;
+  session: string;
+  kind: CardKind;
+  project?: string;
+  title?: string;
+  request?: string;
+  started_at_ms: number;
+  updated_at_ms: number;
+  approval_since_ms?: number;
+}
+
+/** One usage limit. `resets_at` is in seconds, the other times are in milliseconds. */
+export interface Limit {
+  source: string;
+  window: "5h" | "week";
+  used_percent: number;
+  resets_at?: number;
+  updated_at_ms: number;
+}
+
+export interface ViewState {
+  mode: Mode;
+  cards: Card[];
+  limits: Limit[];
+  nowMs: number;
+  serviceOk: boolean;
+  display: "main" | "secondary";
+}
+
+export interface Ctx {
+  options: Readonly<Record<string, unknown>>;
+  requestFrame(cb: (nowMs: number) => void): () => void;
+  now(): number;
+  display: "main" | "secondary";
+}
+
+export interface BackgroundExt {
+  start(root: HTMLElement, ctx: Ctx): void;
+  stop(): void;
+}
+
+export interface ComponentExt {
+  mount(root: HTMLElement, ctx: Ctx): void;
+  update(state: ViewState): void;
+  unmount(): void;
+}
+
+/** An extension's entry module: `export default function create(): BackgroundExt | ComponentExt`. */
+export type CreateExtension = () => BackgroundExt | ComponentExt;
+```
+
+The `entry` file is a JavaScript module. It exports a function named `create` as its default export. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. The types above describe each method and the data it receives.
 
 ## Install, list and remove
 
