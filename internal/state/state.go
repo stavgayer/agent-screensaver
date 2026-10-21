@@ -1,0 +1,188 @@
+// Package state turns the stream of events into the cards and usage limits
+// the screen saver shows. It holds the business rules and nothing else: no
+// clock, no files, no JSON transport.
+package state
+
+import (
+	"slices"
+
+	"agent-screensaver/internal/event"
+)
+
+// Timing rules, all measured from a card's last event.
+const (
+	FinishedTTLMs          = 30 * 60_000
+	NoActivityAfterMs      = 60 * 60_000
+	RemoveAfterMs          = 12 * 3_600_000
+	ApprovalUnknownAfterMs = 10 * 60_000
+)
+
+// CardKind is what a card shows.
+type CardKind string
+
+const (
+	KindApproval   CardKind = "approval"
+	KindRunning    CardKind = "running"
+	KindFinished   CardKind = "finished"
+	KindUnknown    CardKind = "unknown"
+	KindNoActivity CardKind = "no_activity"
+)
+
+// Card is one agent session on screen.
+type Card struct {
+	Source          string   `json:"source"`
+	Session         string   `json:"session"`
+	Kind            CardKind `json:"kind"`
+	Project         string   `json:"project,omitempty"`
+	Title           string   `json:"title,omitempty"`
+	Request         string   `json:"request,omitempty"`
+	StartedAtMs     int64    `json:"started_at_ms"`
+	UpdatedAtMs     int64    `json:"updated_at_ms"`
+	ApprovalSinceMs *int64   `json:"approval_since_ms,omitempty"`
+}
+
+// Limit is the latest usage reading of one source and window.
+type Limit struct {
+	Source      string       `json:"source"`
+	Window      event.Window `json:"window"`
+	UsedPercent float64      `json:"used_percent"`
+	ResetsAt    *int64       `json:"resets_at,omitempty"`
+	UpdatedAtMs int64        `json:"updated_at_ms"`
+}
+
+// State is everything the screen saver shows. Cards keep insertion order so
+// the screen does not shuffle between updates.
+type State struct {
+	Cards  []Card
+	Limits []Limit
+}
+
+// Apply folds one event into the state.
+func (s *State) Apply(incoming event.Event) {
+	if incoming.Kind == event.KindLimits {
+		s.applyLimits(incoming)
+		return
+	}
+	index := s.findCard(incoming.Source, incoming.Session)
+	if incoming.Kind == event.KindEnded && (index < 0 || s.Cards[index].Kind != KindFinished) {
+		// A finished card stays so its result remains visible until the TTL.
+		if index >= 0 {
+			s.Cards = slices.Delete(s.Cards, index, index+1)
+		}
+		return
+	}
+	if index < 0 {
+		s.Cards = append(s.Cards, newCard(incoming))
+		index = len(s.Cards) - 1
+	}
+	card := &s.Cards[index]
+	applyToCard(card, incoming)
+	card.UpdatedAtMs = max(card.UpdatedAtMs, incoming.AtMs)
+	if incoming.Project != "" {
+		card.Project = incoming.Project
+	}
+}
+
+// Tick ages the cards. Limits are readings, not sessions, so they stay.
+func (s *State) Tick(nowMs int64) {
+	s.Cards = slices.DeleteFunc(s.Cards, func(card Card) bool {
+		return isExpired(card, nowMs)
+	})
+	for index := range s.Cards {
+		s.Cards[index].Kind = agedKind(s.Cards[index], nowMs)
+	}
+}
+
+// NeedsAttention reports whether any card waits for the user to approve.
+func (s *State) NeedsAttention() bool {
+	return slices.ContainsFunc(s.Cards, func(card Card) bool {
+		return card.Kind == KindApproval
+	})
+}
+
+func newCard(incoming event.Event) Card {
+	return Card{
+		Source:      incoming.Source,
+		Session:     incoming.Session,
+		Kind:        KindRunning,
+		StartedAtMs: incoming.AtMs,
+	}
+}
+
+func applyToCard(card *Card, incoming event.Event) {
+	switch incoming.Kind {
+	case event.KindStarted:
+		card.Kind = KindRunning
+		card.Title = incoming.Title
+		card.StartedAtMs = incoming.AtMs
+		card.Request = ""
+		card.ApprovalSinceMs = nil
+	case event.KindToolIntent:
+		card.Request = incoming.Title
+	case event.KindApproval:
+		card.Kind = KindApproval
+		since := incoming.AtMs
+		card.ApprovalSinceMs = &since
+		if incoming.Title != "" {
+			card.Request = incoming.Title
+		}
+	case event.KindResumed:
+		card.Kind = KindRunning
+		card.ApprovalSinceMs = nil
+	case event.KindFinished:
+		card.Kind = KindFinished
+	}
+}
+
+func (s *State) applyLimits(incoming event.Event) {
+	for _, reading := range incoming.Limits {
+		index := slices.IndexFunc(s.Limits, func(limit Limit) bool {
+			return limit.Source == incoming.Source && limit.Window == reading.Window
+		})
+		if index < 0 {
+			s.Limits = append(s.Limits, Limit{Source: incoming.Source, Window: reading.Window})
+			index = len(s.Limits) - 1
+		}
+		limit := &s.Limits[index]
+		limit.UsedPercent = reading.UsedPercent
+		limit.ResetsAt = copyInt64(reading.ResetsAt)
+		limit.UpdatedAtMs = max(limit.UpdatedAtMs, incoming.AtMs)
+	}
+}
+
+func (s *State) findCard(source, session string) int {
+	return slices.IndexFunc(s.Cards, func(card Card) bool {
+		return card.Source == source && card.Session == session
+	})
+}
+
+func isExpired(card Card, nowMs int64) bool {
+	idleMs := nowMs - card.UpdatedAtMs
+	if idleMs > RemoveAfterMs {
+		return true
+	}
+	return card.Kind == KindFinished && idleMs > FinishedTTLMs
+}
+
+// agedKind downgrades a silent card: an agent that stops reporting while
+// waiting is probably no longer waiting, and one that stops while running is
+// probably gone.
+func agedKind(card Card, nowMs int64) CardKind {
+	idleMs := nowMs - card.UpdatedAtMs
+	switch {
+	case card.Kind == KindApproval && idleMs > ApprovalUnknownAfterMs:
+		return KindUnknown
+	case card.Kind == KindRunning && idleMs > NoActivityAfterMs:
+		return KindNoActivity
+	default:
+		return card.Kind
+	}
+}
+
+func copyInt64(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
+}
