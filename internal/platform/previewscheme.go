@@ -33,71 +33,97 @@ var previewMIMEs = map[string]string{
 	".mp4": "video/mp4", ".mov": "video/quicktime", ".woff2": "font/woff2",
 }
 
-// previewReply is one answer to the preview frame.
+// previewReply says how to answer one request: the status, and for a 200
+// or 206 which bytes of which file.
 type previewReply struct {
-	Status      int
-	MIME        string
-	Body        []byte
-	Start, Size int64 // for Content-Range on a 206
+	Status              int
+	MIME, Path          string
+	Start, Length, Size int64 // Size is the whole file, for Content-Range
 }
 
-// servePreview answers one request for rawURL with an optional Range header.
-func servePreview(rawURL, rangeHeader, root string) previewReply {
+// planPreview decides the answer to one request for rawURL with an optional
+// Range header. It reads no file content: the caller reads Length bytes into
+// its own buffer with readPreview. A file larger than one chunk is only sent
+// in ranges, so a request can never make the window read a whole video.
+func planPreview(rawURL, rangeHeader, root string) previewReply {
 	path, err := resolvePreviewPath(rawURL, root)
 	if err != nil {
 		return previewReply{Status: 404}
 	}
-	file, err := os.Open(path)
+	info, err := os.Stat(path)
 	if err != nil {
 		return previewReply{Status: 404}
 	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return previewReply{Status: 404}
-	}
-	start, length, partial, err := parseRange(rangeHeader, info.Size())
-	if err != nil {
-		return previewReply{Status: 416, Size: info.Size()}
+	size := info.Size()
+	start, length, partial, err := parseRange(rangeHeader, size)
+	if err != nil || (!partial && size > maxPreviewChunk) {
+		return previewReply{Status: 416, Size: size}
 	}
 	status := 200
 	if partial {
 		status, length = 206, min(length, maxPreviewChunk)
 	}
-	body := make([]byte, length)
-	if _, err := file.ReadAt(body, start); err != nil && !errors.Is(err, io.EOF) {
-		return previewReply{Status: 404}
-	}
-	return previewReply{Status: status, MIME: previewMIME(path), Body: body, Start: start, Size: info.Size()}
+	return previewReply{Status: status, MIME: previewMIME(path), Path: path, Start: start, Length: length, Size: size}
 }
 
+// readPreview reads the planned bytes into buffer and returns how many it
+// read. A file that shrank since the plan gives fewer bytes, never padding.
+func readPreview(reply previewReply, buffer []byte) (int, error) {
+	file, err := os.Open(reply.Path)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+	n, err := file.ReadAt(buffer, reply.Start)
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	return n, err
+}
+
+// previewFolders are the only folders of the data directory the preview
+// needs: the runtime, the extensions and the media. The rest (payloads with
+// raw prompts, the spool, config.json, logs) is never served.
+var previewFolders = []string{"runtime", "extensions", "media"}
+
 // resolvePreviewPath maps ags-preview://data/<path> to a regular file inside
-// root. Anything else is errPreviewNotFound: another scheme or host, a ".."
-// segment, or a symlink that leads out of root.
+// one of previewFolders under root. Anything else is errPreviewNotFound:
+// another scheme or host, another folder, a ".." segment, a NUL, or a
+// symlink that leads out of the served folders.
 func resolvePreviewPath(rawURL, root string) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Scheme != PreviewScheme || parsed.Host != previewHost {
 		return "", errPreviewNotFound
 	}
 	relative := strings.TrimPrefix(parsed.Path, "/") // Path is already decoded
-	if relative == "" || slices.Contains(strings.Split(relative, "/"), "..") || !filepath.IsLocal(relative) {
+	segments := strings.Split(relative, "/")
+	if slices.Contains(segments, "..") || strings.ContainsRune(relative, 0) || !filepath.IsLocal(relative) ||
+		!slices.Contains(previewFolders, segments[0]) {
 		return "", errPreviewNotFound
 	}
-	realRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return "", errPreviewNotFound
-	}
-	realPath, err := filepath.EvalSymlinks(filepath.Join(realRoot, relative))
-	if err != nil {
-		return "", errPreviewNotFound
-	}
-	if inside, err := filepath.Rel(realRoot, realPath); err != nil || !filepath.IsLocal(inside) {
+	realPath, err := filepath.EvalSymlinks(filepath.Join(root, relative))
+	if err != nil || !insideServedFolder(realPath, root) {
 		return "", errPreviewNotFound
 	}
 	if info, err := os.Stat(realPath); err != nil || !info.Mode().IsRegular() {
 		return "", errPreviewNotFound
 	}
 	return realPath, nil
+}
+
+// insideServedFolder reports whether realPath, with every symlink resolved,
+// lies in one of previewFolders, also with its symlinks resolved.
+func insideServedFolder(realPath, root string) bool {
+	for _, folder := range previewFolders {
+		realFolder, err := filepath.EvalSymlinks(filepath.Join(root, folder))
+		if err != nil {
+			continue
+		}
+		if inside, err := filepath.Rel(realFolder, realPath); err == nil && filepath.IsLocal(inside) {
+			return true
+		}
+	}
+	return false
 }
 
 func previewMIME(path string) string {
@@ -113,6 +139,9 @@ func previewMIME(path string) string {
 func parseRange(header string, size int64) (start, length int64, partial bool, err error) {
 	if header == "" {
 		return 0, size, false, nil
+	}
+	if size == 0 {
+		return 0, 0, false, fmt.Errorf("range %q of an empty file", header)
 	}
 	spec, ok := strings.CutPrefix(header, "bytes=")
 	first, last, hasDash := strings.Cut(spec, "-")

@@ -72,18 +72,26 @@ func settingsPageMessage(message *C.char) {
 }
 
 // previewRequest answers one ags-preview:// request from the preview frame,
-// on the main thread.
+// on the main thread. The file is read once, straight into a C buffer that
+// the Objective-C side hands to WebKit and frees.
 //
 //export previewRequest
 func previewRequest(rawURL, rangeHeader *C.char, reply *C.PreviewReply) {
-	answer := servePreview(C.GoString(rawURL), C.GoString(rangeHeader), previewRoot)
-	reply.status = C.int(answer.Status)
-	reply.start, reply.size = C.longlong(answer.Start), C.longlong(answer.Size)
-	reply.length = C.longlong(len(answer.Body))
-	if answer.MIME != "" {
-		reply.mime = C.CString(answer.MIME)
+	plan := planPreview(C.GoString(rawURL), C.GoString(rangeHeader), previewRoot)
+	reply.status = C.int(plan.Status)
+	reply.start, reply.size = C.longlong(plan.Start), C.longlong(plan.Size)
+	if plan.MIME != "" {
+		reply.mime = C.CString(plan.MIME)
 	}
-	if len(answer.Body) > 0 {
-		reply.body = C.CBytes(answer.Body)
+	if plan.Length == 0 {
+		return
 	}
+	buffer := C.malloc(C.size_t(plan.Length))
+	n, err := readPreview(plan, unsafe.Slice((*byte)(buffer), plan.Length))
+	if err != nil || n == 0 {
+		C.free(buffer)
+		reply.status = 404
+		return
+	}
+	reply.body, reply.length = buffer, C.longlong(n)
 }
