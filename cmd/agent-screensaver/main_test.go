@@ -223,3 +223,15 @@ func TestStatuslineStopsWhenAlreadyInsideStatusline(t *testing.T) {
 		t.Errorf("exit %d, stdout %q; want 0 and empty", got.exitCode, got.stdout)
 	}
 }
+
+func TestVersionPrintsBuildVersion(t *testing.T) {
+	for _, arg := range []string{"version", "--version"} {
+		t.Run(arg, func(t *testing.T) {
+			got := runBinary(t, t.TempDir(), "", arg)
+
+			if got.exitCode != 0 || got.stdout != "dev\n" {
+				t.Errorf("exit %d, stdout %q; want 0 and \"dev\\n\"", got.exitCode, got.stdout)
+			}
+		})
+	}
+}

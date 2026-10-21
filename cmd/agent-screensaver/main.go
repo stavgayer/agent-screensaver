@@ -25,12 +25,19 @@ var subcommands = []string{
 	"option", "privacy", "sound", "fps", "ext", "tray", "settings",
 }
 
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
 // run dispatches to a subcommand and returns the process exit code.
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 1 && (args[0] == "version" || args[0] == "--version") {
+		fmt.Fprintln(stdout, version)
+		return 0
+	}
 	if len(args) == 0 || !isSubcommand(args[0]) {
 		printUsage(stderr)
 		return 2
