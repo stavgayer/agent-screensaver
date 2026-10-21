@@ -409,6 +409,35 @@ func TestInstallAbortsOnInvalidUserJSON(t *testing.T) {
 	}
 }
 
+func TestInstallAbortsOnCorruptOwnConfig(t *testing.T) {
+	home := t.TempDir()
+	p := paths.ForHome(home)
+	corrupt := []byte("{not json")
+	writeFile(t, p.ConfigFile, corrupt)
+	claudeOriginal := readFixture(t, "claude_settings.json")
+	writeFile(t, claudePath(home), claudeOriginal)
+	sm := &fakeServices{}
+	artifacts, binary := artifactsFixture(t)
+
+	_, err := Apply(home, binary, artifacts, sm)
+
+	if err == nil || !strings.Contains(err.Error(), p.ConfigFile) || !strings.Contains(err.Error(), "nothing was changed") {
+		t.Fatalf("error = %v", err)
+	}
+	if got, _ := os.ReadFile(p.ConfigFile); !bytes.Equal(got, corrupt) {
+		t.Error("corrupt config was replaced")
+	}
+	if got, _ := os.ReadFile(claudePath(home)); !bytes.Equal(got, claudeOriginal) {
+		t.Error("user file was written")
+	}
+	if _, statErr := os.Stat(claudePath(home) + backupSuffix); !os.IsNotExist(statErr) {
+		t.Error("backup written after aborted install")
+	}
+	if len(sm.installed) != 0 {
+		t.Error("service installed after abort")
+	}
+}
+
 func TestInstallWritesBackupOfOriginal(t *testing.T) {
 	home := t.TempDir()
 	original := readFixture(t, "claude_settings.json")

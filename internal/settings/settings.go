@@ -320,7 +320,7 @@ func (s Service) removeMediaCopy(extID, key string, stored any) {
 // temp file and renames it, so a failed copy never leaves a half-written
 // media file.
 func (s Service) copyIntoMedia(extID, key, source string) (string, error) {
-	if key != filepath.Base(key) || !filepath.IsLocal(key) {
+	if key != filepath.Base(key) || key == "." || !filepath.IsLocal(key) {
 		return "", fmt.Errorf("option name %q cannot be used as a folder name", key)
 	}
 	folder := s.mediaFolder(extID, key)

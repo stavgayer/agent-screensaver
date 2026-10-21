@@ -469,3 +469,15 @@ func TestSnapshotShowsSchemasAndValues(t *testing.T) {
 		t.Errorf("config theme = %q", snapshot.Config.Theme)
 	}
 }
+
+func TestMediaFolderGuardRejectsBadOptionNames(t *testing.T) {
+	service := newService(t)
+	source := writeFile(t, filepath.Join(t.TempDir(), "photo.png"), "x")
+	for _, key := range []string{".", "..", "a/b", ""} {
+		t.Run("key "+key, func(t *testing.T) {
+			if _, err := service.copyIntoMedia("acme.rain", key, source); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+}

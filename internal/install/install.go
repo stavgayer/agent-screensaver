@@ -158,7 +158,14 @@ type configEdit struct {
 func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, error) {
 	where := locationsFor(home)
 	prior, _ := loadRecord(where.paths.InstallRecord) // missing record: first install
-	edits, previous, err := prepareInstall(home, where.bin, prior.PreviousStatusline)
+	// Our own settings file is checked up front too: saving the status line
+	// later must never replace a damaged file with defaults.
+	_, err := config.LoadStrict(where.paths.ConfigFile)
+	var edits []configEdit
+	var previous string
+	if err == nil {
+		edits, previous, err = prepareInstall(home, where.bin, prior.PreviousStatusline)
+	}
 	if err != nil {
 		return Record{}, fmt.Errorf("cannot install: %w; nothing was changed", err)
 	}
@@ -331,7 +338,10 @@ func jsonEscaped(text string) string {
 }
 
 func saveStatusline(configFile, previous string) error {
-	cfg := config.Load(configFile)
+	cfg, err := config.LoadStrict(configFile)
+	if err != nil {
+		return err
+	}
 	cfg.PreviousStatusline = previous
 	return cfg.Save(configFile)
 }
@@ -339,6 +349,9 @@ func saveStatusline(configFile, previous string) error {
 func clearSavedStatusline(configFile string) error {
 	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
 		return nil
+	}
+	if _, err := config.LoadStrict(configFile); err != nil {
+		return nil // a damaged file is the user's to fix; do not block uninstall
 	}
 	return saveStatusline(configFile, "")
 }
