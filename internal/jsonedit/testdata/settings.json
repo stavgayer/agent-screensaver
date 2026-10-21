@@ -1,0 +1,9 @@
+{
+  "z": {"b":1,   "a":[1, 2,3]},
+  "a": "text with <html> & unicode é",
+  "hooks": {
+    "Stop": [{"hooks": [{"type": "command", "command": "old"}]}],
+    "PreToolUse": []
+  },
+  "m": 1.50
+}
