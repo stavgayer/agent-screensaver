@@ -82,6 +82,21 @@ func (l Launchd) unloadIfLoaded(label string) error {
 	return nil
 }
 
+// trayLabelSuffix marks the menu bar app's service. Its Quit item exits with
+// code 0, which must stay quit, so launchd restarts it only after a crash.
+// The platform package cannot import install, so it recognises the label by
+// its end.
+const trayLabelSuffix = ".tray"
+
+// keepAliveValue is the plist value of the KeepAlive key: always for the
+// daemon, only after a non-zero exit for the tray.
+func keepAliveValue(label string) string {
+	if strings.HasSuffix(label, trayLabelSuffix) {
+		return "\t<dict>\n\t\t<key>SuccessfulExit</key>\n\t\t<false/>\n\t</dict>"
+	}
+	return "\t<true/>"
+}
+
 func renderPlist(label string, args []string, logFile string) []byte {
 	var out bytes.Buffer
 	out.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
@@ -100,7 +115,7 @@ func renderPlist(label string, args []string, logFile string) []byte {
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
-	<true/>
+` + keepAliveValue(label) + `
 	<key>ProcessType</key>
 	<string>Background</string>
 	<key>LowPriorityIO</key>

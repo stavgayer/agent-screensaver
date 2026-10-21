@@ -31,9 +31,9 @@ func plain(label string) Item { return Item{Label: label} }
 
 var separator = Item{}
 
-// controls is the part of the menu that never changes, for the default config
+// tail is the part of the menu that never changes, for the default config
 // (sound on, privacy off).
-func controls(sound, privacy bool) []Item {
+func tail(sound, privacy bool) []Item {
 	return []Item{
 		separator,
 		{ID: "preview", Label: "Preview screen saver", Enabled: true},
@@ -44,6 +44,12 @@ func controls(sound, privacy bool) []Item {
 		separator,
 		{ID: "quit", Label: "Quit menu bar app", Enabled: true},
 	}
+}
+
+// live marks a state file as written just now by a running daemon.
+func live(f statefile.StateFile) statefile.StateFile {
+	f.ServiceOK, f.GeneratedAtMs = true, nowMs
+	return f
 }
 
 func TestBuildMenu(t *testing.T) {
@@ -115,6 +121,20 @@ func TestBuildMenu(t *testing.T) {
 			wantSound: true,
 		},
 		{
+			name: "old limit reading says how old",
+			file: statefile.StateFile{Limits: []state.Limit{
+				{Source: "claude", Window: event.Week, UsedPercent: 40, UpdatedAtMs: nowMs - 20*minuteMs},
+				{Source: "codex", Window: event.Week, UsedPercent: 40, UpdatedAtMs: nowMs - 15*minuteMs},
+			}},
+			cfg: soundOn,
+			wantInfo: []Item{
+				plain("All quiet"),
+				plain("Claude week 40% · updated 20m ago"),
+				plain("Codex week 40%"),
+			},
+			wantSound: true,
+		},
+		{
 			name: "reset in past says waiting",
 			file: statefile.StateFile{Limits: []state.Limit{
 				limit("claude", event.FiveHour, 90, inMinutes(-5)),
@@ -161,11 +181,39 @@ func TestBuildMenu(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := BuildMenu(tt.file, tt.cfg, nowMs)
-			want := Model{Attention: tt.wantAttention, Items: append(tt.wantInfo, controls(tt.wantSound, tt.wantPrivacy)...)}
+			got := BuildMenu(live(tt.file), tt.cfg, nowMs)
+			want := Model{Attention: tt.wantAttention, Items: append(tt.wantInfo, tail(tt.wantSound, tt.wantPrivacy)...)}
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("BuildMenu:\n got %+v\nwant %+v", got, want)
 			}
 		})
 	}
+}
+
+func TestBuildMenuServiceDown(t *testing.T) {
+	cards := []state.Card{approvalCard("codex", "api-server", nowMs-minuteMs)}
+	limits := []state.Limit{limit("claude", event.FiveHour, 62, inMinutes(100))}
+	tests := []struct {
+		name string
+		file statefile.StateFile
+	}{
+		{"file missing", statefile.StateFile{}},
+		{"service_ok false", statefile.StateFile{ServiceOK: false, GeneratedAtMs: nowMs, Cards: cards, Limits: limits}},
+		{"generated more than 120 s ago", statefile.StateFile{ServiceOK: true, GeneratedAtMs: nowMs - 120_001, Cards: cards, Limits: limits}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildMenu(tt.file, config.Config{Sound: true}, nowMs)
+			want := Model{Items: append([]Item{plain("Service not running")}, tail(true, false)...)}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("BuildMenu:\n got %+v\nwant %+v", got, want)
+			}
+		})
+	}
+	t.Run("exactly 120 s old is still alive", func(t *testing.T) {
+		file := statefile.StateFile{ServiceOK: true, GeneratedAtMs: nowMs - 120_000}
+		if got := BuildMenu(file, config.Config{}, nowMs); got.Items[0].Label != "All quiet" {
+			t.Errorf("first line = %q", got.Items[0].Label)
+		}
+	})
 }

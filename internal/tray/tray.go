@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
 
@@ -89,18 +88,10 @@ func (a *app) refresh() {
 		return
 	}
 	a.menu.apply(a.current, model, a.clicks)
-	a.current = model
-	log.Printf("tray: menu attention=%t items=%s", model.Attention, describe(model.Items))
-}
-
-func describe(items []Item) string {
-	var labels []string
-	for _, item := range items {
-		if item.Label != "" {
-			labels = append(labels, fmt.Sprintf("%q", item.Label))
-		}
+	if model.Attention != a.current.Attention {
+		log.Printf("tray: attention icon %t", model.Attention) // no project names in logs
 	}
-	return strings.Join(labels, ", ")
+	a.current = model
 }
 
 func (a *app) handle(id string) {
@@ -108,7 +99,7 @@ func (a *app) handle(id string) {
 	var err error
 	switch id {
 	case IDPreview:
-		err = exec.Command("open", "-a", "ScreenSaverEngine").Run()
+		err = startAndReap(exec.Command("open", "-a", "ScreenSaverEngine"))
 	case IDSettings:
 		err = a.openSettings()
 	case IDSound:
@@ -121,6 +112,16 @@ func (a *app) handle(id string) {
 	if err != nil {
 		log.Printf("tray: %s: %v", id, err)
 	}
+}
+
+// startAndReap starts the command and returns at once; the goroutine only
+// collects the exit, so the loop never waits for the child.
+func startAndReap(command *exec.Cmd) error {
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("start %s: %w", command.Path, err)
+	}
+	go func() { _ = command.Wait() }()
+	return nil
 }
 
 // stateReader returns the last good state file. It reads the file again only

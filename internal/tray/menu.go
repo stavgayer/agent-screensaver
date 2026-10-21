@@ -38,9 +38,26 @@ type Model struct {
 	Items     []Item
 }
 
+const (
+	// staleAfterMs is how old the state file may be before the daemon counts as
+	// dead. Same value as STALE_AFTER_MS in web/src/plan.ts; change both.
+	staleAfterMs = 120_000
+	// limitStaleAfterMs is the age of a limit reading that gets an "updated
+	// Nm ago" note. Same value as STALE_AFTER_MS in
+	// web/src/builtins/limit-rings/logic.ts; change both.
+	limitStaleAfterMs = 15 * 60_000
+
+	serviceDownLine = "Service not running"
+)
+
 // BuildMenu turns the state file and the settings into the menu. It is pure:
-// the clock is a parameter.
+// the clock is a parameter. A state file that is missing (the zero value),
+// says the service is down, or is too old means the daemon is dead: the cards
+// and limits in it are not trusted, so only the warning and the controls show.
 func BuildMenu(f statefile.StateFile, cfg config.Config, nowMs int64) Model {
+	if !f.ServiceOK || nowMs-f.GeneratedAtMs > staleAfterMs {
+		return Model{Items: append([]Item{text(serviceDownLine)}, controls(cfg)...)}
+	}
 	waiting := cardsOfKind(f.Cards, state.KindApproval)
 	running := cardsOfKind(f.Cards, state.KindRunning)
 
@@ -51,7 +68,11 @@ func BuildMenu(f statefile.StateFile, cfg config.Config, nowMs int64) Model {
 	for _, card := range waiting {
 		items = append(items, text(approvalLine(card, cfg.Privacy, nowMs)))
 	}
-	items = append(items,
+	return Model{Attention: len(waiting) > 0, Items: append(items, controls(cfg)...)}
+}
+
+func controls(cfg config.Config) []Item {
+	return []Item{
 		separatorLine(),
 		action(IDPreview, "Preview screen saver", false),
 		action(IDSettings, "Settings…", false),
@@ -60,8 +81,7 @@ func BuildMenu(f statefile.StateFile, cfg config.Config, nowMs int64) Model {
 		action(IDPrivacy, "Privacy mode", cfg.Privacy),
 		separatorLine(),
 		action(IDQuit, "Quit menu bar app", false),
-	)
-	return Model{Attention: len(waiting) > 0, Items: items}
+	}
 }
 
 func text(label string) Item { return Item{Label: label} }
@@ -120,6 +140,9 @@ func limitLine(reading state.Limit, nowMs int64) string {
 	line := fmt.Sprintf("%s %d%%", name, wholePercent(reading.UsedPercent))
 	if reset := resetText(reading, nowMs); reset != "" {
 		line += " · " + reset
+	}
+	if age := nowMs - reading.UpdatedAtMs; age > limitStaleAfterMs {
+		line += " · updated " + FormatDuration(age) + " ago"
 	}
 	return line
 }

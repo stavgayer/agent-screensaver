@@ -137,3 +137,21 @@ func TestLaunchdBootstrapFailureIsReported(t *testing.T) {
 		t.Error("want an error, got nil")
 	}
 }
+
+func TestKeepAliveByService(t *testing.T) {
+	tests := []struct {
+		name, label, want string
+	}{
+		{"daemon is always restarted", "dev.agentscreensaver.daemon", "<key>KeepAlive</key>\n\t<true/>"},
+		{"tray stays quit after a clean exit", "dev.agentscreensaver.tray",
+			"<key>KeepAlive</key>\n\t<dict>\n\t\t<key>SuccessfulExit</key>\n\t\t<false/>\n\t</dict>"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plist := string(renderPlist(tt.label, []string{"/bin/x"}, "/log"))
+			if !strings.Contains(plist, tt.want) {
+				t.Errorf("plist lacks %q:\n%s", tt.want, plist)
+			}
+		})
+	}
+}
