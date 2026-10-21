@@ -1,0 +1,2 @@
+{"id":"builtin.default-layout","name":"Default layout","version":"1.0.0","type":"layout","api":1,
+ "layout":{"modes":{"idle":{"center":[{"id":"builtin.clock"}]},"attention":{"center":[{"id":"builtin.clock"}],"bottom":[{"id":"builtin.cards"}]}}}}

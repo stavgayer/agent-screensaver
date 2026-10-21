@@ -1,0 +1,2 @@
+{"id":"acme.night","name":"Night","version":"1.0.0","type":"theme","api":1,
+ "theme":{"background":{"id":"acme.rain","options":{"color":"#222222"}},"layout":"builtin.default-layout","style":{"accent":"#0088ff"}}}

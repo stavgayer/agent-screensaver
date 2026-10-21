@@ -1,0 +1,2 @@
+{"id":"acme.rain","name":"Rain","version":"1.0.0","type":"background","api":1,"entry":"index.js",
+ "options":{"color":{"type":"color","default":"#000000"}}}

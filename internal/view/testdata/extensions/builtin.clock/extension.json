@@ -1,0 +1,2 @@
+{"id":"builtin.clock","name":"Clock","version":"1.0.0","type":"component","api":1,"entry":"index.js",
+ "options":{"format":{"type":"enum","values":["12h","24h"],"default":"24h"}}}

@@ -1,0 +1,2 @@
+{"id":"builtin.default","name":"Default","version":"1.0.0","type":"theme","api":1,
+ "theme":{"background":{"id":"builtin.plain","options":{"color":"#111111"}},"layout":"builtin.default-layout","style":{"accent":"#ff8800"}}}
