@@ -286,7 +286,7 @@ Version 1 includes a menu bar app. It replaces "settings window later" from §7a
 
 ### How it is built
 
-- It is part of the same Go binary, using two cross-platform libraries: `fyne.io/systray` for the tray icon and menu, and `github.com/webview/webview_go` for the settings window (WebKit on macOS, WebView2 on Windows, WebKitGTK on Linux). These are the only third-party Go libraries in the project. The first task of this phase checks that both are maintained and work on macOS 26 (see the plan).
+- It is part of the same Go binary. The tray icon and menu use `fyne.io/systray`, the only third-party Go library in the project. The settings window is our own small window behind a `platform.SettingsWindow` interface: on macOS an `NSWindow` with a `WKWebView` and a script-message bridge, through cgo (owner decision, 21/10/2026, after the library check in docs/decisions/0003-tray-and-webview.md found `webview_go` unmaintained). Windows (WebView2) and Linux (WebKitGTK) get their own small implementations later.
 - Three separate processes, each small: the daemon (no UI), `agent-screensaver tray` (icon and menu, started at login like the daemon), and `agent-screensaver settings` (the settings window, started by the tray only when the user opens it, and closed after). Reason: both libraries want the main thread, and a crash in the UI must never stop the daemon.
 - The settings page is HTML and TypeScript, the same on every OS. The window talks to Go through the webview's function binding, in the same process. No network port is opened.
 - All settings logic lives in one Go package used by the CLI, the tray and the settings window. No logic is written twice.
