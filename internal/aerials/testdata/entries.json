@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "categories": [
+    { "id": "CAT-LAND", "localizedNameKey": "AerialCategoryLandscapes" },
+    { "id": "CAT-CITY", "localizedNameKey": "AerialCategoryCities" },
+    { "id": "CAT-SPACE", "localizedNameKey": "AerialCategorySpace" },
+    { "id": "CAT-SEA", "localizedNameKey": "AerialCategoryUnderwater" },
+    { "id": "CAT-MAC", "localizedNameKey": "AerialCategoryMac" }
+  ],
+  "assets": [
+    { "id": "C2-NEW-YORK", "categories": ["CAT-CITY"], "accessibilityLabel": "New York" },
+    { "id": "C1-DUBAI", "categories": ["CAT-CITY"], "accessibilityLabel": "Dubai" },
+    { "id": "L1-TAHOE", "categories": ["CAT-LAND"], "accessibilityLabel": "Tahoe" },
+    { "id": "S1-EARTH", "categories": ["CAT-SPACE"], "accessibilityLabel": "Earth" },
+    { "id": "U1-DOLPHINS", "categories": ["CAT-SEA"], "accessibilityLabel": "Dolphins" },
+    { "id": "M1-MACOS", "categories": ["CAT-MAC"], "accessibilityLabel": "macOS" },
+    { "id": "X1-BOTH", "categories": ["CAT-LAND", "CAT-SEA"], "accessibilityLabel": "Coast" },
+    { "id": "../C9-ESCAPE", "categories": ["CAT-CITY"], "accessibilityLabel": "Unsafe id" }
+  ]
+}
