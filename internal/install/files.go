@@ -86,11 +86,11 @@ func removeBuiltinExtensions(dir string) error {
 	return nil
 }
 
-// removeInstalledFiles deletes what Apply copied. Settings, spool and other
-// extensions stay. The paths come from the home directory, never from the
+// removeInstalledFiles deletes what Apply copied and the aerial clones the
+// daemon made. Settings, spool, the user's media and other extensions stay. The paths come from the home directory, never from the
 // record file, so a damaged or edited record cannot point deletion elsewhere.
 func removeInstalledFiles(where locations) error {
-	for _, path := range []string{filepath.Dir(where.bin), where.paths.RuntimeDir, where.saver} {
+	for _, path := range []string{filepath.Dir(where.bin), where.paths.RuntimeDir, where.saver, where.paths.AerialClonesDir} {
 		if err := os.RemoveAll(path); err != nil {
 			return fmt.Errorf("remove %s: %w", path, err)
 		}

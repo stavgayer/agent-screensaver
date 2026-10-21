@@ -128,8 +128,8 @@ func PlanUninstall(home string) ([]PlannedStep, error) {
 		steps = append(steps, PlannedStep{"service", "Stop and remove the launch agent " + label})
 	}
 	return append(steps,
-		PlannedStep{"files", fmt.Sprintf("Delete %s, %s, %s and the built-in extensions in %s",
-			where.bin, where.paths.RuntimeDir, where.saver, where.paths.ExtensionsDir)},
+		PlannedStep{"files", fmt.Sprintf("Delete %s, %s, %s, the aerial clones in %s and the built-in extensions in %s",
+			where.bin, where.paths.RuntimeDir, where.saver, where.paths.AerialClonesDir, where.paths.ExtensionsDir)},
 		PlannedStep{"record", "Delete " + where.paths.InstallRecord + " (your settings and spool stay)"},
 	), nil
 }

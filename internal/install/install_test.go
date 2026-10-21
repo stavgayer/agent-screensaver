@@ -565,3 +565,25 @@ func TestUninstallDeletesOnlyOwnPathsNotRecordPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestUninstallRemovesAerialClonesOnly(t *testing.T) {
+	home := t.TempDir()
+	sm := &fakeServices{}
+	apply(t, home, sm)
+	p := paths.ForHome(home)
+	clone := filepath.Join(p.AerialClonesDir, "C1.mov")
+	userMedia := filepath.Join(p.MediaDir, "builtin.video", "file", "mine.mov")
+	writeFile(t, clone, []byte("clone"))
+	writeFile(t, userMedia, []byte("user video"))
+
+	if err := Uninstall(home, sm); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(p.AerialClonesDir); !os.IsNotExist(err) {
+		t.Errorf("%s still exists (err %v)", p.AerialClonesDir, err)
+	}
+	if _, err := os.Stat(userMedia); err != nil {
+		t.Errorf("the user's media was deleted: %v", err)
+	}
+}
