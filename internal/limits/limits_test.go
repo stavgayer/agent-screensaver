@@ -5,9 +5,13 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"agent-screensaver/internal/event"
 )
@@ -53,6 +57,30 @@ func TestParseCodexRateLimits(t *testing.T) {
 			want: []event.LimitReading{
 				{Window: event.FiveHour, UsedPercent: 100},
 				{Window: event.Week, UsedPercent: 0},
+			},
+		},
+		{
+			name:     "usage-based plan gives one plan reading",
+			response: `{"rateLimits":{"primary":null,"secondary":null,"individualLimit":{"limit":"8824","used":"1636.33","remainingPercent":81,"resetsAt":1793491200}}}`,
+			want:     []event.LimitReading{{Window: event.Plan, UsedPercent: 19, ResetsAt: int64Pointer(1793491200)}},
+		},
+		{
+			name:     "plan falls back to used over limit",
+			response: `{"rateLimits":{"individualLimit":{"limit":"200","used":50}}}`,
+			want:     []event.LimitReading{{Window: event.Plan, UsedPercent: 25}},
+		},
+		{
+			name:     "plan with zero limit and no percent is skipped",
+			response: `{"rateLimits":{"individualLimit":{"limit":"0","used":"5"}}}`,
+			want:     nil,
+		},
+		{
+			name:     "both windows and plan give three readings",
+			response: `{"rateLimits":{"primary":{"usedPercent":10},"secondary":{"usedPercent":20},"individualLimit":{"remainingPercent":"70"}}}`,
+			want: []event.LimitReading{
+				{Window: event.FiveHour, UsedPercent: 10},
+				{Window: event.Week, UsedPercent: 20},
+				{Window: event.Plan, UsedPercent: 30},
 			},
 		},
 		{
@@ -117,6 +145,87 @@ func TestAll(t *testing.T) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// fakeCodex writes a shell script that stands in for the codex binary.
+func fakeCodex(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "codex")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestCodexRead(t *testing.T) {
+	ok := `{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":42,"resetsAt":7}}}}`
+	tests := []struct {
+		name    string
+		script  string
+		want    []event.LimitReading
+		wantErr bool
+	}{
+		{
+			name:   "skips notifications and junk before the answer",
+			script: "read line\necho '{\"method\":\"configWarning\",\"id\":2}'\necho 'not json'\necho '" + ok + "'\nsleep 60",
+			want:   []event.LimitReading{{Window: event.FiveHour, UsedPercent: 42, ResetsAt: int64Pointer(7)}},
+		},
+		{
+			name:    "error response fails",
+			script:  `echo '{"id":2,"error":{"code":-1,"message":"x"}}'; sleep 60`,
+			wantErr: true,
+		},
+		{
+			name:    "exit without answer fails",
+			script:  "exit 0",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			got, err := Codex{Bin: fakeCodex(t, tt.script)}.Read(ctx)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// The timeout is generous because the first run of a fresh script can be
+// slow on macOS; the script has to write its pid before the deadline.
+func TestCodexReadTimeoutKillsProcessGroup(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	// The inner sleep is a grandchild: only a group kill removes it.
+	script := fakeCodex(t, "sleep 60 &\necho $! > "+pidFile+"\nwait")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	start := time.Now()
+	_, err := Codex{Bin: script}.Read(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want DeadlineExceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("Read took %v", elapsed)
+	}
+	raw, readErr := os.ReadFile(pidFile)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	grandchild, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+	// Wait briefly: a killed process needs a moment to be reaped by init.
+	deadline := time.Now().Add(2 * time.Second)
+	for syscall.Kill(grandchild, 0) == nil && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := syscall.Kill(grandchild, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Errorf("grandchild %d still alive: %v", grandchild, err)
 	}
 }
 

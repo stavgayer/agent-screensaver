@@ -23,6 +23,7 @@ import (
 	"io"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -93,6 +94,7 @@ func killGroup(cmd *exec.Cmd) error {
 
 type rpcMessage struct {
 	ID     *int            `json:"id"`
+	Method string          `json:"method"`
 	Result json.RawMessage `json:"result"`
 	Error  *struct {
 		Message string `json:"message"`
@@ -123,7 +125,7 @@ func awaitResult(stdout io.Reader, id int) (json.RawMessage, error) {
 // logs and notifications fall through.
 func decodeResponse(line []byte, id int) (rpcMessage, bool) {
 	var message rpcMessage
-	if json.Unmarshal(line, &message) != nil || message.ID == nil || *message.ID != id {
+	if json.Unmarshal(line, &message) != nil || message.Method != "" || message.ID == nil || *message.ID != id {
 		return rpcMessage{}, false
 	}
 	return message, true
@@ -134,16 +136,37 @@ type rateLimitWindow struct {
 	ResetsAt    *int64   `json:"resetsAt"`
 }
 
+// flexNumber reads a JSON number or a numeric string; Codex sends both.
+type flexNumber struct{ value *float64 }
+
+func (number *flexNumber) UnmarshalJSON(data []byte) error {
+	trimmed := strings.Trim(string(data), `"`)
+	if parsed, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		number.value = &parsed
+	}
+	return nil
+}
+
+// individualLimit is the limit of usage-based plans, which have no windows.
+type individualLimit struct {
+	Limit            flexNumber `json:"limit"`
+	Used             flexNumber `json:"used"`
+	RemainingPercent flexNumber `json:"remainingPercent"`
+	ResetsAt         *int64     `json:"resetsAt"`
+}
+
 type rateLimitsResult struct {
 	RateLimits struct {
-		Primary   *rateLimitWindow `json:"primary"`
-		Secondary *rateLimitWindow `json:"secondary"`
+		Primary         *rateLimitWindow `json:"primary"`
+		Secondary       *rateLimitWindow `json:"secondary"`
+		IndividualLimit *individualLimit `json:"individualLimit"`
 	} `json:"rateLimits"`
 }
 
 // ParseCodexRateLimits turns the result of `account/rateLimits/read` into
 // readings: primary is the 5 hour window, secondary the weekly one. A window
-// that is absent or has no percent is skipped.
+// that is absent or has no percent is skipped. Usage-based plans have no
+// windows; their individual limit becomes one "plan" reading.
 func ParseCodexRateLimits(resp []byte) []event.LimitReading {
 	var result rateLimitsResult
 	if json.Unmarshal(resp, &result) != nil {
@@ -161,22 +184,52 @@ func ParseCodexRateLimits(resp []byte) []event.LimitReading {
 			readings = append(readings, reading)
 		}
 	}
+	if reading, ok := planReading(result.RateLimits.IndividualLimit); ok {
+		readings = append(readings, reading)
+	}
 	return readings
+}
+
+func planReading(limit *individualLimit) (event.LimitReading, bool) {
+	if limit == nil {
+		return event.LimitReading{}, false
+	}
+	percent, ok := usedPercent(limit)
+	if !ok {
+		return event.LimitReading{}, false
+	}
+	return event.LimitReading{Window: event.Plan, UsedPercent: clampPercent(percent), ResetsAt: toSeconds(limit.ResetsAt)}, true
+}
+
+// usedPercent prefers the remaining percent the server computed, and falls
+// back to used divided by limit.
+func usedPercent(limit *individualLimit) (float64, bool) {
+	if remaining := limit.RemainingPercent.value; remaining != nil {
+		return 100 - *remaining, true
+	}
+	if limit.Used.value != nil && limit.Limit.value != nil && *limit.Limit.value != 0 {
+		return *limit.Used.value / *limit.Limit.value * 100, true
+	}
+	return 0, false
+}
+
+func clampPercent(percent float64) float64 { return min(max(percent, 0), 100) }
+
+func toSeconds(resetsAt *int64) *int64 {
+	if resetsAt == nil {
+		return nil
+	}
+	seconds := *resetsAt
+	if seconds > millisecondsThreshold {
+		seconds /= 1000
+	}
+	return &seconds
 }
 
 func toReading(window event.Window, data *rateLimitWindow) (event.LimitReading, bool) {
 	if data == nil || data.UsedPercent == nil {
 		return event.LimitReading{}, false
 	}
-	reading := event.LimitReading{Window: window, UsedPercent: min(max(*data.UsedPercent, 0), 100)}
-	if data.ResetsAt != nil {
-		seconds := *data.ResetsAt
-		if seconds > millisecondsThreshold {
-			seconds /= 1000
-		}
-		reading.ResetsAt = &seconds
-	}
+	reading := event.LimitReading{Window: window, UsedPercent: clampPercent(*data.UsedPercent), ResetsAt: toSeconds(data.ResetsAt)}
 	return reading, true
 }
-
-func formatInt(value int64) string { return strconv.FormatInt(value, 10) }

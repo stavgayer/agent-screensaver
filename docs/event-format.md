@@ -63,7 +63,7 @@ A `limits` event carries a list of readings:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `window` | string | yes | `5h` for the five-hour limit. `week` for the weekly limit. |
+| `window` | string | yes | `5h` for the five-hour limit. `week` for the weekly limit. `plan` for a usage-based plan limit with no fixed period. |
 | `used_percent` | number | yes | How much of the limit is used. |
 | `resets_at` | number | no | When the limit resets. Unix time in seconds. Leave it out if you do not know it. |
 

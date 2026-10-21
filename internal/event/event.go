@@ -18,12 +18,15 @@ const (
 	MaxIdentifierLength = 128
 )
 
-// Window names the period a usage limit covers.
+// Window names the period a usage limit covers, or "plan" for a usage-based
+// limit that has no period.
 type Window string
 
 const (
 	FiveHour Window = "5h"
 	Week     Window = "week"
+	// Plan is a usage-based plan limit that has no fixed period.
+	Plan Window = "plan"
 )
 
 // LimitReading is one usage-limit measurement.
