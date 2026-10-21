@@ -39,6 +39,26 @@ func TestParse(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:     "source of 100 Hebrew characters (200 bytes)",
+			input:    `{"v":1,"source":"` + strings.Repeat("א", 100) + `","session":"s1","kind":"started","at_ms":1}`,
+			wantKind: KindStarted,
+		},
+		{
+			name:     "session of 100 Hebrew characters (200 bytes)",
+			input:    `{"v":1,"source":"claude","session":"` + strings.Repeat("א", 100) + `","kind":"started","at_ms":1}`,
+			wantKind: KindStarted,
+		},
+		{
+			name:    "source of 129 Hebrew characters",
+			input:   `{"v":1,"source":"` + strings.Repeat("א", 129) + `","session":"s1","kind":"started","at_ms":1}`,
+			wantErr: true,
+		},
+		{
+			name:    "session over 128 chars",
+			input:   `{"v":1,"source":"claude","session":"` + strings.Repeat("a", 129) + `","kind":"started","at_ms":1}`,
+			wantErr: true,
+		},
+		{
 			name:    "unknown kind",
 			input:   `{"v":1,"source":"claude","session":"s1","kind":"exploded","at_ms":1}`,
 			wantErr: true,

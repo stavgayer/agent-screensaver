@@ -2,7 +2,7 @@
 
 This page describes the event that tells agent-screensaver what is happening. The Claude Code and Codex hooks use it. The status line uses it. Your own program can use it too.
 
-Any program can be a source. To be one, write one JSON file with one event into the spool folder. The background service reads the file. You do not need to link to any code of ours. You can write the file in any language.
+Any program can be a source. To be one, write one JSON file with one event into the spool folder. The spool folder is `$HOME/Library/Application Support/agent-screensaver/spool/`. The background service reads the file. You do not need to link to any code of ours. You can write the file in any language.
 
 ## Shape
 
@@ -36,8 +36,8 @@ Two sessions with the same `source` and different `session` values are two cards
 | Kind | Meaning | Claude Code hook | Codex hook |
 |---|---|---|---|
 | `started` | A task started. | `UserPromptSubmit` | `UserPromptSubmit` |
-| `tool_intent` | A tool is about to run. It tells the service what a later approval is for. | `PreToolUse` | none |
-| `approval` | The agent waits for the user to approve something. | `Notification` | `PermissionRequest` |
+| `tool_intent` | A tool is about to run. It tells the service what a later approval is for. | `PreToolUse` | `PreToolUse` |
+| `approval` | The agent waits for the user to approve something. | `Notification` (permission prompts only, idle notifications are ignored) and `PermissionRequest` | `PermissionRequest` |
 | `resumed` | The agent works again. The approval was answered. | `PostToolUse` | `PostToolUse` |
 | `finished` | The task finished. | `Stop` | `Stop` |
 | `ended` | The session closed. | `SessionEnd` | `SessionEnd` |
@@ -70,6 +70,7 @@ A `limits` event carries a list of readings:
 ## Rules for writers
 
 - Write exactly one event in each file.
+- Never write straight to the final name. First write `<at_ms>-<pid>-<nanos>.json.tmp`, then rename it to `.json`. The rename means the service never sees a half-written file.
 - Keep each file under 64 KiB (65536 bytes). A bigger file is rejected.
 - Use `"v": 1`. Any other version is rejected.
 - Use one of the kinds above. Any other kind is rejected.

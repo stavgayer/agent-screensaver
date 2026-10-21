@@ -5,6 +5,7 @@ package event
 import (
 	"encoding/json"
 	"fmt"
+	"unicode/utf8"
 )
 
 // Version is the only event format version this package accepts.
@@ -100,8 +101,8 @@ func validateIdentifier(field, value string) error {
 	if value == "" {
 		return fmt.Errorf("%s must not be empty", field)
 	}
-	if len(value) > MaxIdentifierLength {
-		return fmt.Errorf("%s is %d bytes, limit is %d", field, len(value), MaxIdentifierLength)
+	if length := utf8.RuneCountInString(value); length > MaxIdentifierLength {
+		return fmt.Errorf("%s is %d characters, limit is %d", field, length, MaxIdentifierLength)
 	}
 	return nil
 }
