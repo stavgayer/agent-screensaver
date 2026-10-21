@@ -147,9 +147,17 @@ func TestParseRange(t *testing.T) {
 
 func TestServePreview(t *testing.T) {
 	root, _ := makePreviewRoot(t)
-	large := filepath.Join(root, "media", "clip.mov")
-	if err := os.WriteFile(large, make([]byte, maxPreviewChunk+1), 0o644); err != nil {
-		t.Fatal(err)
+	const mebibyte = 1 << 20
+	sizes := map[string]int64{ // sparse files, so a large one costs no disk
+		"clip.mov":  maxPreviewChunk + 1,
+		"photo.jpg": 5 * mebibyte,
+		"huge.png":  maxPreviewImage + 1,
+		"clip.mp4":  5 * mebibyte,
+	}
+	for name, size := range sizes {
+		if err := os.Truncate(createFile(t, filepath.Join(root, "media", name)), size); err != nil {
+			t.Fatal(err)
+		}
 	}
 	tests := []struct {
 		name, url, rangeHeader string
@@ -161,6 +169,9 @@ func TestServePreview(t *testing.T) {
 		{"a range", "ags-preview://data/runtime/runtime.js", "bytes=1-", 206, "s", 1},
 		{"a bad range", "ags-preview://data/runtime/runtime.js", "bytes=9-", 416, "", 0},
 		{"a large file needs a range", "ags-preview://data/media/clip.mov", "", 416, "", 0},
+		{"an image is sent whole up to the image limit", "ags-preview://data/media/photo.jpg", "", 200, "", 5 << 20},
+		{"an image over the image limit needs a range", "ags-preview://data/media/huge.png", "", 416, "", 0},
+		{"a video of the same size needs a range", "ags-preview://data/media/clip.mp4", "", 416, "", 0},
 		{"a range of a large file is cut to one chunk", "ags-preview://data/media/clip.mov", "bytes=0-", 206, "", maxPreviewChunk},
 		{"outside the served folders", "ags-preview://data/payloads/prompt.json", "", 404, "", 0},
 	}
@@ -195,4 +206,16 @@ func TestReadPreviewShrinkingFile(t *testing.T) {
 	if err != nil || string(buffer[:n]) != "ra" {
 		t.Fatalf("readPreview = %q, %v; want %q", buffer[:n], err, "ra")
 	}
+}
+
+func createFile(t *testing.T, path string) string {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

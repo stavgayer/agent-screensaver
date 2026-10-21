@@ -22,6 +22,9 @@ const (
 	// maxPreviewChunk caps one ranged answer, so seeking a long video never
 	// reads it whole. Media players ask again for the rest.
 	maxPreviewChunk = 4 << 20
+	// maxPreviewImage is how large an image may be when sent whole: <img>
+	// never asks for ranges, and wallpaper photos are often over 4 MiB.
+	maxPreviewImage = 32 << 20
 )
 
 var errPreviewNotFound = errors.New("not found")
@@ -56,7 +59,11 @@ func planPreview(rawURL, rangeHeader, root string) previewReply {
 	}
 	size := info.Size()
 	start, length, partial, err := parseRange(rangeHeader, size)
-	if err != nil || (!partial && size > maxPreviewChunk) {
+	wholeLimit := int64(maxPreviewChunk)
+	if strings.HasPrefix(previewMIME(path), "image/") {
+		wholeLimit = maxPreviewImage
+	}
+	if err != nil || (!partial && size > wholeLimit) {
 		return previewReply{Status: 416, Size: size}
 	}
 	status := 200
