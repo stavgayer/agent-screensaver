@@ -215,8 +215,8 @@ func TestErrors(t *testing.T) {
 		serviceErr                 error
 	}{
 		{"unknown method", "dropTables", `{}`, `unknown method "dropTables"`, nil},
-		{"bad parameters", "setMaxFps", `{"fps":"fast"}`, "setMaxFps: ", nil},
-		{"unknown parameter", "setTheme", `{"theme":"x"}`, "setTheme: ", nil},
+		{"bad parameters", "setMaxFps", `{"fps":"fast"}`, "parameters: ", nil},
+		{"unknown parameter", "setTheme", `{"theme":"x"}`, "unknown field", nil},
 		{"service error comes back", "setTheme", `{"id":"acme.night"}`, "not installed", errors.New(`extension "acme.night" is not installed`)},
 	}
 	for _, tt := range tests {

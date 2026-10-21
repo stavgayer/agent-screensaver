@@ -68,11 +68,8 @@ func (b bridge) handle(method string, params json.RawMessage) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown method %q", method)
 	}
-	result, err := call(params)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", method, err)
-	}
-	return result, nil
+	// Service errors already say what is wrong; they go to the page as they are.
+	return call(params)
 }
 
 type method func(params json.RawMessage) (any, error)
