@@ -5,6 +5,7 @@
 package install
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,7 +129,7 @@ func PlanUninstall(home string) ([]PlannedStep, error) {
 	}
 	return append(steps,
 		PlannedStep{"files", fmt.Sprintf("Delete %s, %s, %s and the built-in extensions in %s",
-			record.Bin, where.paths.RuntimeDir, record.Saver, where.paths.ExtensionsDir)},
+			where.bin, where.paths.RuntimeDir, where.saver, where.paths.ExtensionsDir)},
 		PlannedStep{"record", "Delete " + where.paths.InstallRecord + " (your settings and spool stay)"},
 	), nil
 }
@@ -148,6 +149,7 @@ type configEdit struct {
 	path     string
 	original []byte // nil when the file does not exist
 	updated  []byte
+	backup   bool // install only, and only while the file is still the user's own
 }
 
 // Apply installs everything. The source binary is bin; artifacts is a folder
@@ -166,12 +168,11 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, err
 	if err := copyArtifacts(bin, artifacts, where); err != nil {
 		return Record{}, err
 	}
-	for _, edit := range edits {
-		if err := writeEdit(edit, true); err != nil {
-			return Record{}, err
-		}
-	}
-	record := Record{Bin: where.bin, PreviousStatusline: previous, Saver: where.saver}
+	// The record and the saved status line command go to disk before the first
+	// user file is touched, so a failure later still leaves uninstall (and a
+	// retry) able to find and restore everything. The service is listed before
+	// it is installed for the same reason: a failed bootstrap can leave a plist.
+	record := Record{Bin: where.bin, PreviousStatusline: previous, Saver: where.saver, Services: []string{DaemonLabel}}
 	for _, target := range hookInstallers() {
 		record.Agents = append(record.Agents, target.name)
 	}
@@ -181,11 +182,15 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, err
 	if err := saveRecord(where.paths.InstallRecord, record); err != nil {
 		return Record{}, err
 	}
+	for _, edit := range edits {
+		if err := writeEdit(edit); err != nil {
+			return Record{}, err
+		}
+	}
 	if _, err := sm.Install(DaemonLabel, []string{where.bin, "daemon"}); err != nil {
 		return Record{}, fmt.Errorf("install service %s: %w", DaemonLabel, err)
 	}
-	record.Services = []string{DaemonLabel}
-	return record, saveRecord(where.paths.InstallRecord, record)
+	return record, nil
 }
 
 func prepareInstall(home, bin, savedPrevious string) (edits []configEdit, previous string, err error) {
@@ -212,7 +217,8 @@ func prepareInstall(home, bin, savedPrevious string) (edits []configEdit, previo
 		if err != nil {
 			return nil, "", fmt.Errorf("%s: %w", path, err)
 		}
-		edits = append(edits, configEdit{path: path, original: original, updated: updated})
+		edits = append(edits, configEdit{path: path, original: original, updated: updated,
+			backup: original != nil && !strings.Contains(string(original), jsonEscaped(target.hookCommand(bin)))})
 	}
 	return edits, previous, nil
 }
@@ -231,7 +237,7 @@ func Uninstall(home string, sm platform.ServiceManager) error {
 		return fmt.Errorf("cannot uninstall: %w; nothing was changed", err)
 	}
 	for _, edit := range edits {
-		if err := writeEdit(edit, false); err != nil {
+		if err := writeEdit(edit); err != nil {
 			return err
 		}
 	}
@@ -240,7 +246,7 @@ func Uninstall(home string, sm platform.ServiceManager) error {
 			return fmt.Errorf("remove service %s: %w", label, err)
 		}
 	}
-	if err := removeInstalledFiles(record, where); err != nil {
+	if err := removeInstalledFiles(where); err != nil {
 		return err
 	}
 	if err := clearSavedStatusline(where.paths.ConfigFile); err != nil {
@@ -303,15 +309,25 @@ func readConfig(path string) (*jsonedit.Object, []byte, error) {
 	return cfg, data, nil
 }
 
-// writeEdit writes the new content, after a backup of the old one on install.
-// An older backup of ours is overwritten.
-func writeEdit(edit configEdit, backup bool) error {
-	if backup && edit.original != nil {
+// writeEdit writes the new content, after a backup of the old one when asked.
+// A file that already holds our entries is not backed up: it is no longer the
+// user's original, and the older backup of ours must survive a retry.
+func writeEdit(edit configEdit) error {
+	if edit.backup {
 		if err := writeFileAtomic(edit.path+backupSuffix, edit.original, 0o600); err != nil {
 			return fmt.Errorf("back up %s: %w", edit.path, err)
 		}
 	}
 	return writeFileAtomic(edit.path, edit.updated, 0o600)
+}
+
+// jsonEscaped is text as it appears inside a JSON string of our own writing.
+func jsonEscaped(text string) string {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	_ = encoder.Encode(text) // a string always encodes
+	return strings.TrimSuffix(strings.TrimSpace(buffer.String()), `"`)[1:]
 }
 
 func saveStatusline(configFile, previous string) error {

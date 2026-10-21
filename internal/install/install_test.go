@@ -3,6 +3,7 @@ package install
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -445,6 +446,93 @@ func TestPlanNamesRealPaths(t *testing.T) {
 	for _, want := range []string{claudePath(home), codexPath(home), paths.ForHome(home).DataDir, "Screen Savers"} {
 		if !strings.Contains(text.String(), want) {
 			t.Errorf("plan lacks %q:\n%s", want, text.String())
+		}
+	}
+}
+
+// failingServices is a service manager whose Install fails after, as launchd
+// can, leaving its plist behind.
+type failingServices struct{ fakeServices }
+
+func (f *failingServices) Install(string, []string) (string, error) {
+	return "", errors.New("launchctl bootstrap: Input/output error")
+}
+
+func TestUninstallAfterFailedServiceInstallStillRemovesService(t *testing.T) {
+	home := t.TempDir()
+	sm := &failingServices{}
+	artifacts, binary := artifactsFixture(t)
+	if _, err := Apply(home, binary, artifacts, sm); err == nil {
+		t.Fatal("Apply should report the service failure")
+	}
+
+	if err := Uninstall(home, &sm.fakeServices); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sm.uninstalled) != 1 || sm.uninstalled[0] != DaemonLabel {
+		t.Errorf("uninstalled services = %v", sm.uninstalled)
+	}
+}
+
+func TestRetryAfterPartialFailureKeepsOriginalStatusline(t *testing.T) {
+	home := t.TempDir()
+	original := readFixture(t, "claude_settings.json")
+	writeFile(t, claudePath(home), original)
+	writeFile(t, codexPath(home), readFixture(t, "codex_hooks.json"))
+	codexDir := filepath.Dir(codexPath(home))
+	if err := os.Chmod(codexDir, 0o500); err != nil { // the Codex write fails after the Claude write succeeded
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(codexDir, 0o755) })
+	sm := &fakeServices{}
+	artifacts, binary := artifactsFixture(t)
+	if _, err := Apply(home, binary, artifacts, sm); err == nil {
+		t.Fatal("first Apply should fail on the read-only Codex folder")
+	}
+	if err := os.Chmod(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Apply(home, binary, artifacts, sm); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+
+	if got, err := os.ReadFile(claudePath(home) + backupSuffix); err != nil || !bytes.Equal(got, original) {
+		t.Errorf("backup no longer holds the original (err %v)", err)
+	}
+	if err := Uninstall(home, sm); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(claudePath(home))
+	if got, want := compact(t, data), compact(t, original); got != want {
+		t.Errorf("after uninstall:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestUninstallDeletesOnlyOwnPathsNotRecordPaths(t *testing.T) {
+	home := t.TempDir()
+	sm := &fakeServices{}
+	apply(t, home, sm)
+	p := paths.ForHome(home)
+	writeFile(t, filepath.Join(p.ExtensionsDir, "acme.rain", "extension.json"), []byte("{}"))
+	record, err := loadRecord(p.InstallRecord)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Bin = p.DataDir
+	record.Saver = home
+	if err := saveRecord(p.InstallRecord, record); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Uninstall(home, sm); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{p.ConfigFile, filepath.Join(p.ExtensionsDir, "acme.rain", "extension.json"), claudePath(home)} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s was deleted: %v", path, err)
 		}
 	}
 }

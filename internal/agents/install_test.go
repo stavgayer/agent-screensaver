@@ -103,6 +103,7 @@ func TestRestoreStatuslineCases(t *testing.T) {
 	}{
 		{"restores previous, keeps padding", `{"statusLine":{"type":"command","command":"ours","padding":1}}`, "old", `"command":"old"`},
 		{"removes ours when nothing before", `{"statusLine":{"type":"command","command":"ours"}}`, "", `{}`},
+		{"keeps user keys when nothing before", `{"statusLine":{"type":"command","command":"ours","padding":1}}`, "", `"statusLine":{"padding":1}`},
 		{"keeps user's own", `{"statusLine":{"type":"command","command":"mine"}}`, "old", `"command":"mine"`},
 	}
 	for _, tt := range tests {

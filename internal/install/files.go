@@ -87,9 +87,10 @@ func removeBuiltinExtensions(dir string) error {
 }
 
 // removeInstalledFiles deletes what Apply copied. Settings, spool and other
-// extensions stay.
-func removeInstalledFiles(record Record, where locations) error {
-	for _, path := range []string{filepath.Dir(record.Bin), where.paths.RuntimeDir, record.Saver} {
+// extensions stay. The paths come from the home directory, never from the
+// record file, so a damaged or edited record cannot point deletion elsewhere.
+func removeInstalledFiles(where locations) error {
+	for _, path := range []string{filepath.Dir(where.bin), where.paths.RuntimeDir, where.saver} {
 		if err := os.RemoveAll(path); err != nil {
 			return fmt.Errorf("remove %s: %w", path, err)
 		}

@@ -61,7 +61,10 @@ func SwapStatusline(settings *jsonedit.Object, ours string) (previous string, er
 }
 
 // RestoreStatusline undoes SwapStatusline, but only while the command is still
-// ours: if the user changed it since, their choice wins.
+// ours: if the user changed it since, their choice wins. It removes only the
+// keys install set: the command (put back to previous when there was one) and,
+// when there was no previous command, the type. The object goes only when that
+// leaves it empty, so keys the user added, such as padding, survive.
 func RestoreStatusline(settings *jsonedit.Object, previous, ours string) error {
 	raw, ok := settings.Get(statuslineKey)
 	if !ok {
@@ -74,12 +77,19 @@ func RestoreStatusline(settings *jsonedit.Object, previous, ours string) error {
 	if current, _ := stringValue(line, "command"); current != ours {
 		return nil
 	}
-	if previous == "" {
+	if previous != "" {
+		if err := setString(line, "command", previous); err != nil {
+			return err
+		}
+		return setObject(settings, statuslineKey, line)
+	}
+	line.Delete("command")
+	if kind, _ := stringValue(line, "type"); kind == "command" {
+		line.Delete("type")
+	}
+	if len(line.Keys()) == 0 {
 		settings.Delete(statuslineKey)
 		return nil
-	}
-	if err := setString(line, "command", previous); err != nil {
-		return err
 	}
 	return setObject(settings, statuslineKey, line)
 }
