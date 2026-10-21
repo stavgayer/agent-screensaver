@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,10 +16,11 @@ import (
 )
 
 const (
-	dirMode  = 0o700
-	fileMode = 0o600
-	finalExt = ".json"
-	tempExt  = ".json.tmp"
+	dirMode    = 0o700
+	fileMode   = 0o600
+	finalExt   = ".json"
+	tempExt    = ".json.tmp"
+	claimedExt = ".json.claimed"
 )
 
 // Write stores one event in dir. It writes a temp file first and renames it,
@@ -62,7 +62,7 @@ func writeExclusive(path string, data []byte) error {
 
 // Drain returns every valid event in dir, ordered by file name (which starts
 // with the event time), and deletes each file it read. Unreadable, oversized
-// and invalid files are deleted too, so one bad file never blocks the rest.
+// and invalid files are deleted too (and dropped), so one bad file never blocks the rest.
 // A missing dir is an empty spool.
 func Drain(dir string) []event.Event {
 	entries, err := os.ReadDir(dir) // sorted by name
@@ -75,12 +75,13 @@ func Drain(dir string) []event.Event {
 			continue // also skips ".json.tmp": the writer is not done yet
 		}
 		path := filepath.Join(dir, entry.Name())
-		data, err := readCapped(path)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue // another reader took it first
-		}
-		_ = os.Remove(path)
+		claimed, err := claim(path)
 		if err != nil {
+			continue // another drainer took it first, or it cannot be claimed
+		}
+		data, readErr := readCapped(claimed)
+		removeErr := os.Remove(claimed)
+		if readErr != nil || removeErr != nil {
 			continue
 		}
 		if parsed, err := event.Parse(data); err == nil {
@@ -88,6 +89,14 @@ func Drain(dir string) []event.Event {
 		}
 	}
 	return events
+}
+
+// claim renames the file out of the listing. Rename is atomic, so exactly one
+// of several overlapping drainers succeeds and may apply the event; a file
+// that cannot be renamed is never applied, so it is never applied twice.
+func claim(path string) (string, error) {
+	claimed := strings.TrimSuffix(path, finalExt) + claimedExt
+	return claimed, os.Rename(path, claimed)
 }
 
 // readCapped reads at most one byte more than the event limit, so an

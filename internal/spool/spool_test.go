@@ -1,9 +1,11 @@
 package spool
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"agent-screensaver/internal/event"
@@ -115,5 +117,59 @@ func TestDrainIgnoresTmpAndDeletesGarbage(t *testing.T) {
 func TestDrainMissingDirIsEmpty(t *testing.T) {
 	if got := Drain(filepath.Join(t.TempDir(), "nope")); len(got) != 0 {
 		t.Fatalf("Drain = %+v, want empty", got)
+	}
+}
+
+func TestConcurrentWritersAndDrainersExactlyOnce(t *testing.T) {
+	const writers = 50
+	dir := t.TempDir()
+
+	var mu sync.Mutex
+	seen := map[string]int{}
+	record := func(events []event.Event) {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, e := range events {
+			seen[e.Session]++
+		}
+	}
+
+	var writing, draining sync.WaitGroup
+	for i := range writers {
+		writing.Add(1)
+		go func() {
+			defer writing.Done()
+			if err := Write(dir, sampleEvent(fmt.Sprintf("s%d", i), 1_760_000_000_000+int64(i))); err != nil {
+				t.Errorf("Write: %v", err)
+			}
+		}()
+	}
+	done := make(chan struct{})
+	for range 2 {
+		draining.Add(1)
+		go func() {
+			defer draining.Done()
+			for {
+				record(Drain(dir))
+				select {
+				case <-done:
+					return
+				default:
+				}
+			}
+		}()
+	}
+	writing.Wait()
+	close(done)
+	draining.Wait()
+	record(Drain(dir))
+
+	if len(seen) != writers {
+		t.Fatalf("got %d distinct events, want %d", len(seen), writers)
+	}
+	for session, count := range seen {
+		if count != 1 {
+			t.Errorf("event %s returned %d times, want 1", session, count)
+		}
 	}
 }
