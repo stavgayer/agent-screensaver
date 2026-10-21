@@ -3,6 +3,11 @@ const MAX_FPS = 240;
 // About a quarter of a 60 Hz frame: a frame landing slightly early still counts.
 const SLACK_MS = 4;
 
+/** What `requestFrame(cb)` without an fps asks for: every display frame. */
+export function requestedFps(fps: number | undefined): number {
+  return fps ?? MAX_FPS;
+}
+
 /** True when enough time has passed since the last render to hit `fps`. */
 export function shouldRender(lastMs: number, nowMs: number, fps: number): boolean {
   return nowMs - lastMs >= 1000 / fps;

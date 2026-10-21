@@ -1,16 +1,19 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { Card } from "../src/api.ts";
+import type { Card, Region } from "../src/api.ts";
 import {
   STALE_AFTER_MS,
   backgroundSignature,
   cssVariables,
-  diffRegions,
   isServiceLineVisible,
   mergeOptions,
-  planRegions,
+  planComponents,
+  reconcileComponents,
   resetKey,
   toViewState,
+  type Options,
+  type PlannedComponent,
+  type RunningComponent,
   type StateFile,
 } from "../src/plan.ts";
 
@@ -54,51 +57,79 @@ describe("mergeOptions", () => {
   });
 });
 
-describe("planRegions", () => {
+describe("planComponents", () => {
   it("merges_options_and_skips_unknown_ids", () => {
-    const plan = planRegions(state(), "idle");
-    assert.deepEqual(plan.map((r) => r.region), ["center", "bottom"]);
-    const [center, bottom] = plan;
-    assert.deepEqual(center?.components[0]?.options, { size: "large", color: "red" });
-    assert.equal(center?.components[0]?.entryUrl, "file:///a.js");
-    assert.deepEqual(bottom?.components.map((c) => c.id), ["b"]);
+    const plan = planComponents(state(), "idle");
+    assert.deepEqual(plan.map((c) => [c.region, c.index, c.id]), [["center", 0, "a"], ["bottom", 0, "b"]]);
+    assert.deepEqual(plan[0]?.options, { size: "large", color: "red" });
+    assert.equal(plan[0]?.entryUrl, "file:///a.js");
   });
 
   it("null_layout_falls_back_to_clock", () => {
-    const plan = planRegions(state({}, { layout: null, components: [{ id: "builtin.clock", entry_url: "file:///c.js", options: {} }] }), "idle");
+    const plan = planComponents(state({}, { layout: null, components: [{ id: "builtin.clock", entry_url: "file:///c.js", options: {} }] }), "idle");
     assert.equal(plan[0]?.region, "center");
-    assert.deepEqual(plan[0]?.components[0]?.options, { size: "large" });
+    assert.deepEqual(plan[0]?.options, { size: "large" });
   });
 
   it("follows_the_mode", () => {
-    assert.deepEqual(planRegions(state(), "attention").map((r) => r.region), ["top-right"]);
+    assert.deepEqual(planComponents(state(), "attention").map((c) => c.region), ["top-right"]);
   });
 });
 
-describe("diffRegions", () => {
-  it("mounts_everything_first_time", () => {
-    const plan = planRegions(state(), "idle");
-    const diff = diffRegions({}, plan);
-    assert.deepEqual(diff.clear, []);
-    assert.equal(diff.mount.length, 2);
+interface Fake extends RunningComponent { name: string }
+const running = (name: string, id: string, region: Region, options: Options = {}, supportsSetOptions = false): Fake =>
+  ({ name, id, entryUrl: `file:///${id}.js`, options, supportsSetOptions, region });
+const placed = (id: string, region: Region, options: Options = {}, index = 0): PlannedComponent =>
+  ({ region, index, id, entryUrl: `file:///${id}.js`, options });
+
+describe("reconcileComponents", () => {
+  it("same id moves region keeps instance", () => {
+    const clock = running("clock", "clock", "center");
+    const result = reconcileComponents([clock], [placed("clock", "top-left")]);
+    assert.deepEqual(result.unmount, []);
+    assert.deepEqual(result.mount, []);
+    assert.equal(result.keep[0]?.running, clock);
+    assert.equal(result.keep[0]?.moved, true);
+    assert.equal(result.keep[0]?.setOptions, false);
   });
 
-  it("keeps_unchanged_regions_and_clears_dropped_ones", () => {
-    const idle = planRegions(state(), "idle");
-    const mounted = Object.fromEntries(idle.map((r) => [r.region, r.signature]));
-    const diff = diffRegions(mounted, planRegions(state(), "attention"));
-    assert.deepEqual(diff.clear.sort(), ["bottom", "center"]);
-    assert.deepEqual(diff.mount.map((r) => r.region), ["top-right"]);
-    assert.deepEqual(diffRegions(mounted, idle), { clear: [], mount: [] });
+  it("same place and options keeps without move", () => {
+    const result = reconcileComponents([running("c", "c", "center", { a: 1 })], [placed("c", "center", { a: 1 })]);
+    assert.deepEqual([result.keep[0]?.moved, result.keep[0]?.setOptions], [false, false]);
   });
 
-  it("remounts_a_region_whose_options_changed", () => {
-    const before = planRegions(state(), "idle");
-    const mounted = Object.fromEntries(before.map((r) => [r.region, r.signature]));
-    const next = state({}, { components: [{ id: "a", entry_url: "file:///a.js", options: { size: "tiny" } }, { id: "b", entry_url: "file:///b.js", options: {} }] });
-    const diff = diffRegions(mounted, planRegions(next, "idle"));
-    assert.deepEqual(diff.clear, ["center"]);
-    assert.deepEqual(diff.mount.map((r) => r.region), ["center"]);
+  it("options differ with setOptions keeps instance", () => {
+    const clock = running("clock", "clock", "center", { size: "large" }, true);
+    const result = reconcileComponents([clock], [placed("clock", "top-left", { size: "small" })]);
+    assert.equal(result.keep[0]?.running, clock);
+    assert.equal(result.keep[0]?.setOptions, true);
+    assert.deepEqual(result.mount, []);
+  });
+
+  it("options differ without setOptions remounts", () => {
+    const clock = running("clock", "clock", "center", { size: "large" });
+    const result = reconcileComponents([clock], [placed("clock", "top-left", { size: "small" })]);
+    assert.deepEqual(result.keep, []);
+    assert.deepEqual(result.unmount, [clock]);
+    assert.equal(result.mount.length, 1);
+  });
+
+  it("component only in new mode mounts", () => {
+    const result = reconcileComponents([], [placed("cards", "bottom")]);
+    assert.equal(result.mount[0]?.id, "cards");
+  });
+
+  it("component only in old mode unmounts", () => {
+    const cards = running("cards", "cards", "bottom");
+    const result = reconcileComponents([cards], []);
+    assert.deepEqual(result.unmount, [cards]);
+  });
+
+  it("first placement of an id pairs with the first running one", () => {
+    const first = running("one", "x", "center");
+    const second = running("two", "x", "bottom");
+    const result = reconcileComponents([first, second], [placed("x", "top-left"), placed("x", "bottom")]);
+    assert.deepEqual(result.keep.map((k) => k.running), [first, second]);
   });
 });
 

@@ -33,60 +33,83 @@ export interface StateFile {
 
 export interface PlannedComponent {
   region: Region;
+  /** Position inside its region. */
   index: number;
   id: string;
   entryUrl: string;
   options: Options;
-  /** Names the placement in logs and failure tracking. */
-  key: string;
 }
 
-export interface PlannedRegion {
+/** What a mounted component must tell the planner. */
+export interface RunningComponent {
+  id: string;
+  entryUrl: string;
+  options: Options;
+  supportsSetOptions: boolean;
   region: Region;
-  /** Changes whenever anything that affects what the region shows changes. */
-  signature: string;
-  components: PlannedComponent[];
 }
 
-export type MountedSignatures = Partial<Record<Region, string>>;
+export interface Reconciliation<T extends RunningComponent> {
+  /** Instances that go away (not in the new mode, or replaced). */
+  unmount: T[];
+  /** Placements that need a new instance. */
+  mount: PlannedComponent[];
+  /** Instances that stay. `moved` is a region change; `setOptions` says to tell the component. */
+  keep: { running: T; target: PlannedComponent; moved: boolean; setOptions: boolean }[];
+}
 
 /** Component defaults first, the placement's own options on top. */
 export function mergeOptions(base: Options, placement: Options | undefined): Options {
   return { ...base, ...placement };
 }
 
-export function planRegions(state: StateFile, mode: Mode): PlannedRegion[] {
+/** Every placed component for `mode`, region by region. Ids that are not resolved are left out. */
+export function planComponents(state: StateFile, mode: Mode): PlannedComponent[] {
   const known = new Map(state.view.components.map((config) => [config.id, config]));
   const placed = regionsFor(state.view.layout?.modes, mode);
-  const planned: PlannedRegion[] = [];
-  for (const [region, refs] of Object.entries(placed) as [Region, NonNullable<typeof placed[Region]>][]) {
-    const components: PlannedComponent[] = [];
-    refs.forEach((ref, index) => {
+  const planned: PlannedComponent[] = [];
+  for (const [region, refs] of Object.entries(placed) as [Region, NonNullable<(typeof placed)[Region]>][]) {
+    let index = 0;
+    for (const ref of refs) {
       const config = known.get(ref.id);
-      if (config === undefined) return; // not installed or not resolved: leave it out
+      if (config === undefined) continue;
       const options = mergeOptions(config.options, ref.options);
-      components.push({ region, index, id: ref.id, entryUrl: config.entry_url, options, key: `${region}:${index}:${ref.id}` });
-    });
-    const signature = JSON.stringify(components.map((c) => [c.id, c.entryUrl, c.options]));
-    planned.push({ region, signature, components });
+      planned.push({ region, index: index++, id: ref.id, entryUrl: config.entry_url, options });
+    }
   }
   return planned;
 }
 
+const sameOptions = (a: Options, b: Options): boolean => JSON.stringify(a) === JSON.stringify(b);
+
 /**
- * What to do to reach `planned` from what is mounted. A region is replaced
- * as a whole, so the order of its components always matches the layout.
+ * Decides what a mode change does to each component. The same id keeps its
+ * instance when it moves to another region (the first placement of an id
+ * pairs with the first running one). Other options go to `setOptions` when
+ * the component has it, otherwise the component is mounted again.
  */
-export function diffRegions(
-  mounted: MountedSignatures,
-  planned: PlannedRegion[],
-): { clear: Region[]; mount: PlannedRegion[] } {
-  const wanted = new Map(planned.map((entry) => [entry.region, entry]));
-  const clear = (Object.keys(mounted) as Region[]).filter(
-    (region) => wanted.get(region)?.signature !== mounted[region],
-  );
-  const mount = planned.filter((entry) => mounted[entry.region] !== entry.signature);
-  return { clear, mount };
+export function reconcileComponents<T extends RunningComponent>(
+  running: T[],
+  planned: PlannedComponent[],
+): Reconciliation<T> {
+  const unclaimed = [...running];
+  const result: Reconciliation<T> = { unmount: [], mount: [], keep: [] };
+  for (const target of planned) {
+    const at = unclaimed.findIndex((item) => item.id === target.id && item.entryUrl === target.entryUrl);
+    const match = at === -1 ? undefined : unclaimed.splice(at, 1)[0];
+    if (match === undefined) {
+      result.mount.push(target);
+    } else if (sameOptions(match.options, target.options)) {
+      result.keep.push({ running: match, target, moved: match.region !== target.region, setOptions: false });
+    } else if (match.supportsSetOptions) {
+      result.keep.push({ running: match, target, moved: match.region !== target.region, setOptions: true });
+    } else {
+      result.unmount.push(match);
+      result.mount.push(target);
+    }
+  }
+  result.unmount.push(...unclaimed);
+  return result;
 }
 
 /** Everything is torn down and rebuilt when this changes: the theme, or the frame scheduler. */

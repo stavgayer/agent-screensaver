@@ -36,7 +36,7 @@ html, body {
 }
 
 /* Components fade in, so a region that changes with the mode does not pop. */
-.region > div { animation: appear var(--fade) ease both; }
+.region > .entering { animation: appear var(--fade) ease both; }
 
 @keyframes appear {
   from { opacity: 0; transform: translateY(1vmin); }
@@ -57,3 +57,7 @@ html, body {
 }
 
 #service-line[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .region > .entering { animation: none; }
+}

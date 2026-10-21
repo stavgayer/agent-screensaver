@@ -1,24 +1,23 @@
-import type { BackgroundExt, ComponentExt, CreateExtension, Ctx, Region, ViewState } from "./api.ts";
+import type { BackgroundExt, ComponentExt, CreateExtension, Ctx, Region } from "./api.ts";
 import { loadExtension, pendingLoads, safeCall } from "./loader.ts";
+import { createFrameScheduler, requestedFps, type FrameScheduler } from "./frame.ts";
+import { createKeeper, type Instance } from "./instance.ts";
 import { screenMode } from "./mode.ts";
-import { createFrameScheduler, type FrameScheduler } from "./frame.ts";
 import {
   backgroundSignature,
   cssVariables,
-  diffRegions,
   isServiceLineVisible,
-  planRegions,
+  planComponents,
+  reconcileComponents,
   resetKey,
   toViewState,
-  type MountedSignatures,
   type Options,
-  type PlannedRegion,
+  type PlannedComponent,
   type StateFile,
 } from "./plan.ts";
 
 const SERVICE_LINE_CHECK_MS = 10_000;
-// The ceiling in `max_fps` does the limiting; an extension asks for "as fast as allowed".
-const REQUESTED_FPS = 60;
+const MOVE_DURATION_MS = 400;
 const BACKGROUND_KEY = "background";
 
 type Display = "main" | "secondary";
@@ -34,25 +33,29 @@ declare global {
   }
 }
 
-/** One running extension and what is needed to take it down again. */
-interface Mounted {
-  key: string;
-  root: HTMLElement;
-  cancels: Set<() => void>;
-  stop(): void;
-  update?(state: ViewState): void;
-  dead: boolean;
+interface ComponentInstance extends Instance {
+  id: string;
+  entryUrl: string;
+  options: Options;
+  region: Region;
+  index: number;
+  element: HTMLElement;
+  supportsSetOptions: boolean;
+  setOptions(options: Options): void;
 }
 
 let latest: { state: StateFile; display: Display } | undefined;
 let scheduler: FrameScheduler | undefined;
 let appliedResetKey: string | undefined;
-let background: { signature: string; mounted?: Mounted } | undefined;
-const regions = new Map<Region, { signature: string; items: Mounted[] }>();
+let background: { signature: string; item?: Instance } | undefined;
+let components: ComponentInstance[] = [];
 // Failed extensions are not retried until the theme changes.
 const failed = new Set<string>();
 const loaded = new Map<string, CreateExtension | undefined>();
 let queue: Promise<void> = Promise.resolve();
+
+const logFailure = (label: string, err: unknown): void => console.error(`[agent-screensaver] ${label}`, err);
+const keeper = createKeeper(failed, logFailure);
 
 const byId = (id: string): HTMLElement => {
   const element = document.getElementById(id);
@@ -60,34 +63,13 @@ const byId = (id: string): HTMLElement => {
   return element;
 };
 
-const logFailure = (label: string, err: unknown): void => console.error(`[agent-screensaver] ${label}`, err);
+const regionElement = (region: Region): HTMLElement => byId(`region-${region}`);
 
-/** Takes an extension down once: stop it, cancel its frames, remove its element. */
-function teardown(item: Mounted): void {
-  if (item.dead) return;
-  item.dead = true;
-  safeCall(`${item.key}.stop`, () => item.stop(), logFailure);
-  item.cancels.forEach((cancel) => safeCall(`${item.key}.cancel`, cancel, logFailure));
-  item.root.remove();
-}
-
-/** Runs one extension call; a throw takes that extension down and keeps it from coming back. */
-function guard<T>(item: Mounted, step: string, fn: () => T): T | undefined {
-  return safeCall(`${item.key}.${step}`, fn, (label, err) => {
-    logFailure(label, err);
-    failed.add(item.key);
-    teardown(item);
-  });
-}
-
-function createContext(item: Mounted, options: Options, display: Display): Ctx {
+function createContext(item: Instance, options: Options, display: Display): Ctx {
   return {
     options: Object.freeze({ ...options }),
-    requestFrame(callback) {
-      const cancel = (scheduler as FrameScheduler).request(callback, REQUESTED_FPS);
-      item.cancels.add(cancel);
-      return cancel;
-    },
+    requestFrame: (callback, fps) =>
+      keeper.trackFrame(item, () => (scheduler as FrameScheduler).request(callback, requestedFps(fps))),
     now: () => Date.now(),
     display,
   };
@@ -98,14 +80,17 @@ async function createFor(entryUrl: string): Promise<CreateExtension | undefined>
   return loaded.get(entryUrl);
 }
 
-/** Loads, creates and starts one extension inside `parent`. */
+/**
+ * Loads, creates and starts one extension inside `parent`. Gives back
+ * `undefined` when it cannot load or when it dies while starting.
+ */
 async function launch(
   key: string,
   parent: HTMLElement,
   entryUrl: string,
   options: Options,
   kind: "background" | "component",
-): Promise<Mounted | undefined> {
+): Promise<{ item: Instance; element: HTMLElement; ext: BackgroundExt | ComponentExt } | undefined> {
   if (failed.has(key)) return undefined;
   const create = await createFor(entryUrl);
   if (create === undefined) {
@@ -113,39 +98,45 @@ async function launch(
     logFailure(key, new Error(`could not load ${entryUrl}`));
     return undefined;
   }
-  const item: Mounted = { key, root: document.createElement("div"), cancels: new Set(), stop() {}, dead: false };
-  const ext = guard(item, "create", create);
+  const root = document.createElement("div");
+  const item: Instance = { key, root, cancels: new Set(), stop() {}, dead: false };
+  const ext = keeper.guard(item, "create", create);
   if (ext === undefined) return undefined;
-  parent.appendChild(item.root);
+  root.classList.add("entering");
+  root.addEventListener("animationend", () => root.classList.remove("entering"), { once: true });
+  parent.appendChild(root);
   const ctx = createContext(item, options, (latest as NonNullable<typeof latest>).display);
   if (kind === "background") {
     item.stop = () => (ext as BackgroundExt).stop();
-    guard(item, "start", () => (ext as BackgroundExt).start(item.root, ctx));
+    keeper.guard(item, "start", () => (ext as BackgroundExt).start(root, ctx));
   } else {
     item.stop = () => (ext as ComponentExt).unmount();
     item.update = (state) => (ext as ComponentExt).update(state);
-    guard(item, "mount", () => (ext as ComponentExt).mount(item.root, ctx));
+    keeper.guard(item, "mount", () => (ext as ComponentExt).mount(root, ctx));
   }
-  return item;
+  return item.dead ? undefined : { item, element: root, ext };
 }
 
-function clearRegion(region: Region): void {
-  regions.get(region)?.items.forEach(teardown);
-  regions.delete(region);
-}
-
-async function mountRegion(planned: PlannedRegion): Promise<void> {
-  const items: Mounted[] = [];
-  regions.set(planned.region, { signature: planned.signature, items });
-  for (const component of planned.components) {
-    const item = await launch(component.key, byId(`region-${planned.region}`), component.entryUrl, component.options, "component");
-    if (item !== undefined) items.push(item);
-  }
+async function mountComponent(target: PlannedComponent): Promise<ComponentInstance | undefined> {
+  const launched = await launch(target.id, regionElement(target.region), target.entryUrl, target.options, "component");
+  if (launched === undefined) return undefined;
+  const ext = launched.ext as ComponentExt;
+  return Object.assign(launched.item, {
+    id: target.id,
+    entryUrl: target.entryUrl,
+    options: target.options,
+    region: target.region,
+    index: target.index,
+    element: launched.element,
+    supportsSetOptions: typeof ext.setOptions === "function",
+    setOptions: (options: Options) => ext.setOptions?.(Object.freeze({ ...options })),
+  });
 }
 
 function teardownAll(): void {
-  [...regions.keys()].forEach(clearRegion);
-  if (background?.mounted !== undefined) teardown(background.mounted);
+  components.forEach(keeper.teardown);
+  components = [];
+  if (background?.item !== undefined) keeper.teardown(background.item);
   background = undefined;
 }
 
@@ -160,27 +151,73 @@ function resetIfNeeded(state: StateFile): void {
   appliedResetKey = key;
 }
 
+async function reconcileBackground(state: StateFile): Promise<void> {
+  const signature = backgroundSignature(state.view);
+  if (background?.signature === signature) return;
+  if (background?.item !== undefined) keeper.teardown(background.item);
+  background = { signature };
+  const { entry_url: entryUrl, options } = state.view.background;
+  background.item = (await launch(BACKGROUND_KEY, byId("background"), entryUrl, options, "background"))?.item;
+}
+
+/** Puts every item in its region, in layout order, touching only what is out of place. */
+function arrange(items: ComponentInstance[]): void {
+  const regions = new Set(items.map((item) => item.region));
+  for (const region of regions) {
+    const parent = regionElement(region);
+    items
+      .filter((item) => item.region === region)
+      .sort((a, b) => a.index - b.index)
+      .forEach((item, position) => {
+        if (parent.children[position] !== item.element) parent.insertBefore(item.element, parent.children[position] ?? null);
+      });
+  }
+}
+
+/** FLIP: the element is already in its new place; play it from where it was. */
+function animateMove(root: HTMLElement, first: DOMRect): void {
+  const last = root.getBoundingClientRect();
+  if (last.width === 0 || last.height === 0) return;
+  const inverse = `translate(${first.left - last.left}px, ${first.top - last.top}px) scale(${first.width / last.width}, ${first.height / last.height})`;
+  root.style.transformOrigin = "top left";
+  root.animate([{ transform: inverse }, { transform: "none" }], { duration: MOVE_DURATION_MS, easing: "ease-in-out" });
+}
+
+const prefersReducedMotion = (): boolean => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+async function reconcileMounted(state: StateFile, display: Display): Promise<void> {
+  const planned = planComponents(state, screenMode(state.cards, display)).filter((target) => !failed.has(target.id));
+  const plan = reconcileComponents(components.filter((item) => !item.dead), planned);
+
+  plan.unmount.forEach(keeper.teardown);
+  const firstRects = new Map<ComponentInstance, DOMRect>();
+  for (const { running, target, moved, setOptions } of plan.keep) {
+    if (moved) firstRects.set(running, running.element.getBoundingClientRect());
+    if (setOptions) keeper.guard(running, "setOptions", () => running.setOptions(target.options));
+    Object.assign(running, { options: target.options, region: target.region, index: target.index });
+  }
+  const added: ComponentInstance[] = [];
+  for (const target of plan.mount) {
+    const item = await mountComponent(target);
+    if (item !== undefined) added.push(item);
+  }
+
+  components = [...plan.keep.map((entry) => entry.running), ...added].filter((item) => !item.dead);
+  arrange(components);
+  if (!prefersReducedMotion()) {
+    firstRects.forEach((first, item) => {
+      if (!item.dead) safeCall(`${item.key}.move`, () => animateMove(item.element, first), logFailure);
+    });
+  }
+}
+
 async function reconcile(): Promise<void> {
   if (latest === undefined) return;
   const { state, display } = latest;
   resetIfNeeded(state);
-
-  const signature = backgroundSignature(state.view);
-  if (background?.signature !== signature) {
-    if (background?.mounted !== undefined) teardown(background.mounted);
-    background = { signature };
-    const { entry_url: entryUrl, options } = state.view.background;
-    background.mounted = await launch(BACKGROUND_KEY, byId("background"), entryUrl, options, "background");
-  }
-
-  const mode = screenMode(state.cards, display);
-  const mounted: MountedSignatures = Object.fromEntries([...regions].map(([region, entry]) => [region, entry.signature]));
-  const diff = diffRegions(mounted, planRegions(state, mode));
-  diff.clear.forEach(clearRegion);
-  for (const planned of diff.mount) await mountRegion(planned);
-
-  const view = toViewState(state, display, Date.now());
-  regions.forEach((entry) => entry.items.forEach((item) => guard(item, "update", () => item.update?.(view))));
+  await reconcileBackground(state);
+  await reconcileMounted(state, display);
+  keeper.updateAll(components, toViewState(state, display, Date.now()));
 }
 
 /** Parts of the page that follow the state directly, with no loading involved. */

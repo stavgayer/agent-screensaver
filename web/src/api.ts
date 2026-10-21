@@ -38,7 +38,13 @@ export interface ViewState {
 
 export interface Ctx {
   options: Readonly<Record<string, unknown>>;
-  requestFrame(cb: (nowMs: number) => void): () => void;
+  /**
+   * Calls `cb` every frame until you call the returned cancel function. Call
+   * it once: calling it again inside `cb` adds a second request each frame.
+   * `fps` is the rate you want; leave it out for every display frame. The
+   * user's frame ceiling can still lower it.
+   */
+  requestFrame(cb: (nowMs: number) => void, fps?: number): () => void;
   now(): number;
   display: "main" | "secondary";
 }
@@ -51,6 +57,8 @@ export interface BackgroundExt {
 export interface ComponentExt {
   mount(root: HTMLElement, ctx: Ctx): void;
   update(state: ViewState): void;
+  /** Optional. Called when the same component moves to a placement with other options. */
+  setOptions?(options: Readonly<Record<string, unknown>>): void;
   unmount(): void;
 }
 

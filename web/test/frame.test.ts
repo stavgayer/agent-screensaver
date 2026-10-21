@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createFrameScheduler, effectiveFps, shouldRender } from "../src/frame.ts";
+import { createFrameScheduler, effectiveFps, requestedFps, shouldRender } from "../src/frame.ts";
 
 /** A fake rAF: callbacks run only when the test calls `tick`. */
 function fakeRaf() {
@@ -183,5 +183,16 @@ describe("createFrameScheduler errors", () => {
     assert.equal(fake.pendingCount(), 0);
     scheduler.request(() => {}, 240);
     assert.equal(fake.pendingCount(), 1);
+  });
+});
+
+describe("requestedFps", () => {
+  it("omitted_fps_means_every_display_frame_and_120_is_reachable", () => {
+    for (const maxFps of [0, 120]) {
+      assert.equal(effectiveFps(requestedFps(undefined), maxFps), 120 === maxFps ? 120 : 240);
+      assert.equal(effectiveFps(requestedFps(120), maxFps), 120);
+    }
+    assert.equal(effectiveFps(requestedFps(undefined), 30), 30);
+    assert.equal(effectiveFps(requestedFps(15), 30), 15);
   });
 });

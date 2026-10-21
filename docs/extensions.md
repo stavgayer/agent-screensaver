@@ -190,7 +190,13 @@ export interface ViewState {
 
 export interface Ctx {
   options: Readonly<Record<string, unknown>>;
-  requestFrame(cb: (nowMs: number) => void): () => void;
+  /**
+   * Calls `cb` every frame until you call the returned cancel function. Call
+   * it once: calling it again inside `cb` adds a second request each frame.
+   * `fps` is the rate you want; leave it out for every display frame. The
+   * user's frame ceiling can still lower it.
+   */
+  requestFrame(cb: (nowMs: number) => void, fps?: number): () => void;
   now(): number;
   display: "main" | "secondary";
 }
@@ -203,6 +209,8 @@ export interface BackgroundExt {
 export interface ComponentExt {
   mount(root: HTMLElement, ctx: Ctx): void;
   update(state: ViewState): void;
+  /** Optional. Called when the same component moves to a placement with other options. */
+  setOptions?(options: Readonly<Record<string, unknown>>): void;
   unmount(): void;
 }
 
@@ -210,7 +218,7 @@ export interface ComponentExt {
 export type CreateExtension = () => BackgroundExt | ComponentExt;
 ```
 
-The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. The types above describe each method and the data it receives.
+The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
 
 ## Install, list and remove
 
