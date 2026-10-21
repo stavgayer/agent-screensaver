@@ -26,7 +26,8 @@ const (
 )
 
 // Hook runs `agent-screensaver hook --tool <name>`. It always returns 0.
-func Hook(args []string, stdin io.Reader, p paths.Paths, now func() int64) int {
+func Hook(args []string, stdin io.Reader, p paths.Paths, now func() int64) (code int) {
+	defer recoverToZero(p, now, &code)
 	flags := flag.NewFlagSet("hook", flag.ContinueOnError)
 	flags.SetOutput(io.Discard) // stdout and stderr must stay silent
 	tool := flags.String("tool", "", "tool name")
@@ -46,7 +47,8 @@ func Hook(args []string, stdin io.Reader, p paths.Paths, now func() int64) int {
 
 // RunHook maps one hook payload to an event and writes it to the spool. It
 // always returns 0 and prints nothing.
-func RunHook(adapter agents.Adapter, stdin io.Reader, p paths.Paths, now func() int64) int {
+func RunHook(adapter agents.Adapter, stdin io.Reader, p paths.Paths, now func() int64) (code int) {
+	defer recoverToZero(p, now, &code)
 	input, err := io.ReadAll(io.LimitReader(stdin, maxHookInputBytes))
 	if err != nil {
 		logError(p, now, fmt.Errorf("read hook input: %w", err))
@@ -113,4 +115,14 @@ func logError(p paths.Paths, now func() int64, cause error) {
 	defer file.Close()
 	stamp := time.UnixMilli(now()).UTC().Format(time.RFC3339)
 	_, _ = fmt.Fprintf(file, "%s %v\n", stamp, cause)
+}
+
+// recoverToZero must be deferred directly. A Go panic exits with status 2,
+// which can block the tool call that ran us, so a panic is logged and turned
+// into exit code 0.
+func recoverToZero(p paths.Paths, now func() int64, code *int) {
+	if recovered := recover(); recovered != nil {
+		logError(p, now, fmt.Errorf("panic: %v", recovered))
+		*code = 0
+	}
 }

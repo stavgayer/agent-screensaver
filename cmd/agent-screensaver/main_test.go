@@ -199,24 +199,16 @@ func TestStatuslineTimesOutSlowPrevious(t *testing.T) {
 }
 
 func TestStatuslineDoesNotCallItself(t *testing.T) {
-	tests := []struct {
-		name     string
-		previous string
-	}{
-		{"plain", "/usr/local/bin/agent-screensaver statusline"},
-		{"with args", "agent-screensaver statusline --x"},
+	home := t.TempDir()
+	saveConfig(t, home, binaryPath+" statusline")
+
+	got := runBinary(t, home, limitsPayload, "statusline")
+
+	if got.exitCode != 0 || got.stdout != "" {
+		t.Errorf("exit %d, stdout %q; want 0 and empty", got.exitCode, got.stdout)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			home := t.TempDir()
-			saveConfig(t, home, tt.previous)
-
-			got := runBinary(t, home, limitsPayload, "statusline")
-
-			if got.exitCode != 0 || got.stdout != "" {
-				t.Errorf("exit %d, stdout %q; want 0 and empty", got.exitCode, got.stdout)
-			}
-		})
+	if files := spoolFiles(t, home); len(files) != 1 {
+		t.Errorf("got %d spool events, want exactly 1", len(files))
 	}
 }
 

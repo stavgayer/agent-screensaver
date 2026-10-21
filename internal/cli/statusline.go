@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,7 +31,8 @@ const (
 
 // RunStatusline writes the limits event, then runs the status line command
 // the user had before and prints its output. It always returns 0.
-func RunStatusline(stdin io.Reader, stdout io.Writer, p paths.Paths, now func() int64) int {
+func RunStatusline(stdin io.Reader, stdout io.Writer, p paths.Paths, now func() int64) (code int) {
+	defer recoverToZero(p, now, &code)
 	if os.Getenv(inStatuslineEnv) == "1" {
 		return 0 // we were started by our own status line: stop the loop
 	}
@@ -77,7 +79,10 @@ func RunPrevious(cmd string, stdin []byte, timeout time.Duration) (string, bool)
 	child.WaitDelay = killGrace
 	var output strings.Builder
 	child.Stdout = &output // stderr stays nil, so it is discarded
-	if err := child.Run(); err != nil {
+	err := child.Run()
+	// A command that leaves a background process holding stdout still
+	// succeeded: WaitDelay only cut the wait for the pipe.
+	if err != nil && !(errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil) {
 		return "", false
 	}
 	return output.String(), true
