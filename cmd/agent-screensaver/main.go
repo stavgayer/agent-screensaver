@@ -102,8 +102,17 @@ func runDaemon(args []string, stderr io.Writer) int {
 	defer stop()
 	service := daemon.New(paths.ForHome(home))
 	providers := limits.All(exec.LookPath)
-	if err := daemon.Run(ctx, service, platform.NewSaverWatcher(), platform.NewSoundPlayer(), providers); err != nil {
-		fmt.Fprintf(stderr, "agent-screensaver daemon: %v\n", err)
+	// The daemon runs beside the main goroutine, which must serve the main
+	// run loop for the screen saver notifications.
+	finished := make(chan struct{})
+	var runErr error
+	go func() {
+		defer close(finished)
+		runErr = daemon.Run(ctx, service, platform.NewSaverWatcher(), platform.NewSoundPlayer(), providers)
+	}()
+	platform.RunMainLoop(finished)
+	if runErr != nil {
+		fmt.Fprintf(stderr, "agent-screensaver daemon: %v\n", runErr)
 		return 1
 	}
 	return 0

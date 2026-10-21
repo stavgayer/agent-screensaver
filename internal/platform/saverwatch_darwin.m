@@ -1,15 +1,22 @@
 #import <Foundation/Foundation.h>
 #include "_cgo_export.h"
 
-// RunSaverObserver subscribes to the screen saver notifications and then
-// serves the run loop for ever, so it never returns.
-void RunSaverObserver(void) {
+// RegisterSaverObservers must run on the main thread: macOS delivers
+// distributed notifications there, so an observer on another thread never
+// hears them.
+void RegisterSaverObservers(void) {
+	NSDistributedNotificationCenter *center = [NSDistributedNotificationCenter defaultCenter];
+	[center addObserverForName:@"com.apple.screensaver.didstart" object:nil queue:nil
+		usingBlock:^(NSNotification *note) { @autoreleasepool { saverStateChanged(1); } }];
+	[center addObserverForName:@"com.apple.screensaver.didstop" object:nil queue:nil
+		usingBlock:^(NSNotification *note) { @autoreleasepool { saverStateChanged(0); } }];
+}
+
+// PumpMainLoop serves the current run loop for a short while, so the caller
+// can check whether to stop. It returns 1 when the run loop has nothing to
+// wait for.
+int PumpMainLoop(double seconds) {
 	@autoreleasepool {
-		NSDistributedNotificationCenter *center = [NSDistributedNotificationCenter defaultCenter];
-		[center addObserverForName:@"com.apple.screensaver.didstart" object:nil queue:nil
-			usingBlock:^(NSNotification *note) { saverStateChanged(1); }];
-		[center addObserverForName:@"com.apple.screensaver.didstop" object:nil queue:nil
-			usingBlock:^(NSNotification *note) { saverStateChanged(0); }];
-		CFRunLoopRun();
+		return CFRunLoopRunInMode(kCFRunLoopDefaultMode, seconds, false) == kCFRunLoopRunFinished;
 	}
 }

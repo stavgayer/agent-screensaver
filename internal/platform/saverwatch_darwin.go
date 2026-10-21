@@ -2,20 +2,23 @@ package platform
 
 /*
 #cgo LDFLAGS: -framework Foundation
-void RunSaverObserver(void);
+void RegisterSaverObservers(void);
+int PumpMainLoop(double seconds);
 */
 import "C"
 
 import (
 	"runtime"
-	"sync"
 	"sync/atomic"
+	"time"
 )
+
+// A package init runs on the main thread; locking it here keeps the main
+// goroutine there, which RunMainLoop needs.
+func init() { runtime.LockOSThread() }
 
 // saverOn is written by the Objective-C callback and read by Active.
 var saverOn atomic.Bool
-
-var startObserver sync.Once
 
 // saverStateChanged is called from the Objective-C observer.
 //
@@ -26,17 +29,25 @@ func saverStateChanged(active C.int) {
 
 type distributedWatcher struct{}
 
-// NewSaverWatcher starts listening for the screen saver notifications. The
-// run loop must stay on one OS thread, so the goroutine locks it and never
-// gives it back.
-func NewSaverWatcher() SaverWatcher {
-	startObserver.Do(func() {
-		go func() {
-			runtime.LockOSThread()
-			C.RunSaverObserver()
-		}()
-	})
-	return distributedWatcher{}
-}
+// NewSaverWatcher returns the watcher. It hears nothing until the main
+// goroutine calls RunMainLoop.
+func NewSaverWatcher() SaverWatcher { return distributedWatcher{} }
 
 func (distributedWatcher) Active() bool { return saverOn.Load() }
+
+// RunMainLoop listens for the screen saver notifications until done is
+// closed. It must be called from the main goroutine, because macOS delivers
+// distributed notifications on the main thread.
+func RunMainLoop(done <-chan struct{}) {
+	C.RegisterSaverObservers()
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		if C.PumpMainLoop(0.2) != 0 {
+			time.Sleep(200 * time.Millisecond) // nothing to wait for: do not spin
+		}
+	}
+}
