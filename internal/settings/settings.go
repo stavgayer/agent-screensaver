@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"agent-screensaver/internal/aerials"
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/paths"
@@ -74,6 +75,28 @@ func currentValues(manifest extensions.Manifest, user map[string]any) map[string
 		}
 	}
 	return values
+}
+
+// noAerialsHint is shown when the chosen aerials group has no downloaded video.
+const noAerialsHint = "Pick it once in System Settings → Screen Saver, and macOS will download the videos."
+
+// Notice returns a message about an extension's current settings that the
+// user should see, or "" when there is none. Today the only one says how to
+// get aerial videos when the chosen group has none downloaded.
+func (s Service) Notice(extID string) string {
+	if extID != aerials.ExtensionID {
+		return ""
+	}
+	ext, err := s.find(extID)
+	if err != nil {
+		return ""
+	}
+	values := currentValues(ext.Manifest, config.Load(s.Paths.ConfigFile).Options[extID])
+	group, ok := aerials.ParseGroup(values[aerials.GroupOption])
+	if !ok || len(s.Paths.Aerials.Downloaded(group)) > 0 {
+		return ""
+	}
+	return noAerialsHint
 }
 
 // SetTheme selects an installed extension of type theme.

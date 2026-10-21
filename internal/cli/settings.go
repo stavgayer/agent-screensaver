@@ -90,7 +90,8 @@ func resetTarget(key string) string {
 }
 
 // setOption stores the value, then reads it back so the line shows what was
-// really stored (for a file option that is the copied path).
+// really stored (for a file option that is the copied path). A notice from
+// the service, such as how to get aerial videos, follows on its own line.
 func setOption(service settings.Service, extID, key, raw string, stdout io.Writer) error {
 	if err := service.SetOption(extID, key, raw); err != nil {
 		return err
@@ -100,6 +101,9 @@ func setOption(service settings.Service, extID, key, raw string, stdout io.Write
 		return err
 	}
 	fmt.Fprintf(stdout, "option: %s %s = %v\n", extID, key, snapshot.Config.Options[extID][key])
+	if notice := service.Notice(extID); notice != "" {
+		fmt.Fprintln(stdout, notice)
+	}
 	return nil
 }
 

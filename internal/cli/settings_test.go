@@ -80,3 +80,27 @@ func TestSettingsCommands(t *testing.T) {
 		})
 	}
 }
+
+func TestOptionSetPrintsAerialsHint(t *testing.T) {
+	const hint = "Pick it once in System Settings → Screen Saver, and macOS will download the videos.\n"
+	p := paths.ForHome(t.TempDir())
+	p.Aerials.Manifest = filepath.Join(t.TempDir(), "missing.json")
+	p.Aerials.Catalog = p.Aerials.Manifest
+	manifest := `{"id":"builtin.aerials","type":"background","api":1,"entry":"index.js",
+"options":{"group":{"type":"enum","default":"cities","values":["cities","space"]}}}`
+	dir := filepath.Join(p.ExtensionsDir, "builtin.aerials")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"extension.json": manifest, "index.js": "//"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	code, stdout, stderr := runSettings(t, p, "option", "set", "builtin.aerials", "group", "space")
+
+	if want := "option: builtin.aerials group = space\n" + hint; code != 0 || stdout != want {
+		t.Errorf("exit %d, stdout %q (stderr %q), want %q", code, stdout, stderr, want)
+	}
+}
