@@ -495,15 +495,23 @@ function render(): void {
   if (focusedId) document.getElementById(focusedId)?.focus();
 }
 
-async function refresh(): Promise<void> {
+/**
+ * Reads the settings again and draws them. After a change the view is always
+ * drawn (its error lines may differ); otherwise it is drawn only when the
+ * settings changed, so a refresh never rebuilds a control under the pointer.
+ */
+async function refresh(after: "change" | "outside" = "change"): Promise<void> {
+  const before = JSON.stringify([snapshot, notices]);
   try {
-    snapshot = await bridge.call<Snapshot>("snapshot");
-    const withOptions = snapshot.extensions.filter((ext) => Object.keys(ext.manifest.options ?? {}).length > 0);
+    const next = await bridge.call<Snapshot>("snapshot");
+    const withOptions = next.extensions.filter((ext) => Object.keys(ext.manifest.options ?? {}).length > 0);
     const answers = await Promise.all(withOptions.map((ext) => bridge.call<string>("notice", { extension: ext.manifest.id })));
+    snapshot = next;
     notices = Object.fromEntries(withOptions.map((ext, index) => [ext.manifest.id, answers[index] ?? ""]));
   } catch (err) {
     showStatus(err instanceof Error ? err.message : String(err), "error");
   }
+  if (after === "outside" && JSON.stringify([snapshot, notices]) === before) return;
   render();
 }
 
@@ -520,9 +528,12 @@ function show(view: View): void {
 for (const link of Array.from(document.querySelectorAll<HTMLButtonElement>(".sidebar button"))) {
   link.addEventListener("click", () => show(link.dataset.view as View));
 }
-document.addEventListener("visibilitychange", () => preview.sync());
-// The menu bar app and the CLI change settings too; read them again when the window comes back.
-window.addEventListener("focus", () => void refresh());
+// The menu bar app and the CLI change settings too: read them again when the
+// window is shown again.
+document.addEventListener("visibilitychange", () => {
+  preview.sync();
+  if (document.visibilityState === "visible") void refresh("outside");
+});
 // WebKit focuses the first control when the window opens, with a keyboard
 // ring; nothing should look selected by the keyboard before a key is pressed.
 void refresh().then(() => (document.activeElement as HTMLElement | null)?.blur());
