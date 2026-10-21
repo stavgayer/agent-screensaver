@@ -44,6 +44,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "install", "uninstall":
 		return runSetup(name, args[1:], os.Stdin, stdout, stderr)
 	}
+	if cli.IsSettingsCommand(name) {
+		return runSettings(name, args[1:], stdout, stderr)
+	}
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	if err := flags.Parse(args[1:]); err != nil {
@@ -85,6 +88,16 @@ func runTool(name string, args []string, stdin io.Reader, stdout io.Writer) int 
 		return cli.Hook(args, stdin, p, now)
 	}
 	return cli.RunStatusline(stdin, stdout, p, now)
+}
+
+// runSettings runs a settings command against the real home.
+func runSettings(name string, args []string, stdout, stderr io.Writer) int {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver %s: %v\n", name, err)
+		return 1
+	}
+	return cli.Settings(name, args, stdout, stderr, paths.ForHome(home))
 }
 
 // runDaemon runs the service until SIGINT or SIGTERM. It logs to stderr,
