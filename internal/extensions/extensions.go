@@ -326,7 +326,9 @@ func Scan(extDir string) []Installed {
 			continue
 		}
 		dir := filepath.Join(extDir, entry.Name())
-		if manifest, err := readManifest(dir); err == nil {
+		// The folder name must equal the id: Remove looks up extDir/<id>,
+		// and folder names are unique, so ids stay unique too.
+		if manifest, err := readManifest(dir); err == nil && manifest.ID == entry.Name() {
 			found = append(found, Installed{Manifest: manifest, Dir: dir})
 		}
 	}

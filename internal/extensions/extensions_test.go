@@ -275,34 +275,56 @@ func TestInstallFromFolderRejectsSymlink(t *testing.T) {
 }
 
 func TestScan(t *testing.T) {
-	extDir := filepath.Join(t.TempDir(), "extensions")
-	if _, err := InstallFrom(validDir, extDir); err != nil {
-		t.Fatal(err)
+	// build installs the valid extension, then lets setup change the folder.
+	build := func(t *testing.T, setup func(extDir string)) string {
+		extDir := filepath.Join(t.TempDir(), "extensions")
+		if _, err := InstallFrom(validDir, extDir); err != nil {
+			t.Fatal(err)
+		}
+		setup(extDir)
+		return extDir
 	}
-	if err := os.MkdirAll(filepath.Join(extDir, "acme.broken"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(extDir, "acme.broken", ManifestFile), "{not json")
-	writeFile(t, filepath.Join(extDir, "notes.txt"), "not a folder")
-
 	tests := []struct {
-		name   string
-		extDir string
-		want   []string
+		name  string
+		setup func(extDir string)
+		want  []string
 	}{
-		{"scan skips invalid", extDir, []string{"acme.rain"}},
-		{"missing folder gives nothing", filepath.Join(extDir, "nope"), nil},
+		{"scan skips invalid", func(extDir string) {
+			if err := os.MkdirAll(filepath.Join(extDir, "acme.broken"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, filepath.Join(extDir, "acme.broken", ManifestFile), "{not json")
+			writeFile(t, filepath.Join(extDir, "notes.txt"), "not a folder")
+		}, []string{"acme.rain"}},
+		{"folder name differs from id skipped", func(extDir string) {
+			copyTestFolder(t, validDir, filepath.Join(extDir, "other-name"))
+		}, []string{"acme.rain"}},
+		{"duplicate id only listed once", func(extDir string) {
+			copyTestFolder(t, validDir, filepath.Join(extDir, "aaa.stale"))
+		}, []string{"acme.rain"}},
+		{"missing folder gives nothing", func(extDir string) {
+			if err := os.RemoveAll(extDir); err != nil {
+				t.Fatal(err)
+			}
+		}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []string
-			for _, installed := range Scan(tt.extDir) {
+			for _, installed := range Scan(build(t, tt.setup)) {
 				got = append(got, installed.Manifest.ID)
 			}
 			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 				t.Fatalf("Scan() ids = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func copyTestFolder(t *testing.T, src, dest string) {
+	t.Helper()
+	if err := copyFolder(src, dest); err != nil {
+		t.Fatal(err)
 	}
 }
 

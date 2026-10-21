@@ -1,8 +1,6 @@
 # Writing extensions
 
-agent-screensaver is built from extensions. The Matrix background, the clock, the limit rings and the task cards are all extensions. They use the same format that you use. If you can write one, you can replace any of them.
-
-This page tells you how to write an extension. It only describes what works today.
+This page tells you how to write an extension for agent-screensaver and how to install it.
 
 ## The five types
 
@@ -45,7 +43,7 @@ acme.rain/
 Rules:
 
 - The `id` uses lowercase letters, digits and dashes. It has at least one dot. Examples: `acme.rain`, `my-name.big-clock`.
-- Ids that start with `builtin.` belong to the parts that ship with agent-screensaver. You cannot install or remove them.
+- Ids that start with `builtin.` are reserved. You cannot install or remove them.
 - `api` must be exactly `1`. A manifest with another number is refused.
 - `entry` is a path inside your folder. It cannot start with `/`. It cannot use `..`. The file must exist.
 
@@ -111,11 +109,11 @@ Regions: `top-left`, `top-right`, `center`, `bottom`. Other names are refused. A
   "layout": {
     "modes": {
       "idle": {
-        "center": [{ "id": "builtin.clock" }],
-        "bottom": [{ "id": "builtin.cards" }]
+        "center": [{ "id": "acme.clock" }],
+        "bottom": [{ "id": "acme.cards" }]
       },
       "attention": {
-        "bottom": [{ "id": "builtin.cards" }]
+        "bottom": [{ "id": "acme.cards" }]
       }
     }
   }
@@ -165,15 +163,4 @@ An install is refused when:
 
 When an install is refused, nothing is left behind.
 
-An extension that is not valid is skipped when the extensions are listed.
-
-## Safety rules
-
-The screen saver runs while the Mac is locked. So outside code is limited:
-
-- Web extensions have no network access. The Content Security Policy blocks it.
-- Web extensions have no file access. They see only the state the service gives them.
-- If an extension throws an error or freezes, the saver drops it and shows the default for that slot.
-- The runtime enforces the user's `max_fps` limit for every background that draws through the API, including yours.
-- A layout has no code, so it cannot run anything.
-- The Go service never loads outside code. A source is a separate program that sends events.
+When the extensions are listed, an extension is skipped if its manifest is not valid, or if its folder name is not the same as its `id`. An install always names the folder after the `id`.
