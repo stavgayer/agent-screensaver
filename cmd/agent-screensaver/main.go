@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
+
+	"agent-screensaver/internal/cli"
+	"agent-screensaver/internal/paths"
 )
 
 // subcommands lists every subcommand, in the order shown in the usage text.
@@ -25,6 +29,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	name := args[0]
+	switch name {
+	case "hook", "statusline":
+		return runTool(name, args[1:], os.Stdin, stdout)
+	}
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	if err := flags.Parse(args[1:]); err != nil {
@@ -50,4 +58,20 @@ func printUsage(out io.Writer) {
 	for _, name := range subcommands {
 		fmt.Fprintf(out, "  %s\n", name)
 	}
+}
+
+// runTool runs a command that coding tools call. Those must exit 0 even when
+// the home cannot be resolved, so they never report a failure.
+func runTool(name string, args []string, stdin io.Reader, stdout io.Writer) int {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		_, _ = io.Copy(io.Discard, stdin)
+		return 0
+	}
+	p := paths.ForHome(home)
+	now := func() int64 { return time.Now().UnixMilli() }
+	if name == "hook" {
+		return cli.Hook(args, stdin, p, now)
+	}
+	return cli.RunStatusline(stdin, stdout, p, now)
 }
