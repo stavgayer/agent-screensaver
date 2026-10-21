@@ -20,7 +20,7 @@ Sources for the criteria: the `emil-design-eng` skill (motion and polish), the `
 - Only one preview runs. A preview per theme card would run one runtime per theme, each with its own Matrix rain. The other themes are static tiles: a black screen with a clock underlined in the theme's own `--accent`. The tile is drawn from the theme's real style values, not from a stock picture.
 - The preview exists only while this view is open and the window is visible. It is removed when the view changes or the window is hidden (`visibilitychange`), so a settings window in the background costs no frames. While it exists, the page reads the state once a second and sends it only when it changed.
 - The theme gallery is a group of real radio buttons, so arrow keys move between themes. The background is a popup menu, because a list of five names does not need pictures.
-- The frame cannot be reached by script from the page (both are `file://`), so the page posts the state and a small script inside the frame passes it to the runtime.
+- The frame is sandboxed (`sandbox="allow-scripts"`, an opaque origin) and served from `ags-preview://data/...`, which the window maps to files inside the data folder only. Extension scripts run in that frame, so they must not reach the page or its bridge to Go. In WebKit a sandboxed `file://` frame can load no `file://` script, so the preview cannot use `file://`. The page posts the state into the frame, with data-folder file URLs rewritten to the scheme, and a small script inside the frame passes it to the runtime.
 
 ## Forms from option schemas
 
