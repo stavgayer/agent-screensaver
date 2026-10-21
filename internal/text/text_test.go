@@ -17,7 +17,24 @@ func TestMaskSecrets(t *testing.T) {
 		{"flag", "--password hunter2", "hunter2"},
 		{"colon", "token: ghp_abcdefghijklmnopqrstuvwxyz0123456789", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"},
 		{"long random string", "deploy with AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/ now", "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/"},
+		{"short colon value", "token: abc", "abc"},
+		{"db password", "DB_PASSWORD=hunter2", "hunter2"},
+		{"github token", "GITHUB_TOKEN=ghp_short1", "ghp_short1"},
+		{"aws secret", "AWS_SECRET_ACCESS_KEY=abcd1234", "abcd1234"},
+		{"openai key", "OPENAI_API_KEY=sk-short", "sk-short"},
+		{"access token", "access_token=abc123", "abc123"},
+		{"client secret", "client_secret=abc123", "abc123"},
+		{"passphrase", "passphrase hunter2", "hunter2"},
+		{"plural secrets", "secrets=abc", "abc"},
+		{"plural tokens", "tokens abc", "abc"},
+		{"json key", `{"password": "hunter2"}`, "hunter2"},
+		{"basic auth", "Authorization: Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"},
+		{"url credentials", "postgres://user:hunter2@db/x", "hunter2"},
+		{"curl user", "curl -u admin:hunter2 host", "hunter2"},
+		{"aws access key id", "id AKIAIOSFODNN7EXAMPLE here", "AKIAIOSFODNN7EXAMPLE"},
+		{"aws temp key id", "id ASIAIOSFODNN7EXAMPLE here", "ASIAIOSFODNN7EXAMPLE"},
 		{"normal word kept", "implementation", ""},
+		{"dash p not masked", "mysql -p hunter2", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -45,6 +62,9 @@ func TestMaskSecretsKeepsContext(t *testing.T) {
 		{"bearer keeps word", "Bearer abc123", "Bearer •••"},
 		{"assignment keeps key and separator", "API_KEY=sk-live-XYZ npm start", "API_KEY=••• npm start"},
 		{"flag keeps name", "--password hunter2", "--password •••"},
+		{"prefixed name kept", "DB_PASSWORD=hunter2 run", "DB_PASSWORD=••• run"},
+		{"url keeps user and host", "postgres://user:hunter2@db/x", "postgres://user:•••@db/x"},
+		{"curl keeps user", "curl -u admin:hunter2 host", "curl -u admin:••• host"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

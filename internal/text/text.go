@@ -14,20 +14,41 @@ const (
 	ellipsis = "…"
 )
 
-// Patterns are compiled once. Go's RE2 has no lookarounds, so context
-// to keep is captured and written back with ${n} references.
-var (
-	bearerPattern     = regexp.MustCompile(`(?i)(bearer\s+)\S+`)
-	assignmentPattern = regexp.MustCompile(`(?i)\b(token|key|secret|password|passwd|pwd|api[_-]?key)\b(\s*[:=]\s*|\s+)\S+`)
-	longRunPattern    = regexp.MustCompile(`[A-Za-z0-9+/_\-]{32,}`)
-)
+// maskRule rewrites matches with a replacement that keeps the context
+// (capture groups) and hides only the secret.
+type maskRule struct {
+	pattern     *regexp.Regexp
+	replacement string
+}
+
+// Rules are compiled once and applied in order. Go's RE2 has no lookarounds,
+// so context to keep is captured and written back with ${n}. Over-masking is
+// the accepted failure: a secret on screen is not.
+var maskRules = []maskRule{
+	// Authorization: Bearer <token>
+	{regexp.MustCompile(`(?i)(bearer\s+)\S+`), "${1}" + mask},
+	// Authorization: Basic <base64 credentials>
+	{regexp.MustCompile(`(?i)(basic\s+)\S+`), "${1}" + mask},
+	// scheme://user:password@host
+	{regexp.MustCompile(`(://[^\s:/@]+:)[^\s@/]+@`), "${1}" + mask + "@"},
+	// curl -u user:password
+	{regexp.MustCompile(`(\s-u\s+[^\s:]+:)\S+`), "${1}" + mask},
+	// AWS access key ids
+	{regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`), mask},
+	// name=value, name: value, --name value, "name": "value", where the name
+	// contains a secret-like word (DB_PASSWORD, access_token, secrets, ...)
+	{regexp.MustCompile(`(?i)([A-Za-z0-9_\-]*(?:token|key|secret|password|passwd|passphrase|pwd)[A-Za-z0-9_\-]*)(["']?\s*[:=]\s*["']?|\s+)\S+`), "${1}${2}" + mask},
+	// any long unbroken token-like run (API keys, hashes)
+	{regexp.MustCompile(`[A-Za-z0-9+/_\-]{32,}`), mask},
+}
 
 // MaskSecrets replaces likely secrets with a mask, keeping the surrounding
 // context (the "Bearer" word, the key name and separator) readable.
 func MaskSecrets(s string) string {
-	s = bearerPattern.ReplaceAllString(s, "${1}"+mask)
-	s = assignmentPattern.ReplaceAllString(s, "${1}${2}"+mask)
-	return longRunPattern.ReplaceAllString(s, mask)
+	for _, rule := range maskRules {
+		s = rule.pattern.ReplaceAllString(s, rule.replacement)
+	}
+	return s
 }
 
 // ShortTitle returns the first non-empty line of s, whitespace collapsed,
