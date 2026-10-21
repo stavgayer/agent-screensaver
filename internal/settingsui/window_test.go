@@ -27,8 +27,30 @@ func (f *fakeService) record(call string) error {
 	return f.err
 }
 
+// fakeSnapshot has one number option and one file option, for the rule that
+// a file option is set only through the file dialog.
+var fakeSnapshot = settings.Snapshot{
+	Config: config.Config{Theme: "builtin.default"},
+	Extensions: []settings.ExtensionInfo{
+		{Manifest: extensions.Manifest{ID: "builtin.matrix", Options: map[string]extensions.OptionSpec{"fps": {Kind: extensions.OptionNumber}}}},
+		{Manifest: extensions.Manifest{ID: "builtin.image", Options: map[string]extensions.OptionSpec{"file": {Kind: extensions.OptionFile}}}},
+	},
+}
+
 func (f *fakeService) Snapshot() (settings.Snapshot, error) {
-	return settings.Snapshot{Config: config.Config{Theme: "builtin.default"}}, f.record("Snapshot")
+	return fakeSnapshot, f.record("Snapshot")
+}
+
+// changes are the calls other than Snapshot, which the bridge also uses to
+// look up an option's kind.
+func (f *fakeService) changes() []string {
+	var changes []string
+	for _, call := range f.calls {
+		if call != "Snapshot" {
+			changes = append(changes, call)
+		}
+	}
+	return changes
 }
 func (f *fakeService) SetTheme(id string) error      { return f.record("SetTheme " + id) }
 func (f *fakeService) SetBackground(id string) error { return f.record("SetBackground " + id) }
@@ -62,13 +84,21 @@ func yesNo(on bool) string {
 }
 
 // fakePicker answers every dialog with path, or a cancel when path is "".
+// While its dialog is open it can make one more call to the page handler,
+// like a page that keeps posting while macOS shows the open panel.
 type fakePicker struct {
-	path     string
-	requests []platform.FileRequest
+	path      string
+	requests  []platform.FileRequest
+	window    *fakeWindow
+	nested    *call
+	nestedErr error
 }
 
 func (f *fakePicker) PickFile(request platform.FileRequest) (string, bool, error) {
 	f.requests = append(f.requests, request)
+	if f.nested != nil {
+		_, f.nestedErr = f.window.handle(f.nested.method, json.RawMessage(f.nested.params))
+	}
 	return f.path, f.path != "", nil
 }
 
@@ -79,6 +109,7 @@ type fakeWindow struct {
 	readAccess string
 	results    []any
 	errs       []error
+	handle     platform.PageHandler
 }
 
 type call struct {
@@ -87,7 +118,7 @@ type call struct {
 }
 
 func (f *fakeWindow) Run(page, readAccess string, handle platform.PageHandler) error {
-	f.page, f.readAccess = page, readAccess
+	f.page, f.readAccess, f.handle = page, readAccess, handle
 	for _, c := range f.calls {
 		result, err := handle(c.method, json.RawMessage(c.params))
 		f.results = append(f.results, result)
@@ -118,7 +149,7 @@ func TestOpenCallsTheService(t *testing.T) {
 		wantCall   string
 		wantResult any
 	}{
-		{"snapshot", "snapshot", ``, "", "Snapshot", settings.Snapshot{Config: config.Config{Theme: "builtin.default"}}},
+		{"snapshot", "snapshot", ``, "", "Snapshot", fakeSnapshot},
 		{"set theme", "setTheme", `{"id":"acme.night"}`, "", "SetTheme acme.night", nil},
 		{"set background", "setBackground", `{"id":"builtin.matrix"}`, "", "SetBackground builtin.matrix", nil},
 		{"back to the theme's background", "setBackground", `{"id":""}`, "", "SetBackground ", nil},
@@ -143,8 +174,12 @@ func TestOpenCallsTheService(t *testing.T) {
 			if window.errs[0] != nil {
 				t.Fatalf("%s: %v", tt.method, window.errs[0])
 			}
-			if want := []string{tt.wantCall}; !reflect.DeepEqual(service.calls, want) {
-				t.Fatalf("service calls = %q, want %q", service.calls, want)
+			got := service.changes()
+			if tt.method == "snapshot" {
+				got = service.calls
+			}
+			if want := []string{tt.wantCall}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("service calls = %q, want %q", got, want)
 			}
 			if !reflect.DeepEqual(window.results[0], tt.wantResult) {
 				t.Fatalf("result = %#v, want %#v", window.results[0], tt.wantResult)
@@ -187,8 +222,8 @@ func TestCancelledPickerChangesNothing(t *testing.T) {
 			if err := Open(testPaths(t), service, &fakePicker{}, window); err != nil {
 				t.Fatal(err)
 			}
-			if window.errs[0] != nil || len(service.calls) != 0 {
-				t.Fatalf("err = %v, calls = %q, want no error and no call", window.errs[0], service.calls)
+			if window.errs[0] != nil || len(service.changes()) != 0 {
+				t.Fatalf("err = %v, calls = %q, want no error and no change", window.errs[0], service.calls)
 			}
 			if window.results[0] != (pickResult{Cancelled: true}) {
 				t.Fatalf("result = %#v, want cancelled", window.results[0])
@@ -252,5 +287,48 @@ func TestState(t *testing.T) {
 	}
 	if window.errs[0] != nil || window.results[0] != content {
 		t.Fatalf("state = %#v, %v; want the file text", window.results[0], window.errs[0])
+	}
+}
+
+func TestFileOptionOnlyThroughTheDialog(t *testing.T) {
+	tests := []struct {
+		name, params, pickerPath, wantErr string
+		wantChanges                       []string
+	}{
+		{"a typed path is refused", `{"extension":"builtin.image","key":"file","value":"/Users/me/.ssh/id_rsa"}`, "", "file dialog", nil},
+		{"a picked path is used", `{"extension":"builtin.image","key":"file","pick":true}`, "/tmp/a.png", "", []string{"SetOption builtin.image file /tmp/a.png"}},
+		{"the dialog is only for file options", `{"extension":"builtin.matrix","key":"fps","pick":true}`, "/tmp/a.png", "not a file option", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &fakeService{}
+			window := &fakeWindow{calls: []call{{"setOption", tt.params}}}
+			if err := Open(testPaths(t), service, &fakePicker{path: tt.pickerPath}, window); err != nil {
+				t.Fatal(err)
+			}
+			err := window.errs[0]
+			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(service.changes(), tt.wantChanges) {
+				t.Fatalf("changes = %q, want %q", service.changes(), tt.wantChanges)
+			}
+		})
+	}
+}
+
+func TestNoCallsWhileTheDialogIsOpen(t *testing.T) {
+	service := &fakeService{}
+	window := &fakeWindow{calls: []call{{"installExtension", `{}`}, {"setPrivacy", `{"on":true}`}}}
+	picker := &fakePicker{path: "/tmp/rain.zip", window: window, nested: &call{"setPrivacy", `{"on":true}`}}
+	if err := Open(testPaths(t), service, picker, window); err != nil {
+		t.Fatal(err)
+	}
+	if picker.nestedErr == nil || !strings.Contains(picker.nestedErr.Error(), "file dialog is open") {
+		t.Fatalf("nested call error = %v, want a refusal", picker.nestedErr)
+	}
+	want := []string{"InstallExtension /tmp/rain.zip", "SetPrivacy on"} // calls work again once it closes
+	if !reflect.DeepEqual(service.changes(), want) {
+		t.Fatalf("changes = %q, want %q", service.changes(), want)
 	}
 }

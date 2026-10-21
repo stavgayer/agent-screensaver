@@ -53,7 +53,7 @@ func Open(p paths.Paths, svc Service, picker platform.FilePicker, window platfor
 	if _, err := os.Stat(page); err != nil {
 		return fmt.Errorf("settings page is missing, run agent-screensaver install: %w", err)
 	}
-	b := bridge{svc: svc, picker: picker, stateFile: p.StateFile}
+	b := &bridge{svc: svc, picker: picker, stateFile: p.StateFile}
 	return window.Run(page, p.DataDir, b.handle)
 }
 
@@ -61,9 +61,16 @@ type bridge struct {
 	svc       Service
 	picker    platform.FilePicker
 	stateFile string
+	// picking is true while the open panel is up. Its modal loop still
+	// delivers the page's messages, so a call could arrive in the middle of
+	// another; those calls are refused instead of nesting.
+	picking bool
 }
 
-func (b bridge) handle(method string, params json.RawMessage) (any, error) {
+func (b *bridge) handle(method string, params json.RawMessage) (any, error) {
+	if b.picking {
+		return nil, errors.New("a file dialog is open")
+	}
 	call, ok := b.methods()[method]
 	if !ok {
 		return nil, fmt.Errorf("unknown method %q", method)
@@ -75,7 +82,7 @@ func (b bridge) handle(method string, params json.RawMessage) (any, error) {
 type method func(params json.RawMessage) (any, error)
 
 // methods maps each page call onto the service. A setter answers null.
-func (b bridge) methods() map[string]method {
+func (b *bridge) methods() map[string]method {
 	return map[string]method{
 		"snapshot": func(json.RawMessage) (any, error) { return b.svc.Snapshot() },
 		"setTheme": withParams(func(p struct{ ID string }) (any, error) { return nil, b.svc.SetTheme(p.ID) }),
@@ -103,9 +110,22 @@ type optionParams struct {
 	Pick                  bool // choose Value with the file dialog
 }
 
-func (b bridge) setOption(p optionParams) (any, error) {
+// setOption sets a file option only with a path the user chose in the file
+// dialog. The settings service copies the file into the data directory, which
+// the screen saver can read, so a typed path must never reach it.
+func (b *bridge) setOption(p optionParams) (any, error) {
+	isFile, err := b.isFileOption(p.Extension, p.Key)
+	if err != nil {
+		return nil, err
+	}
+	if isFile && !p.Pick {
+		return nil, fmt.Errorf("option %s %s is a file: choose it in the file dialog", p.Extension, p.Key)
+	}
+	if !isFile && p.Pick {
+		return nil, fmt.Errorf("option %s %s is not a file option", p.Extension, p.Key)
+	}
 	if p.Pick {
-		path, ok, err := b.picker.PickFile(optionFiles)
+		path, ok, err := b.pick(optionFiles)
 		if err != nil || !ok {
 			return pickResult{Cancelled: err == nil}, err
 		}
@@ -119,10 +139,10 @@ type soundParams struct {
 	Pick bool // also choose a new sound file
 }
 
-func (b bridge) setSound(p soundParams) (any, error) {
+func (b *bridge) setSound(p soundParams) (any, error) {
 	file := ""
 	if p.Pick {
-		path, ok, err := b.picker.PickFile(soundFiles)
+		path, ok, err := b.pick(soundFiles)
 		if err != nil || !ok {
 			return pickResult{Cancelled: err == nil}, err
 		}
@@ -131,8 +151,8 @@ func (b bridge) setSound(p soundParams) (any, error) {
 	return nil, b.svc.SetSound(p.On, file)
 }
 
-func (b bridge) installExtension() (any, error) {
-	path, ok, err := b.picker.PickFile(extensionFiles)
+func (b *bridge) installExtension() (any, error) {
+	path, ok, err := b.pick(extensionFiles)
 	if err != nil || !ok {
 		return pickResult{Cancelled: err == nil}, err
 	}
@@ -143,9 +163,31 @@ func (b bridge) installExtension() (any, error) {
 	return pickResult{Manifest: &manifest}, nil
 }
 
+// isFileOption reports whether the option is of kind file. An option the
+// snapshot does not know is not a file; the service reports it as unknown.
+func (b *bridge) isFileOption(extID, key string) (bool, error) {
+	snapshot, err := b.svc.Snapshot()
+	if err != nil {
+		return false, err
+	}
+	for _, ext := range snapshot.Extensions {
+		if ext.Manifest.ID == extID {
+			return ext.Manifest.Options[key].Kind == extensions.OptionFile, nil
+		}
+	}
+	return false, nil
+}
+
+// pick shows the file dialog with other calls held off until it closes.
+func (b *bridge) pick(request platform.FileRequest) (string, bool, error) {
+	b.picking = true
+	defer func() { b.picking = false }()
+	return b.picker.PickFile(request)
+}
+
 // state returns state.json as text, ready for the runtime's setState, or nil
 // when the daemon has not written one yet.
-func (b bridge) state() (any, error) {
+func (b *bridge) state() (any, error) {
 	data, err := os.ReadFile(b.stateFile)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
