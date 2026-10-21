@@ -16,6 +16,44 @@ static BOOL IsSettingsPage(NSURL *url) {
   return url.isFileURL && [url.URLByStandardizingPath.path isEqualToString:gPageURL.URLByStandardizingPath.path];
 }
 
+// Serves ags-preview://data/... to the sandboxed preview frame. Go decides
+// what may be read (servePreview); this only turns its answer into a
+// response.
+@interface AGSPreviewScheme : NSObject <WKURLSchemeHandler>
+@end
+
+@implementation AGSPreviewScheme
+- (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
+  NSString *range = [task.request valueForHTTPHeaderField:@"Range"] ?: @"";
+  PreviewReply reply = {0};
+  previewRequest((char *)task.request.URL.absoluteString.UTF8String, (char *)range.UTF8String, &reply);
+  NSMutableDictionary *headers = [NSMutableDictionary dictionaryWithDictionary:@{
+    @"Accept-Ranges" : @"bytes",
+    @"Content-Length" : [NSString stringWithFormat:@"%lld", reply.length],
+  }];
+  if (reply.mime != NULL) {
+    headers[@"Content-Type"] = [NSString stringWithUTF8String:reply.mime];
+    free(reply.mime);
+  }
+  if (reply.status == 206) {
+    headers[@"Content-Range"] = [NSString stringWithFormat:@"bytes %lld-%lld/%lld", reply.start, reply.start + reply.length - 1, reply.size];
+  } else if (reply.status == 416) {
+    headers[@"Content-Range"] = [NSString stringWithFormat:@"bytes */%lld", reply.size];
+  }
+  [task didReceiveResponse:[[NSHTTPURLResponse alloc] initWithURL:task.request.URL
+                                                       statusCode:reply.status
+                                                      HTTPVersion:@"HTTP/1.1"
+                                                     headerFields:headers]];
+  if (reply.body != NULL) {
+    [task didReceiveData:[NSData dataWithBytesNoCopy:reply.body length:(NSUInteger)reply.length freeWhenDone:YES]];
+  }
+  [task didFinish];
+}
+- (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)task {
+  // Every task finishes inside startURLSchemeTask, so there is nothing to stop.
+}
+@end
+
 @interface AGSSettingsController : NSObject <WKScriptMessageHandler, WKNavigationDelegate, NSWindowDelegate>
 @end
 
@@ -41,8 +79,10 @@ static BOOL IsSettingsPage(NSURL *url) {
 - (void)webView:(WKWebView *)webView
     decidePolicyForNavigationAction:(WKNavigationAction *)action
                     decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+  // The preview scheme is only for the preview frame, never for the page.
   NSString *scheme = action.request.URL.scheme;
-  BOOL local = [scheme isEqualToString:@"file"] || [scheme isEqualToString:@"about"];
+  BOOL preview = [scheme isEqualToString:@"ags-preview"] && !action.targetFrame.isMainFrame;
+  BOOL local = [scheme isEqualToString:@"file"] || [scheme isEqualToString:@"about"] || preview;
   decisionHandler(local ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
 }
 
@@ -133,6 +173,7 @@ void RunSettingsWindow(const char *title, const char *page, const char *readAcce
 
     WKWebViewConfiguration *config = [WKWebViewConfiguration new];
     [config.userContentController addScriptMessageHandler:controller name:@"ags"];
+    [config setURLSchemeHandler:[AGSPreviewScheme new] forURLScheme:@"ags-preview"];
     NSRect frame = NSMakeRect(0, 0, kWidth, kHeight);
     gWebView = [[WKWebView alloc] initWithFrame:frame configuration:config];
     gWebView.navigationDelegate = controller;
