@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/jsonedit"
 	"agent-screensaver/internal/text"
 )
 
@@ -175,4 +176,15 @@ func firstString(values map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// HookInstaller edits one tool's hook config file. Both adapters implement it,
+// so install loops over All instead of naming tools.
+type HookInstaller interface {
+	// ConfigPath is the tool's hook config file under home.
+	ConfigPath(home string) string
+	// AddHooks appends our entries for command. It is idempotent.
+	AddHooks(cfg *jsonedit.Object, command string) error
+	// RemoveHooks removes only the entries whose command is exactly command.
+	RemoveHooks(cfg *jsonedit.Object, command string) error
 }

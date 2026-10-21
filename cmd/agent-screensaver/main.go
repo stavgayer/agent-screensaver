@@ -41,6 +41,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runTool(name, args[1:], os.Stdin, stdout)
 	case "daemon":
 		return runDaemon(args[1:], stderr)
+	case "install", "uninstall":
+		return runSetup(name, args[1:], os.Stdin, stdout, stderr)
 	}
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.SetOutput(stderr)
