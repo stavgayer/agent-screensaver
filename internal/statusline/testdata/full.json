@@ -1,0 +1,13 @@
+{
+  "cwd": "/Users/dev/work/my-project",
+  "session_id": "abc123",
+  "model": {"id": "claude-opus-5-5", "display_name": "Opus"},
+  "workspace": {
+    "current_dir": "/Users/dev/work/my-project",
+    "project_dir": "/Users/dev/work/my-project"
+  },
+  "rate_limits": {
+    "five_hour": {"used_percentage": 62.0, "resets_at": 1738425600},
+    "seven_day": {"used_percentage": 38.0, "resets_at": 1738857600}
+  }
+}

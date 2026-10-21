@@ -1,0 +1,8 @@
+{
+  "cwd": "/Users/dev/work/my-project",
+  "session_id": "abc123",
+  "workspace": {"current_dir": "/Users/dev/work/my-project"},
+  "rate_limits": {
+    "five_hour": {"used_percentage": 23.5, "resets_at": 1738425600}
+  }
+}

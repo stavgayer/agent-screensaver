@@ -1,0 +1,6 @@
+{
+  "cwd": "/Users/dev/work/my-project",
+  "session_id": "abc123",
+  "workspace": {"current_dir": "/Users/dev/work/my-project"},
+  "model": {"id": "claude-opus-5-5", "display_name": "Opus"}
+}
