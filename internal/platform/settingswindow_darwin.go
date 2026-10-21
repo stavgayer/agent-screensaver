@@ -13,13 +13,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
 	"unsafe"
 )
 
-// Cocoa must run on the main thread. A package init runs there; locking it
-// keeps the main goroutine on it for Run, whatever other packages do.
-func init() { runtime.LockOSThread() }
+// Cocoa must run on the main thread: the init in saverwatch_darwin.go locks
+// the main goroutine there, which Run relies on.
 
 const settingsWindowTitle = "Agent Screen Saver"
 
