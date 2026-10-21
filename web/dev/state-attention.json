@@ -1,0 +1,172 @@
+{
+  "_offsets": "Times are offsets from now, not absolute: *_ms in milliseconds, resets_at in seconds. preview.html adds Date.now() to each.",
+  "version": 1,
+  "generated_at_ms": 0,
+  "service_ok": true,
+  "cards": [
+    {
+      "source": "codex",
+      "session": "c1",
+      "kind": "running",
+      "project": "web-app",
+      "title": "Refactor auth module",
+      "started_at_ms": -1440000,
+      "updated_at_ms": 0
+    },
+    {
+      "source": "claude",
+      "session": "c2",
+      "kind": "running",
+      "project": "api-server",
+      "title": "Integration tests",
+      "started_at_ms": -4320000,
+      "updated_at_ms": 0
+    },
+    {
+      "source": "claude",
+      "session": "c3",
+      "kind": "finished",
+      "project": "web-app",
+      "title": "Fix flaky test",
+      "started_at_ms": -1800000,
+      "updated_at_ms": -480000
+    },
+    {
+      "source": "claude",
+      "session": "c4",
+      "kind": "approval",
+      "project": "api-server",
+      "started_at_ms": -300000,
+      "updated_at_ms": -180000,
+      "request": "Bash: npm run migrate",
+      "approval_since_ms": -180000
+    }
+  ],
+  "limits": [
+    {
+      "source": "claude",
+      "window": "5h",
+      "used_percent": 62,
+      "resets_at": 6000,
+      "updated_at_ms": 0
+    },
+    {
+      "source": "claude",
+      "window": "week",
+      "used_percent": 38,
+      "updated_at_ms": 0
+    },
+    {
+      "source": "codex",
+      "window": "5h",
+      "used_percent": 20,
+      "resets_at": 11100,
+      "updated_at_ms": 0
+    },
+    {
+      "source": "codex",
+      "window": "week",
+      "used_percent": 55,
+      "updated_at_ms": 0
+    }
+  ],
+  "view": {
+    "theme": "builtin.default",
+    "background": {
+      "id": "builtin.matrix",
+      "entry_url": "{{BUILD}}extensions/builtin.matrix/index.js",
+      "options": {}
+    },
+    "layout": {
+      "modes": {
+        "idle": {
+          "center": [
+            {
+              "id": "builtin.clock",
+              "options": {
+                "size": "large"
+              }
+            }
+          ],
+          "top-right": [
+            {
+              "id": "builtin.limit-rings"
+            }
+          ],
+          "bottom": [
+            {
+              "id": "builtin.task-row"
+            }
+          ]
+        },
+        "attention": {
+          "top-left": [
+            {
+              "id": "builtin.clock",
+              "options": {
+                "size": "small"
+              }
+            }
+          ],
+          "top-right": [
+            {
+              "id": "builtin.limit-rings"
+            }
+          ],
+          "center": [
+            {
+              "id": "builtin.approval-card"
+            }
+          ],
+          "bottom": [
+            {
+              "id": "builtin.task-row"
+            }
+          ]
+        },
+        "secondary": {
+          "center": [
+            {
+              "id": "builtin.clock",
+              "options": {
+                "size": "large"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "components": [
+      {
+        "id": "builtin.clock",
+        "entry_url": "{{BUILD}}extensions/builtin.clock/index.js",
+        "options": {
+          "size": "large"
+        }
+      },
+      {
+        "id": "builtin.limit-rings",
+        "entry_url": "{{BUILD}}extensions/builtin.limit-rings/index.js",
+        "options": {}
+      },
+      {
+        "id": "builtin.task-row",
+        "entry_url": "{{BUILD}}extensions/builtin.task-row/index.js",
+        "options": {}
+      },
+      {
+        "id": "builtin.approval-card",
+        "entry_url": "{{BUILD}}extensions/builtin.approval-card/index.js",
+        "options": {}
+      }
+    ],
+    "style": {
+      "--accent": "#00e07a",
+      "--attention": "#ffb020",
+      "--done": "#78c8ff",
+      "--card-opacity": "0.82"
+    },
+    "privacy": null,
+    "max_fps": 0
+  }
+}

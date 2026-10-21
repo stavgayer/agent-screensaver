@@ -1,0 +1,8 @@
+{
+  "id": "builtin.limit-rings",
+  "name": "Limit rings",
+  "version": "1.0.0",
+  "type": "component",
+  "api": 1,
+  "entry": "index.js"
+}

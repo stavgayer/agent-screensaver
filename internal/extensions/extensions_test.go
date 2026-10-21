@@ -408,3 +408,32 @@ func itoa(number int) string {
 	data, _ := json.Marshal(number)
 	return string(data)
 }
+
+// Built-ins are plain extension folders, so they must pass the same rules as
+// outside ones. They are built into build/extensions by `npm run build`.
+func TestAllBuiltinManifestsAreValid(t *testing.T) {
+	const builtDir = "../../build/extensions"
+	entries, err := os.ReadDir(builtDir)
+	if err != nil {
+		t.Skipf("%s is missing: run `npm run build` in web/ first (%v)", builtDir, err)
+	}
+	checked := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		t.Run(entry.Name(), func(t *testing.T) {
+			manifest, err := readManifest(filepath.Join(builtDir, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if manifest.ID != entry.Name() {
+				t.Errorf("folder %q holds id %q", entry.Name(), manifest.ID)
+			}
+		})
+		checked++
+	}
+	if checked == 0 {
+		t.Fatalf("%s holds no extensions", builtDir)
+	}
+}

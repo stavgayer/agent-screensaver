@@ -1,0 +1,15 @@
+{
+  "id": "builtin.matrix",
+  "name": "Matrix",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "index.js",
+  "options": {
+    "color": { "type": "color", "default": "#00ff66", "label": "Color" },
+    "speed": { "type": "number", "default": 1, "min": 0.25, "max": 4, "label": "Speed" },
+    "charset": { "type": "enum", "default": "katakana", "values": ["katakana", "latin", "digits", "hebrew"], "label": "Characters" },
+    "fps": { "type": "number", "default": 24, "min": 1, "max": 240, "label": "Frames per second" },
+    "density": { "type": "number", "default": 1, "min": 0.25, "max": 2, "label": "Density" }
+  }
+}

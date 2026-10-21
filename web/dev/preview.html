@@ -1,0 +1,65 @@
+<!doctype html>
+<!--
+  Previews the real runtime with the built-in theme and sample data.
+  Needs `npm run build` first, and a static server started in the repo root
+  (browsers refuse to fetch the JSON files from file://):
+    python3 -m http.server 8000   then open http://localhost:8000/web/dev/preview.html
+  Idle for 5 s, then attention for 5 s, then idle again, in a loop.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Screensaver preview</title>
+  <link rel="stylesheet" href="../../build/runtime/styles.css">
+</head>
+<body class="mode-idle">
+  <div id="background"></div>
+  <main id="screen">
+    <section id="region-top-left" class="region"></section>
+    <section id="region-top-right" class="region"></section>
+    <section id="region-center" class="region"></section>
+    <section id="region-bottom" class="region"></section>
+  </main>
+  <div id="service-line" hidden>service not running</div>
+  <script src="../../build/runtime/runtime.js"></script>
+  <script>
+    const PHASE_MS = 5000;
+    const buildUrl = new URL("../../build/", location.href).href;
+
+    // The JSON files hold offsets from "now"; this turns them into real times so the screen looks live.
+    function liveState(template) {
+      const nowMs = Date.now();
+      const state = JSON.parse(JSON.stringify(template).replaceAll("{{BUILD}}", buildUrl));
+      state.generated_at_ms += nowMs;
+      for (const card of state.cards) {
+        for (const key of ["started_at_ms", "updated_at_ms", "approval_since_ms"]) {
+          if (key in card) card[key] += nowMs;
+        }
+      }
+      for (const limit of state.limits) {
+        limit.updated_at_ms += nowMs;
+        if ("resets_at" in limit) limit.resets_at += Math.round(nowMs / 1000);
+      }
+      return JSON.stringify(state);
+    }
+
+    async function load(name) {
+      const response = await fetch(name);
+      if (!response.ok) throw new Error(`${name}: ${response.status}`);
+      return response.json();
+    }
+
+    async function run() {
+      const [idle, attention] = await Promise.all([load("state-idle.json"), load("state-attention.json")]);
+      const phases = [idle, attention];
+      for (let phase = 0; ; phase = (phase + 1) % phases.length) {
+        window.agentScreensaver.setState(liveState(phases[phase]), "main");
+        await new Promise((resolve) => setTimeout(resolve, PHASE_MS));
+      }
+    }
+
+    run().catch((error) => console.error("[preview]", error));
+  </script>
+</body>
+</html>

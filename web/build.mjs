@@ -2,14 +2,15 @@
 // extensions into ../build/extensions. Run from web/ with `npm run build`.
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const outRuntime = join(root, "..", "build", "runtime");
 const outExtensions = join(root, "..", "build", "extensions");
 const builtinsDir = join(root, "src", "builtins");
+const manifestsDir = join(root, "..", "extensions");
 
 // WebKit refuses ES modules on file://, so every bundle is a classic script.
 const common = { bundle: true, format: "iife", target: "es2022", logLevel: "warning" };
@@ -26,16 +27,24 @@ async function buildRuntime() {
   );
 }
 
-/** `src/builtins/<name>.ts` becomes `extensions/builtin.<name>/index.js`, next to `<name>.extension.json`. */
+/**
+ * Every folder under the repo's `extensions/` is copied to `build/extensions/<id>/`.
+ * A built-in with code (`src/builtins/<name>/index.ts`) is bundled to
+ * `build/extensions/builtin.<name>/index.js` next to its manifest.
+ */
 async function buildBuiltins() {
-  if (!existsSync(builtinsDir)) return; // none yet
-  for (const file of readdirSync(builtinsDir).filter((name) => name.endsWith(".ts"))) {
-    const name = basename(file, ".ts");
-    const outDir = join(outExtensions, `builtin.${name}`);
-    mkdirSync(outDir, { recursive: true });
-    await build({ ...common, entryPoints: [join(builtinsDir, file)], outfile: join(outDir, "index.js") });
-    const manifest = join(builtinsDir, `${name}.extension.json`);
-    if (existsSync(manifest)) copyFileSync(manifest, join(outDir, "extension.json"));
+  rmSync(outExtensions, { recursive: true, force: true });
+  mkdirSync(outExtensions, { recursive: true });
+  cpSync(manifestsDir, outExtensions, { recursive: true });
+  if (!existsSync(builtinsDir)) return;
+  for (const entry of readdirSync(builtinsDir, { withFileTypes: true })) {
+    const source = join(builtinsDir, entry.name, "index.ts");
+    if (!entry.isDirectory() || !existsSync(source)) continue;
+    await build({
+      ...common,
+      entryPoints: [source],
+      outfile: join(outExtensions, `builtin.${entry.name}`, "index.js"),
+    });
   }
 }
 

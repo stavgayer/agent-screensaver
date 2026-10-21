@@ -1,0 +1,17 @@
+{
+  "id": "builtin.default",
+  "name": "Default",
+  "version": "1.0.0",
+  "type": "theme",
+  "api": 1,
+  "theme": {
+    "background": { "id": "builtin.matrix" },
+    "layout": "builtin.spotlight",
+    "style": {
+      "--accent": "#00e07a",
+      "--attention": "#ffb020",
+      "--done": "#78c8ff",
+      "--card-opacity": "0.82"
+    }
+  }
+}

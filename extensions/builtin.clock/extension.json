@@ -1,0 +1,11 @@
+{
+  "id": "builtin.clock",
+  "name": "Clock",
+  "version": "1.0.0",
+  "type": "component",
+  "api": 1,
+  "entry": "index.js",
+  "options": {
+    "size": { "type": "enum", "default": "large", "values": ["large", "small"], "label": "Size" }
+  }
+}

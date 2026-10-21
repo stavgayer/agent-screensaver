@@ -52,3 +52,8 @@ export function formatClock(date: Date): string {
 export function formatDate(date: Date): string {
   return `${WEEKDAYS[date.getDay()]} ${date.getDate()} ${MONTHS[date.getMonth()]}`;
 }
+
+/** "claude" is "Claude", "codex" is "Codex"; any other source gets a capital first letter. */
+export function displayName(source: string): string {
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}

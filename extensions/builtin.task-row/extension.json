@@ -1,0 +1,8 @@
+{
+  "id": "builtin.task-row",
+  "name": "Task row",
+  "version": "1.0.0",
+  "type": "component",
+  "api": 1,
+  "entry": "index.js"
+}
