@@ -114,3 +114,74 @@ describe("createFrameScheduler", () => {
     assert.deepEqual(seen, [10]);
   });
 });
+
+/** Counts renders over one second of display frames with the given step pattern. */
+function rendersInOneSecond(fps: number, steps: number[]): number {
+  const fake = fakeRaf();
+  const scheduler = createFrameScheduler(0, fake.raf);
+  let count = 0;
+  scheduler.request(() => count++, fps);
+  let nowMs = 0;
+  for (let i = 0; nowMs < 1000; i++) {
+    fake.tick(nowMs);
+    nowMs += steps[i % steps.length] as number;
+  }
+  return count;
+}
+
+describe("createFrameScheduler pacing", () => {
+  const patterns = [[16.6, 16.7, 16.8], [16.6, 16.7], [16.7]];
+  for (const [fps, expected] of [[30, 30], [24, 24], [60, 60]] as const) {
+    for (const steps of patterns) {
+      it(`${fps}fps_with_jitter_${steps.join("_")}`, () => {
+        const count = rendersInOneSecond(fps, steps);
+        assert.ok(Math.abs(count - expected) <= 1, `got ${count}, want ${expected}`);
+      });
+    }
+  }
+
+  it("stall_renders_once_not_a_burst", () => {
+    const fake = fakeRaf();
+    const scheduler = createFrameScheduler(0, fake.raf);
+    const seen: number[] = [];
+    scheduler.request((nowMs) => seen.push(nowMs), 30);
+    fake.tick(0);
+    fake.tick(500);
+    fake.tick(516.7);
+    fake.tick(533.4);
+    assert.equal(seen.filter((nowMs) => nowMs >= 500 && nowMs < 520).length, 1);
+  });
+});
+
+describe("createFrameScheduler errors", () => {
+  it("throwing_callback_is_dropped_and_others_keep_rendering", () => {
+    const fake = fakeRaf();
+    const errors: unknown[] = [];
+    const scheduler = createFrameScheduler(0, fake.raf, (err) => errors.push(err));
+    let throwerCalls = 0;
+    const good: number[] = [];
+    scheduler.request(() => {
+      throwerCalls++;
+      throw new Error("boom");
+    }, 240);
+    scheduler.request((nowMs) => good.push(nowMs), 240);
+    fake.tick(0);
+    fake.tick(100);
+    fake.tick(200);
+    assert.equal(throwerCalls, 1);
+    assert.deepEqual(good, [0, 100, 200]);
+    assert.equal(errors.length, 1);
+  });
+
+  it("loop_restarts_for_new_request_after_the_only_callback_threw", () => {
+    const fake = fakeRaf();
+    const scheduler = createFrameScheduler(0, fake.raf, () => {});
+    scheduler.request(() => {
+      throw new Error("boom");
+    }, 240);
+    fake.tick(0);
+    assert.equal(fake.pendingCount(), 0);
+    scheduler.request(() => {}, 240);
+    assert.equal(fake.pendingCount(), 1);
+  });
+});

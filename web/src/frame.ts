@@ -1,5 +1,7 @@
 const MIN_FPS = 1;
 const MAX_FPS = 240;
+// About a quarter of a 60 Hz frame: a frame landing slightly early still counts.
+const SLACK_MS = 4;
 
 /** True when enough time has passed since the last render to hit `fps`. */
 export function shouldRender(lastMs: number, nowMs: number, fps: number): boolean {
@@ -39,19 +41,36 @@ export interface FrameScheduler {
 export function createFrameScheduler(
   maxFps: number,
   raf: RequestAnimationFrame = requestAnimationFrame,
+  onError: (err: unknown) => void = (err) => console.error(err),
 ): FrameScheduler {
   const requests = new Set<Request>();
   let looping = false;
+
+  /** Decides if a request renders now and moves its schedule anchor. */
+  function isDue(request: Request, nowMs: number): boolean {
+    if (request.lastMs === undefined) {
+      request.lastMs = nowMs;
+      return true;
+    }
+    if (!shouldRender(request.lastMs, nowMs + SLACK_MS, request.fps)) return false;
+    // Advance by whole intervals, not to `nowMs`, so jitter does not drift the rate.
+    const interval = 1000 / request.fps;
+    request.lastMs += interval * Math.floor((nowMs + SLACK_MS - request.lastMs) / interval);
+    return true;
+  }
 
   function frame(nowMs: number): void {
     // Snapshot: a callback may add or cancel requests while we iterate.
     for (const request of [...requests]) {
       if (!requests.has(request)) continue;
-      const due =
-        request.lastMs === undefined || shouldRender(request.lastMs, nowMs, request.fps);
-      if (!due) continue;
-      request.lastMs = nowMs;
-      request.callback(nowMs);
+      if (!isDue(request, nowMs)) continue;
+      try {
+        request.callback(nowMs);
+      } catch (err) {
+        // One broken extension must not stop the loop for the others.
+        requests.delete(request);
+        onError(err);
+      }
     }
     looping = requests.size > 0;
     if (looping) raf(frame);
