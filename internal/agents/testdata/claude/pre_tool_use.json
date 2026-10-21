@@ -1,0 +1,1 @@
+{"session_id":"s1","cwd":"/home/user/my-project","transcript_path":"/t.jsonl","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm run migrate","description":"Run migrations"},"tool_use_id":"toolu_1"}

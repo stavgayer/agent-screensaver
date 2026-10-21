@@ -1,0 +1,1 @@
+{"session_id":"s1","cwd":"/home/user/my-project","transcript_path":"/t.jsonl","hook_event_name":"UserPromptSubmit","prompt":"Fix the login bug and add a regression test for the session expiry"}
