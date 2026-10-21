@@ -1,0 +1,13 @@
+{
+  "id": "builtin.aerials",
+  "name": "Apple aerials",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "index.js",
+  "options": {
+    "group": { "type": "enum", "default": "cities", "values": ["cities", "landscapes", "space", "underwater"], "label": "Group" },
+    "fit": { "type": "enum", "default": "cover", "values": ["cover", "contain"], "label": "Fit" },
+    "dim": { "type": "number", "default": 0.25, "min": 0, "max": 0.8, "label": "Dim" }
+  }
+}
