@@ -220,6 +220,14 @@ export type CreateExtension = () => BackgroundExt | ComponentExt;
 
 The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
 
+## The Apple aerials background
+
+`builtin.aerials` plays Apple aerial videos that macOS has already downloaded. It has three options: `group` (`cities`, `landscapes`, `space` or `underwater`; default `cities`), `fit` and `dim`, the same as `builtin.video`.
+
+The service gives the background one more option, `files`: a list of `file://` URLs of the videos to play. You cannot set it yourself. The background plays the list in a shuffled order and crossfades from one video to the next. When no video of the group is downloaded, the service shows `builtin.matrix` with its default options instead. `option set builtin.aerials group <group>` then prints how to get the videos: pick the group once in System Settings → Screen Saver, and macOS downloads them.
+
+A theme uses it like any other background: `"background": { "id": "builtin.aerials", "options": { "group": "space" } }`.
+
 ## Install, list and remove
 
 Install from a folder or a `.zip` file. The service copies the extension into the extensions folder. If you install the same `id` again, the new version replaces the old one.

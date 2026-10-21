@@ -42,7 +42,7 @@ The owner is the first user. The project will be open source.
 - The screen saver keeps using CPU or battery after it stops.
 - Any data leaves the Mac. No analytics, no server of ours.
 - The code uses undocumented endpoints (for example `api.anthropic.com/api/oauth/usage` or `chatgpt.com/backend-api/wham/usage`), browser cookies, or copies login tokens.
-- The project downloads, stores, or ships Apple video files.
+- The project downloads, ships, or makes real copies of Apple video files. (APFS clones of videos macOS already downloaded are allowed; they share the original's disk blocks and are removed on uninstall.)
 - The screen shows full prompts, code, or secrets. Version 1 shows only tool name, project folder name, a short title (see "Card text" in section 5), and times.
 
 ## 3. What the screen looks like
@@ -204,7 +204,7 @@ Backgrounds in version 1:
 
 1. Matrix rain (default). Options: color, speed, characters.
 2. The user's own image or video file.
-3. Apple aerials: Landscapes, Cities, Space, Underwater. The list comes from `/Library/Application Support/com.apple.idleassetsd/Customer/entries.json` (137 entries on the owner's Mac, 20/10/2026). We play ONLY video files macOS already downloaded. If none are downloaded for the chosen group, settings show: "Pick it once in System Settings → Screen Saver, and macOS will download the videos." This folder is not an official API. If Apple moves it, this background must fail quietly and fall back to Matrix.
+3. Apple aerials: Landscapes, Cities, Space, Underwater. On macOS 26 the list comes from `~/Library/Application Support/com.apple.wallpaper/aerials/manifest/entries.json` (156 entries on the owner's Mac, 21/10/2026), and the downloaded videos are `~/Library/Application Support/com.apple.wallpaper/aerials/videos/<asset id>.mov`. If that manifest is missing, the list comes from the older catalog `/Library/Application Support/com.apple.idleassetsd/Customer/entries.json` (137 entries, no videos); videos are still looked up in the wallpaper `videos` folder. We play ONLY video files macOS already downloaded. The saver's web view can load files only inside the data directory, so the daemon makes an APFS clone of each video of the chosen group in `DATA_DIR/media/aerials/<asset id>.mov` (it never makes a real copy; a video that cannot be cloned is skipped), removes clones that are no longer chosen or whose video is gone, and uninstall removes the folder. If none are downloaded for the chosen group, settings show: "Pick it once in System Settings → Screen Saver, and macOS will download the videos." These folders are not an official API. If Apple moves them, this background must fail quietly and fall back to Matrix.
 
 Customization in version 1: background choice and its options, card size, how see-through the cards are, sound on or off, privacy mode on or off (privacy mode hides titles and project names and shows only counts).
 

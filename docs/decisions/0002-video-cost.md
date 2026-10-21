@@ -64,4 +64,4 @@ Notes on the numbers:
 
 - 1080p files and battery power.
 - The pause on `visibilitychange` inside the real `legacyScreenSaver` host. We could not make the host hide the page, so only the code path is written; it is not observed.
-- Reading a downloaded aerial from inside the sandbox (still open from 0001). These runs read a copy under the data dir, which 0001 showed is readable.
+- Playback of an APFS clone of an aerial was not measured separately. These runs played a real copy under the data dir; a clone holds the same bytes, so we expect the same cost. Sandbox access to the aerials is settled in 0001.

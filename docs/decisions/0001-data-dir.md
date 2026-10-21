@@ -52,7 +52,7 @@ If a future macOS version blocks reads from C1, use one of these. Both passed re
 
 ## Open items
 
-- Aerials: `entries.json` is readable from the sandbox. Reading a downloaded `.mov` is NOT verified yet. Task 4.2 must re-run the probe's aerial check with a downloaded video before relying on it.
+- Aerials (closed 2026-10-21): on macOS 26 the aerials live in `~/Library/Application Support/com.apple.wallpaper/aerials/`. The probe, run by the owner inside the real sandbox, read the manifest and a downloaded `.mov`. A `<video>` cannot play the original, because it is outside the folder given to `allowingReadAccessTo`; an APFS clone inside `DATA_DIR` plays (3840 wide). So the daemon clones the chosen videos into `DATA_DIR/media/aerials/`.
 
 ## Gotchas
 
