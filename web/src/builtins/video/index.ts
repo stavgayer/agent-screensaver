@@ -35,6 +35,7 @@ function createVideo(): BackgroundExt {
       else void element.play().catch(() => undefined);
     };
     document.addEventListener("visibilitychange", onVisibility);
+    if (document.hidden) element.pause(); // started while hidden: do not play until shown
   }
 
   function stop(): void {
