@@ -21,7 +21,7 @@ export interface Card {
 /** One usage limit. `resets_at` is in seconds, the other times are in milliseconds. */
 export interface Limit {
   source: string;
-  window: "5h" | "week";
+  window: "5h" | "week" | "plan";
   used_percent: number;
   resets_at?: number;
   updated_at_ms: number;

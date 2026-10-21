@@ -1,5 +1,6 @@
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
+const MS_PER_DAY = 24 * MINUTES_PER_HOUR * MS_PER_MINUTE;
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = [
@@ -35,6 +36,18 @@ export function formatResetIn(resetsAtS: number | undefined, nowMs: number): str
   const hours = Math.floor(minutes / MINUTES_PER_HOUR);
   const rest = minutes % MINUTES_PER_HOUR;
   return rest === 0 ? `${hours}h` : `${hours}h${rest}m`;
+}
+
+/** Reset date, for example "resets 3 Nov", in the local time zone. `resetsAtS` is in seconds. */
+export function formatResetDate(resetsAtS: number): string {
+  const date = new Date(resetsAtS * 1000);
+  return `resets ${date.getDate()} ${MONTHS[date.getMonth()].slice(0, 3)}`;
+}
+
+/** Reset label for a ring: a countdown, or the date once the reset is more than 24 hours away. */
+export function formatResetLabel(resetsAtS: number | undefined, nowMs: number): string {
+  if (resetsAtS === undefined) return "";
+  return resetsAtS * 1000 - nowMs > MS_PER_DAY ? formatResetDate(resetsAtS) : formatResetIn(resetsAtS, nowMs);
 }
 
 export function ringLevel(pct: number): "ok" | "warn" | "high" {

@@ -4,6 +4,7 @@ import {
   formatClock,
   formatDate,
   formatDuration,
+  formatResetDate,
   formatResetIn,
   ringLevel,
 } from "../src/format.ts";
@@ -73,4 +74,15 @@ describe("formatDate", () => {
     assert.equal(formatDate(new Date(2026, 9, 20, 9, 5)), "Tuesday 20 October");
     assert.equal(formatDate(new Date(2026, 0, 4)), "Sunday 4 January");
   });
+});
+
+describe("formatResetDate", () => {
+  const cases: [string, Date, string][] = [
+    ["two-digit day", new Date(2026, 10, 13, 8, 30), "resets 13 Nov"],
+    ["single-digit day", new Date(2026, 10, 3, 8, 30), "resets 3 Nov"],
+    ["december", new Date(2026, 11, 25, 23, 59), "resets 25 Dec"],
+  ];
+  for (const [name, date, want] of cases) {
+    it(name, () => assert.equal(formatResetDate(date.getTime() / 1000), want));
+  }
 });

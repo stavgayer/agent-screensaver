@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Card, Limit } from "../src/api.ts";
-import { displayName } from "../src/format.ts";
+import { displayName, formatResetDate } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
 import { orderLimits, ringCaption, ringPercent } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha, numberOption } from "../src/builtins/matrix/logic.ts";
@@ -19,7 +19,7 @@ const card = (overrides: Partial<Card>): Card => ({
   ...overrides,
 });
 
-const limit = (source: string, window: "5h" | "week", overrides: Partial<Limit> = {}): Limit => ({
+const limit = (source: string, window: Limit["window"], overrides: Partial<Limit> = {}): Limit => ({
   source,
   window,
   used_percent: 10,
@@ -95,6 +95,14 @@ describe("orderLimits", () => {
     );
   });
 
+  it("rings_order_includes_plan_after_week", () => {
+    const shuffled = [limit("codex", "plan"), limit("claude", "plan"), limit("claude", "week"), limit("claude", "5h")];
+    assert.deepEqual(
+      orderLimits(shuffled).map((entry) => `${entry.source} ${entry.window}`),
+      ["claude 5h", "claude week", "claude plan", "codex plan"],
+    );
+  });
+
   it("puts unknown sources after Claude and Codex, sorted by name", () => {
     const ordered = orderLimits([limit("zed", "5h"), limit("aider", "week"), limit("codex", "5h"), limit("claude", "5h")]);
     assert.deepEqual(ordered.map((entry) => entry.source), ["claude", "codex", "aider", "zed"]);
@@ -120,6 +128,29 @@ describe("ringCaption", () => {
 
   it("a week ring shows no reset time", () => {
     assert.equal(ringCaption(limit("claude", "week", { resets_at: resetsAtS }), NOW_MS), "Claude week");
+  });
+
+  const DAY_MS = 24 * 60 * MINUTE_MS;
+  const planAt = (offsetMs: number): Limit => limit("codex", "plan", { resets_at: (NOW_MS + offsetMs) / 1000 });
+
+  it("plan_caption_is_source_plan", () => {
+    assert.ok(ringCaption(limit("codex", "plan"), NOW_MS).startsWith("Codex plan"));
+  });
+
+  it("plan_reset_far_shows_date", () => {
+    const far = planAt(13 * DAY_MS);
+    const date = new Date(NOW_MS + 13 * DAY_MS);
+    assert.equal(ringCaption(far, NOW_MS), `Codex plan · ${formatResetDate(date.getTime() / 1000)}`);
+    assert.match(ringCaption(far, NOW_MS), /^Codex plan · resets \d{1,2} [A-Z][a-z]{2}$/);
+  });
+
+  it("plan_reset_near_shows_countdown", () => {
+    assert.equal(ringCaption(planAt(100 * MINUTE_MS), NOW_MS), "Codex plan · 1h40m");
+    assert.equal(ringCaption(planAt(DAY_MS), NOW_MS), "Codex plan · 24h");
+  });
+
+  it("plan_without_reset_shows_percent_only", () => {
+    assert.equal(ringCaption(limit("codex", "plan"), NOW_MS), "Codex plan");
   });
 
   it("a ring older than 15 minutes says how old it is", () => {
