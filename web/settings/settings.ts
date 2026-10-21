@@ -1,5 +1,6 @@
 import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
+import { PREVIEW_DATA_URL, dataFolderUrl, previewState } from "./preview-url.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
 interface Snapshot {
@@ -422,7 +423,15 @@ const preview = {
   },
 
   start(): void {
-    const frame = h("iframe", { src: "../preview.html", title: "Live preview of the screen saver", tabindex: "-1" });
+    const frame = h("iframe", {
+      src: `${PREVIEW_DATA_URL}runtime/preview.html`,
+      title: "Live preview of the screen saver",
+      tabindex: "-1",
+      // Sandboxed and served from the preview scheme: an opaque origin, so
+      // extension scripts in the frame cannot reach this page or its bridge
+      // to Go (parent.webkit), whatever WebKit's file:// rules are.
+      sandbox: "allow-scripts",
+    });
     frame.addEventListener("load", () => {
       this.lastState = undefined;
       void this.poll();
@@ -450,7 +459,10 @@ const preview = {
     byId("preview-empty").hidden = state !== null;
     if (frame === undefined || frame !== this.frame || state === null || state === this.lastState) return;
     this.lastState = state;
-    frame.contentWindow?.postMessage({ type: "agent-screensaver-state", state }, "*");
+    // "*": the frame's origin is opaque, so no named target matches it. Only
+    // state goes in; this page listens to no message from the frame.
+    const dataUrl = dataFolderUrl(location.href);
+    frame.contentWindow?.postMessage({ type: "agent-screensaver-state", state: previewState(state, dataUrl), dataUrl }, "*");
   },
 };
 

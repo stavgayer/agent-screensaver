@@ -43,7 +43,13 @@ async function buildSettings() {
   const runtimeTag = '<script src="runtime.js"></script>';
   const page = readFileSync(join(root, "index.html"), "utf8");
   if (!page.includes(runtimeTag)) throw new Error(`index.html has no ${runtimeTag}`);
-  writeFileSync(join(outRuntime, "preview.html"), page.replace(runtimeTag, `${runtimeTag}\n  <script src="settings/preview.js"></script>`));
+  // The preview is served from ags-preview:// (see web/settings/preview-url.ts), so its
+  // policy names that scheme wherever it names file:. connect-src stays 'none'.
+  const preview = page
+    .replace(runtimeTag, `${runtimeTag}\n  <script src="settings/preview.js"></script>`)
+    .replaceAll(" file:", " file: ags-preview:");
+  if (!preview.includes("script-src file: ags-preview:")) throw new Error("preview.html policy was not updated");
+  writeFileSync(join(outRuntime, "preview.html"), preview);
 }
 
 /**
