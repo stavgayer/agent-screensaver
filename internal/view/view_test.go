@@ -170,3 +170,145 @@ func TestResolvePassesConfigThrough(t *testing.T) {
 		})
 	}
 }
+
+// sanitizeInstalled builds a minimal set of extensions around the given
+// layout JSON: a theme, a background, a layout and the listed extras.
+func sanitizeInstalled(layout string, extras ...extensions.Installed) []extensions.Installed {
+	number := func(value float64) *float64 { return &value }
+	sizeSpec := extensions.OptionSpec{Kind: extensions.OptionEnum, Values: []string{"large", "small"}, Default: json.RawMessage(`"large"`)}
+	scaleSpec := extensions.OptionSpec{Kind: extensions.OptionNumber, Min: number(0), Max: number(10), Default: json.RawMessage(`1`)}
+	manifest := func(id string, kind extensions.Type) extensions.Manifest {
+		return extensions.Manifest{ID: id, Type: kind, Entry: "index.js"}
+	}
+	card := manifest("t.card", extensions.TypeComponent)
+	card.Options = map[string]extensions.OptionSpec{"size": sizeSpec, "scale": scaleSpec}
+	theme := manifest("builtin.default", extensions.TypeTheme)
+	theme.Theme = &extensions.ThemeSpec{Background: extensions.ExtRef{ID: "t.bg"}, Layout: "t.layout"}
+	layoutManifest := manifest("t.layout", extensions.TypeLayout)
+	layoutManifest.Layout = json.RawMessage(layout)
+	installed := []extensions.Installed{
+		{Manifest: theme}, {Manifest: layoutManifest},
+		{Manifest: manifest("t.bg", extensions.TypeBackground), Dir: "/x/t.bg"},
+		{Manifest: card, Dir: "/x/t.card"},
+		{Manifest: manifest("t.plain", extensions.TypeComponent), Dir: "/x/t.plain"},
+	}
+	return append(installed, extras...)
+}
+
+func sanitizedLayout(t *testing.T, layout string) map[string]map[string][]extensions.ExtRef {
+	t.Helper()
+	got := Resolve(config.Default(), sanitizeInstalled(layout))
+	var parsed layoutModes
+	if err := json.Unmarshal(got.Layout, &parsed); err != nil {
+		t.Fatalf("layout %s: %v", got.Layout, err)
+	}
+	return parsed.Modes
+}
+
+func TestResolveSanitizesPlacements(t *testing.T) {
+	tests := []struct {
+		name   string
+		layout string
+		want   []extensions.ExtRef
+	}{
+		{"placement option not in schema is dropped",
+			`{"modes":{"idle":{"center":[{"id":"t.card","options":{"bogus":1}}]}}}`,
+			[]extensions.ExtRef{{ID: "t.card"}}},
+		{"invalid placement option is dropped",
+			`{"modes":{"idle":{"center":[{"id":"t.card","options":{"size":"huge"}}]}}}`,
+			[]extensions.ExtRef{{ID: "t.card"}}},
+		{"valid placement option is kept",
+			`{"modes":{"idle":{"center":[{"id":"t.card","options":{"size":"small","scale":2,"bogus":1}}]}}}`,
+			[]extensions.ExtRef{{ID: "t.card", Options: map[string]any{"size": "small", "scale": 2.0}}}},
+		{"placement of missing component is dropped",
+			`{"modes":{"idle":{"center":[{"id":"t.missing"},{"id":"t.card"}]}}}`,
+			[]extensions.ExtRef{{ID: "t.card"}}},
+		{"placement of a non-component extension is dropped",
+			`{"modes":{"idle":{"center":[{"id":"t.bg"},{"id":"t.layout"},{"id":"t.card"}]}}}`,
+			[]extensions.ExtRef{{ID: "t.card"}}},
+		{"placement order kept",
+			`{"modes":{"idle":{"center":[{"id":"t.plain"},{"id":"t.card"},{"id":"t.plain"}]}}}`,
+			[]extensions.ExtRef{{ID: "t.plain"}, {ID: "t.card"}, {ID: "t.plain"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizedLayout(t, tt.layout)["idle"]["center"]
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("placements = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveKeepsModesAndRegions(t *testing.T) {
+	layout := `{"modes":{"idle":{"top-left":[{"id":"t.card"}],"bottom":[{"id":"t.gone"}]},"attention":{"center":[{"id":"t.plain"}]}}}`
+
+	got := sanitizedLayout(t, layout)
+
+	if len(got) != 2 || len(got["idle"]) != 2 || len(got["attention"]) != 1 {
+		t.Fatalf("modes = %+v, want idle with two regions and attention with one", got)
+	}
+	if bottom := got["idle"]["bottom"]; bottom == nil || len(bottom) != 0 {
+		t.Errorf("emptied region = %#v, want empty non-nil slice", bottom)
+	}
+}
+
+func TestResolveViewJSONHasNoNullCollections(t *testing.T) {
+	layout := `{"modes":{"idle":{"center":[{"id":"t.gone"}]}}}`
+	tests := []struct {
+		name string
+		view View
+	}{
+		{"empty fallback view", Resolve(config.Default(), nil)},
+		{"normal view", Resolve(config.Default(), installedWithout(t))},
+		{"view with every placement dropped", Resolve(config.Default(), sanitizeInstalled(layout))},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.view)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var parsed struct {
+				Components []json.RawMessage `json:"components"`
+				Style      map[string]any    `json:"style"`
+				Background struct {
+					Options map[string]any `json:"options"`
+				} `json:"background"`
+			}
+			if err := json.Unmarshal(data, &parsed); err != nil {
+				t.Fatal(err)
+			}
+			if parsed.Components == nil || parsed.Style == nil || parsed.Background.Options == nil {
+				t.Errorf("null collection in %s", data)
+			}
+			for _, component := range tt.view.Components {
+				if component.Options == nil {
+					t.Errorf("component %s has null options", component.ID)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveMaxFPSRange(t *testing.T) {
+	tests := []struct {
+		name         string
+		maxFPS, want int
+	}{
+		{"negative becomes zero", -1, 0},
+		{"above 240 becomes zero", 241, 0},
+		{"zero kept", 0, 0},
+		{"one kept", 1, 1},
+		{"240 kept", 240, 240},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.MaxFPS = tt.maxFPS
+			if got := Resolve(cfg, installedWithout(t)).MaxFPS; got != tt.want {
+				t.Errorf("max fps = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

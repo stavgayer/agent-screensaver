@@ -49,7 +49,7 @@ func Resolve(cfg config.Config, installed []extensions.Installed) View {
 	for _, ext := range installed {
 		byID[ext.Manifest.ID] = ext
 	}
-	result := View{Privacy: cfg.Privacy, MaxFPS: cfg.MaxFPS}
+	result := emptyView(cfg)
 
 	fallback, hasFallback := byID.find(defaultThemeID, extensions.TypeTheme)
 	theme, ok := byID.find(cfg.Theme, extensions.TypeTheme)
@@ -65,16 +65,84 @@ func Resolve(cfg config.Config, installed []extensions.Installed) View {
 	}
 
 	result.Theme = theme.Manifest.ID
-	result.Style = maps.Clone(specs[0].Style)
+	if specs[0].Style != nil {
+		result.Style = maps.Clone(specs[0].Style)
+	}
 	if background, ok := byID.resolveBackground(cfg, specs); ok {
 		result.Background = background
 	}
-	layout, hasLayout := byID.resolveLayout(specs)
-	if hasLayout {
-		result.Layout = layout.Manifest.Layout
-		result.Components = byID.resolveComponents(cfg, layout.Manifest.Layout)
+	if layout, ok := byID.resolveLayout(specs); ok {
+		byID.applyLayout(&result, cfg, layout.Manifest.Layout)
 	}
 	return result
+}
+
+// maxFPSLimit is the highest frame-rate ceiling the runtime accepts.
+const maxFPSLimit = 240
+
+// emptyView has no null collections, because the runtime trusts the shape.
+func emptyView(cfg config.Config) View {
+	maxFPS := cfg.MaxFPS
+	if maxFPS < 0 || maxFPS > maxFPSLimit {
+		maxFPS = 0 // out of range means no ceiling
+	}
+	return View{
+		Background: ResolvedExt{Options: map[string]any{}},
+		Components: []ResolvedExt{},
+		Style:      map[string]any{},
+		Privacy:    cfg.Privacy,
+		MaxFPS:     maxFPS,
+	}
+}
+
+// applyLayout stores the sanitized layout and the components it uses. A
+// layout that cannot be decoded leaves both empty.
+func (byID index) applyLayout(result *View, cfg config.Config, rawLayout json.RawMessage) {
+	var layout layoutModes
+	if err := json.Unmarshal(rawLayout, &layout); err != nil {
+		return
+	}
+	layout = byID.sanitizeLayout(layout)
+	encoded, err := json.Marshal(layout)
+	if err != nil {
+		return
+	}
+	result.Layout = encoded
+	result.Components = byID.resolveComponents(cfg, layout)
+}
+
+// sanitizeLayout keeps only placements of installed components, and only the
+// placement options the component declares with a valid value. Slices are
+// never nil so they encode as [] and not null.
+func (byID index) sanitizeLayout(layout layoutModes) layoutModes {
+	clean := layoutModes{Modes: make(map[string]map[string][]extensions.ExtRef, len(layout.Modes))}
+	for mode, regions := range layout.Modes {
+		clean.Modes[mode] = make(map[string][]extensions.ExtRef, len(regions))
+		for region, refs := range regions {
+			kept := make([]extensions.ExtRef, 0, len(refs))
+			for _, ref := range refs {
+				if ext, ok := byID.find(ref.ID, extensions.TypeComponent); ok {
+					kept = append(kept, extensions.ExtRef{ID: ref.ID, Options: validOptions(ext.Manifest.Options, ref.Options)})
+				}
+			}
+			clean.Modes[mode][region] = kept
+		}
+	}
+	return clean
+}
+
+// validOptions drops undeclared options and values that fail validation.
+func validOptions(specs map[string]extensions.OptionSpec, options map[string]any) map[string]any {
+	var kept map[string]any
+	for name, value := range options {
+		if spec, ok := specs[name]; ok && extensions.ValidateOption(spec, value) == nil {
+			if kept == nil {
+				kept = map[string]any{}
+			}
+			kept[name] = value
+		}
+	}
+	return kept // nil is omitted by the omitempty tag
 }
 
 func (byID index) find(id string, kind extensions.Type) (extensions.Installed, bool) {
@@ -105,13 +173,9 @@ func (byID index) resolveLayout(specs []extensions.ThemeSpec) (extensions.Instal
 // resolveComponents lists each installed component used by any mode once.
 // Per-placement options stay inside the layout, so only manifest defaults
 // and the user's options are merged here.
-func (byID index) resolveComponents(cfg config.Config, rawLayout json.RawMessage) []ResolvedExt {
-	var layout layoutModes
-	if err := json.Unmarshal(rawLayout, &layout); err != nil {
-		return nil
-	}
+func (byID index) resolveComponents(cfg config.Config, layout layoutModes) []ResolvedExt {
 	seen := map[string]bool{}
-	var components []ResolvedExt
+	components := []ResolvedExt{}
 	for _, regions := range layout.Modes {
 		for _, refs := range regions {
 			for _, ref := range refs {
