@@ -123,6 +123,7 @@ func runDaemon(args []string, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	service := daemon.New(paths.ForHome(home))
+	service.Cloner = platform.NewFileCloner()
 	providers := limits.All(exec.LookPath)
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.

@@ -9,12 +9,20 @@ import (
 	"path/filepath"
 	"sort"
 
+	"agent-screensaver/internal/aerials"
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
 )
 
-// defaultThemeID is the built-in theme used when the chosen one cannot be used.
-const defaultThemeID = "builtin.default"
+const (
+	// defaultThemeID is the built-in theme used when the chosen one cannot be used.
+	defaultThemeID = "builtin.default"
+	// matrixID is the background shown when the aerials have no videos.
+	matrixID = "builtin.matrix"
+	// filesOption carries the aerial videos to the aerials background. It is
+	// not in the manifest, so a user can never set it.
+	filesOption = "files"
+)
 
 // ResolvedExt is an extension ready for the web runtime to load.
 type ResolvedExt struct {
@@ -44,37 +52,82 @@ type index map[string]extensions.Installed
 // Resolve picks the theme, background, layout and components. Anything
 // missing or of the wrong type falls back to builtin.default. If even that
 // is missing it returns an empty view, and the runtime shows a plain clock.
-func Resolve(cfg config.Config, installed []extensions.Installed) View {
+// aerialClones are the aerial videos the aerials background may play.
+func Resolve(cfg config.Config, installed []extensions.Installed, aerialClones []string) View {
+	byID := newIndex(installed)
+	result := emptyView(cfg)
+	theme, specs, ok := byID.theme(cfg)
+	if !ok {
+		return result
+	}
+	result.Theme = theme.Manifest.ID
+	if specs[0].Style != nil {
+		result.Style = maps.Clone(specs[0].Style)
+	}
+	if background, ok := byID.resolveBackground(cfg, specs); ok {
+		result.Background = byID.useAerialClones(background, aerialClones)
+	}
+	if layout, ok := byID.resolveLayout(specs); ok {
+		byID.applyLayout(&result, cfg, layout.Manifest.Layout)
+	}
+	return result
+}
+
+// Background is the background the theme asks for, with its options, before
+// the aerials fallback. The daemon reads it to know which aerials to clone.
+// With no usable theme the ID is empty.
+func Background(cfg config.Config, installed []extensions.Installed) ResolvedExt {
+	byID := newIndex(installed)
+	if _, specs, ok := byID.theme(cfg); ok {
+		if background, ok := byID.resolveBackground(cfg, specs); ok {
+			return background
+		}
+	}
+	return ResolvedExt{Options: map[string]any{}}
+}
+
+func newIndex(installed []extensions.Installed) index {
 	byID := make(index, len(installed))
 	for _, ext := range installed {
 		byID[ext.Manifest.ID] = ext
 	}
-	result := emptyView(cfg)
+	return byID
+}
 
+// theme returns the chosen theme, or builtin.default, and the theme specs to
+// try in order: the theme's own, then the default's.
+func (byID index) theme(cfg config.Config) (extensions.Installed, []extensions.ThemeSpec, bool) {
 	fallback, hasFallback := byID.find(defaultThemeID, extensions.TypeTheme)
 	theme, ok := byID.find(cfg.Theme, extensions.TypeTheme)
 	if !ok {
 		theme, ok = fallback, hasFallback
 	}
 	if !ok || theme.Manifest.Theme == nil {
-		return result
+		return extensions.Installed{}, nil, false
 	}
 	specs := []extensions.ThemeSpec{*theme.Manifest.Theme}
 	if hasFallback && fallback.Manifest.Theme != nil {
 		specs = append(specs, *fallback.Manifest.Theme)
 	}
+	return theme, specs, true
+}
 
-	result.Theme = theme.Manifest.ID
-	if specs[0].Style != nil {
-		result.Style = maps.Clone(specs[0].Style)
+// useAerialClones gives the aerials background its videos as file URLs.
+// With none, the screen shows Matrix with its defaults instead of black, so
+// a missing or moved Apple folder fails quietly.
+func (byID index) useAerialClones(background ResolvedExt, clones []string) ResolvedExt {
+	if background.ID != aerials.ExtensionID {
+		return background
 	}
-	if background, ok := byID.resolveBackground(cfg, specs); ok {
-		result.Background = background
+	if matrix, ok := byID.find(matrixID, extensions.TypeBackground); ok && len(clones) == 0 {
+		return ResolvedExt{ID: matrixID, EntryURL: entryURL(matrix), Options: mergeOptions(matrix.Manifest.Options)}
 	}
-	if layout, ok := byID.resolveLayout(specs); ok {
-		byID.applyLayout(&result, cfg, layout.Manifest.Layout)
+	files := make([]string, 0, len(clones))
+	for _, clone := range clones {
+		files = append(files, fileURL(clone))
 	}
-	return result
+	background.Options[filesOption] = files // a fresh map from mergeOptions
+	return background
 }
 
 // maxFPSLimit is the highest frame-rate ceiling the runtime accepts.
@@ -202,7 +255,11 @@ func resolveExt(ext extensions.Installed, cfg config.Config, refOptions map[stri
 }
 
 func entryURL(ext extensions.Installed) string {
-	file := url.URL{Scheme: "file", Path: filepath.Join(ext.Dir, ext.Manifest.Entry)}
+	return fileURL(filepath.Join(ext.Dir, ext.Manifest.Entry))
+}
+
+func fileURL(path string) string {
+	file := url.URL{Scheme: "file", Path: path}
 	return file.String()
 }
 

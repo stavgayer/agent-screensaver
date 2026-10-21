@@ -64,7 +64,7 @@ func TestResolveBackgroundOptions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Resolve(tt.cfg, installedWithout(t))
+			got := Resolve(tt.cfg, installedWithout(t), nil)
 			if got.Background.ID != tt.wantID {
 				t.Fatalf("background = %q, want %q", got.Background.ID, tt.wantID)
 			}
@@ -89,7 +89,7 @@ func TestResolveFallbacks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Resolve(tt.cfg, installedWithout(t, tt.skip...))
+			got := Resolve(tt.cfg, installedWithout(t, tt.skip...), nil)
 			if got.Theme != tt.wantTheme || got.Background.ID != tt.wantBackground {
 				t.Errorf("theme=%q background=%q, want %q and %q", got.Theme, got.Background.ID, tt.wantTheme, tt.wantBackground)
 			}
@@ -101,7 +101,7 @@ func TestResolveFallbacks(t *testing.T) {
 }
 
 func TestResolveWithoutBuiltinDefault(t *testing.T) {
-	got := Resolve(config.Default(), nil)
+	got := Resolve(config.Default(), nil, nil)
 	if got.Background.ID != "" || len(got.Components) != 0 || got.Layout != nil {
 		t.Errorf("want empty view, got %+v", got)
 	}
@@ -111,7 +111,7 @@ func TestResolveComponentsListedOnce(t *testing.T) {
 	cfg := config.Default()
 	cfg.Options = map[string]map[string]any{"builtin.clock": {"format": "12h"}}
 
-	got := Resolve(cfg, installedWithout(t))
+	got := Resolve(cfg, installedWithout(t), nil)
 
 	var ids []string
 	for _, component := range got.Components {
@@ -129,7 +129,7 @@ func TestResolveComponentsListedOnce(t *testing.T) {
 }
 
 func TestResolveLayoutIsManifestLayout(t *testing.T) {
-	got := Resolve(config.Default(), installedWithout(t))
+	got := Resolve(config.Default(), installedWithout(t), nil)
 	var parsed struct {
 		Modes map[string]json.RawMessage `json:"modes"`
 	}
@@ -140,12 +140,12 @@ func TestResolveLayoutIsManifestLayout(t *testing.T) {
 
 func TestResolveStyleIsCopied(t *testing.T) {
 	installed := installedWithout(t)
-	got := Resolve(config.Default(), installed)
+	got := Resolve(config.Default(), installed, nil)
 	if got.Style["accent"] != "#ff8800" {
 		t.Fatalf("style = %v", got.Style)
 	}
 	got.Style["accent"] = "changed"
-	if again := Resolve(config.Default(), installed); again.Style["accent"] != "#ff8800" {
+	if again := Resolve(config.Default(), installed, nil); again.Style["accent"] != "#ff8800" {
 		t.Error("mutating the view changed the manifest")
 	}
 }
@@ -163,7 +163,7 @@ func TestResolvePassesConfigThrough(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.Default()
 			cfg.Privacy, cfg.MaxFPS = tt.privacy, tt.maxFPS
-			got := Resolve(cfg, installedWithout(t))
+			got := Resolve(cfg, installedWithout(t), nil)
 			if got.Privacy != tt.privacy || got.MaxFPS != tt.maxFPS {
 				t.Errorf("privacy=%v fps=%d, want %v and %d", got.Privacy, got.MaxFPS, tt.privacy, tt.maxFPS)
 			}
@@ -197,7 +197,7 @@ func sanitizeInstalled(layout string, extras ...extensions.Installed) []extensio
 
 func sanitizedLayout(t *testing.T, layout string) map[string]map[string][]extensions.ExtRef {
 	t.Helper()
-	got := Resolve(config.Default(), sanitizeInstalled(layout))
+	got := Resolve(config.Default(), sanitizeInstalled(layout), nil)
 	var parsed layoutModes
 	if err := json.Unmarshal(got.Layout, &parsed); err != nil {
 		t.Fatalf("layout %s: %v", got.Layout, err)
@@ -259,9 +259,9 @@ func TestResolveViewJSONHasNoNullCollections(t *testing.T) {
 		name string
 		view View
 	}{
-		{"empty fallback view", Resolve(config.Default(), nil)},
-		{"normal view", Resolve(config.Default(), installedWithout(t))},
-		{"view with every placement dropped", Resolve(config.Default(), sanitizeInstalled(layout))},
+		{"empty fallback view", Resolve(config.Default(), nil, nil)},
+		{"normal view", Resolve(config.Default(), installedWithout(t), nil)},
+		{"view with every placement dropped", Resolve(config.Default(), sanitizeInstalled(layout), nil)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -306,7 +306,7 @@ func TestResolveMaxFPSRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.Default()
 			cfg.MaxFPS = tt.maxFPS
-			if got := Resolve(cfg, installedWithout(t)).MaxFPS; got != tt.want {
+			if got := Resolve(cfg, installedWithout(t), nil).MaxFPS; got != tt.want {
 				t.Errorf("max fps = %d, want %d", got, tt.want)
 			}
 		})

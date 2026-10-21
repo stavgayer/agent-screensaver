@@ -68,14 +68,19 @@ func stampOf(path string) fileStamp {
 type Daemon struct {
 	// Logf reports problems. It defaults to the standard logger (stderr).
 	Logf func(format string, args ...any)
+	// Cloner makes the aerial clones. Without one, no new clone is made.
+	Cloner platform.FileCloner
 
-	paths paths.Paths
-	state state.State
-	cfg   config.Config
-	view  view.View
+	paths     paths.Paths
+	state     state.State
+	cfg       config.Config
+	installed []extensions.Installed
+	view      view.View
 
 	configStamp, extensionsStamp fileStamp
 	viewLoaded                   bool
+	aerialClones                 []string
+	aerialsSyncedMs              int64
 
 	attention    bool
 	written      bool
@@ -117,7 +122,7 @@ func (d *Daemon) SetLimits(source string, readings []event.LimitReading, nowMs i
 func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	changed := d.applyPendingLimits()
 	changed = d.drainSpool() || changed
-	changed = d.refreshView() || changed
+	changed = d.refreshView(nowMs) || changed
 	changed = d.tick(nowMs) || changed
 
 	attention := d.state.NeedsAttention()
@@ -153,17 +158,29 @@ func (d *Daemon) drainSpool() bool {
 	return len(events) > 0
 }
 
-// refreshView resolves the view again only when the config file or the
-// extensions folder changed. A folder's modification time changes when an
-// extension is added or removed.
-func (d *Daemon) refreshView() bool {
+// refreshView resolves the view again when the config file or the
+// extensions folder changed, or when the aerial clones changed. A folder's
+// modification time changes when an extension is added or removed. The
+// clones are synced on every re-read and every aerialSyncEveryMs, not on
+// every tick.
+func (d *Daemon) refreshView(nowMs int64) bool {
 	configStamp, extensionsStamp := stampOf(d.paths.ConfigFile), stampOf(d.paths.ExtensionsDir)
-	if d.viewLoaded && configStamp == d.configStamp && extensionsStamp == d.extensionsStamp {
+	reread := !d.viewLoaded || configStamp != d.configStamp || extensionsStamp != d.extensionsStamp
+	if reread {
+		d.configStamp, d.extensionsStamp, d.viewLoaded = configStamp, extensionsStamp, true
+		d.cfg = config.Load(d.paths.ConfigFile)
+		d.installed = extensions.Scan(d.paths.ExtensionsDir)
+	} else if nowMs-d.aerialsSyncedMs < aerialSyncEveryMs {
 		return false
 	}
-	d.configStamp, d.extensionsStamp, d.viewLoaded = configStamp, extensionsStamp, true
-	d.cfg = config.Load(d.paths.ConfigFile)
-	d.view = view.Resolve(d.cfg, extensions.Scan(d.paths.ExtensionsDir))
+	d.aerialsSyncedMs = nowMs
+	wanted := wantedAerials(view.Background(d.cfg, d.installed), d.paths.Aerials)
+	clones := syncAerialClones(wanted, d.paths.AerialClonesDir, d.Cloner, d.Logf)
+	if !reread && slices.Equal(clones, d.aerialClones) {
+		return false
+	}
+	d.aerialClones = clones
+	d.view = view.Resolve(d.cfg, d.installed, clones)
 	return true
 }
 
