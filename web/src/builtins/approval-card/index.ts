@@ -5,13 +5,13 @@ import { approvalMoreLabel, approvalWaitingLabel } from "./logic.ts";
 
 const STYLE = `
 .approval { width: 55vw; text-align: center; padding: 2.6vmin; border: 2px solid var(--attention, #ffb020); border-radius: 1.6vmin; background: rgba(60, 35, 0, var(--card-opacity, 0.82));
-  box-shadow: 0 0 18px rgba(255, 176, 32, 0.7); animation: approval-pulse 1.6s ease-in-out infinite; }
+  box-shadow: 0 0 18px color-mix(in srgb, var(--attention, #ffb020) 70%, transparent); animation: approval-pulse 1.6s ease-in-out infinite; }
 .approval .meta { font-size: 1.8vmin; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; }
-.approval .headline { color: #ffd27a; font-size: 4vmin; font-weight: 600; margin: 0.6vmin 0; }
+.approval .headline { color: color-mix(in srgb, var(--attention, #ffb020) 60%, white); font-size: 4vmin; font-weight: 600; margin: 0.6vmin 0; }
 .approval .where { font-size: 2.8vmin; overflow-wrap: anywhere; }
 .approval .request { font-size: 2.8vmin; color: #fff; overflow-wrap: anywhere; }
 .approval .more { margin-top: 1.2vmin; font-size: 2vmin; color: var(--attention, #ffb020); }
-@keyframes approval-pulse { 50% { box-shadow: 0 0 34px rgba(255, 176, 32, 1); } }
+@keyframes approval-pulse { 50% { box-shadow: 0 0 34px var(--attention, #ffb020); } }
 @media (prefers-reduced-motion: reduce) { .approval { animation: none; } }
 `;
 

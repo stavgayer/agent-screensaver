@@ -4,8 +4,9 @@ import { taskCards, taskLabel } from "./logic.ts";
 
 const STYLE = `
 .tasks { display: flex; gap: 1.4vmin; }
-.task { flex: 1; min-width: 0; background: rgba(10, 20, 14, var(--card-opacity, 0.82)); border: 1px solid rgba(0, 255, 120, 0.25); border-radius: 1.6vmin; padding: 1.6vmin 2vmin; line-height: 1.35; font-size: 2.2vmin; }
-.task.finished { border-color: rgba(120, 200, 255, 0.5); }
+.task { flex: 1; min-width: 0; background: rgba(10, 20, 14, var(--card-opacity, 0.82)); border: 1px solid color-mix(in srgb, var(--accent, #00e07a) 25%, transparent); border-radius: 1.6vmin; padding: 1.6vmin 2vmin; line-height: 1.35; font-size: 2.2vmin; }
+.task.finished { border-color: color-mix(in srgb, var(--done, #78c8ff) 50%, transparent); }
+.task.finished .heading { color: var(--done, #78c8ff); }
 .task .meta { font-size: 1.7vmin; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; }
 .task .heading { color: #fff; font-weight: 600; overflow-wrap: anywhere; }
 .task .project { opacity: 0.7; font-size: 1.8vmin; }
