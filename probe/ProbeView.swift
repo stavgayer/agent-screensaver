@@ -71,6 +71,9 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
         for candidate in candidates {
             record("C\(candidate.id) read state.json: \(Self.readStatus(candidate.probeDir + "/state.json"))")
         }
+        for candidate in candidates {
+            record("C\(candidate.id) write: \(Self.writeStatus(candidate.probeDir + "/write-test.txt"))")
+        }
         probeAerials()
         for candidate in candidates { loadWebPage(candidate) }
         layout()
@@ -97,6 +100,16 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
         case NSFileReadNoPermissionError: return "DENIED (\(ns.domain) \(ns.code))"
         case NSFileReadNoSuchFileError, NSFileNoSuchFileError: return "MISSING (\(ns.domain) \(ns.code))"
         default: return "ERROR \(ns.domain) \(ns.code)"
+        }
+    }
+
+    private static func writeStatus(_ path: String) -> String {
+        do {
+            try "probe write test\n".write(toFile: path, atomically: false, encoding: .utf8)
+            return "OK"
+        } catch {
+            let ns = error as NSError
+            return "DENIED (\(ns.domain) \(ns.code))"
         }
     }
 
@@ -164,6 +177,16 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
         NSLog("AGS-PROBE %@", line)
         lines.append(line)
         report.stringValue = lines.joined(separator: "\n")
+        saveResults()
+    }
+
+    /// NSLog is not visible from outside and screencapture fails while the saver runs,
+    /// so also keep the results in a file (inside the sandbox: the legacyScreenSaver container).
+    /// Rewritten on every result, so async web results land in it too.
+    private func saveResults() {
+        let header = "\(ISO8601DateFormatter().string(from: Date())) home=\(Self.realHomeDirectory()) isPreview=\(isPreview)"
+        let text = ([header] + lines).joined(separator: "\n") + "\n"
+        try? text.write(toFile: NSHomeDirectory() + "/agentprobe-results.txt", atomically: true, encoding: .utf8)
     }
 }
 
