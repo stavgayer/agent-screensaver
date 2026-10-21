@@ -1,0 +1,14 @@
+{
+  "id": "builtin.video",
+  "name": "Video",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "index.js",
+  "options": {
+    "file": { "type": "file", "default": "", "label": "Video" },
+    "fit": { "type": "enum", "default": "cover", "values": ["cover", "contain"], "label": "Fit" },
+    "loop": { "type": "boolean", "default": true, "label": "Loop" },
+    "dim": { "type": "number", "default": 0.25, "min": 0, "max": 0.8, "label": "Dim" }
+  }
+}
