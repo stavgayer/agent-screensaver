@@ -2,9 +2,10 @@ import AppKit
 import ScreenSaver
 import WebKit
 
-// Sandbox probe: which folders can legacyScreenSaver read and load a page from?
-// Every result goes on screen (large text, for screenshots) and to NSLog
-// with the prefix "AGS-PROBE".
+// Sandbox probe: which folders can legacyScreenSaver read and load a page from,
+// and can it play the aerial videos macOS already downloaded (checks A1-A4)?
+// Every result goes on screen (large text, for screenshots), to NSLog with the
+// prefix "AGS-PROBE", and to <NSHomeDirectory()>/agentprobe-results.txt.
 
 @objc(AgentProbeView)
 final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessageHandler {
@@ -20,10 +21,14 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
     private var candidates: [Candidate] = []
     private var started = false
 
+    // Web views for the video checks carry these ids (candidate web views use 1-3).
+    private static let aerialVideoID = 103
+    private static let cloneVideoID = 104
+
     override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
         animationTimeInterval = 1.0
-        report.font = .monospacedSystemFont(ofSize: isPreview ? 9 : 22, weight: .bold)
+        report.font = .monospacedSystemFont(ofSize: isPreview ? 8 : 17, weight: .bold)
         report.textColor = .white
         report.backgroundColor = .clear
         report.maximumNumberOfLines = 0
@@ -48,7 +53,7 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
         super.layout()
         let reportHeight = bounds.height * 0.62
         report.frame = NSRect(x: 16, y: bounds.height - reportHeight, width: bounds.width - 32, height: reportHeight - 8)
-        let slot = bounds.width / 3
+        let slot = bounds.width / CGFloat(max(webViews.count, 1))
         for (index, web) in webViews.enumerated() {
             web.frame = NSRect(x: slot * CGFloat(index) + 4, y: 4, width: slot - 8, height: bounds.height - reportHeight - 12)
         }
@@ -74,8 +79,12 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
         for candidate in candidates {
             record("C\(candidate.id) write: \(Self.writeStatus(candidate.probeDir + "/write-test.txt"))")
         }
-        probeAerials()
+        let dataDir = candidates[0]
+        let aerialsDir = realHome + "/Library/Application Support/com.apple.wallpaper/aerials"
+        probeAerials(aerialsDir)
         for candidate in candidates { loadWebPage(candidate) }
+        loadVideoPage(dataDir, page: "video.html", id: Self.aerialVideoID)
+        loadVideoPage(dataDir, page: "video-clone.html", id: Self.cloneVideoID, requires: "clone.mov")
         layout()
     }
 
@@ -113,23 +122,23 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
         }
     }
 
-    private func probeAerials() {
-        let root = "/Library/Application Support/com.apple.idleassetsd/Customer"
-        record("aerial entries.json: \(Self.readStatus(root + "/entries.json"))")
+    /// A1 and A2: can the saver read the manifest and open a downloaded video?
+    private func probeAerials(_ aerialsDir: String) {
+        record("A1 aerials manifest/entries.json: \(Self.readStatus(aerialsDir + "/manifest/entries.json"))")
 
-        let videoDir = root + "/4KSDR240FPS"
+        let videoDir = aerialsDir + "/videos"
         do {
             let names = try FileManager.default.contentsOfDirectory(atPath: videoDir)
             guard let mov = names.sorted().first(where: { $0.hasSuffix(".mov") }) else {
-                record("aerial .mov open: NONE (no .mov in dir)")
+                record("A2 aerial .mov open: NONE (no .mov in videos/)")
                 return
             }
             let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: videoDir + "/" + mov))
             defer { try? handle.close() }
             let head = try handle.read(upToCount: 16) ?? Data()
-            record("aerial .mov open: OK (\(head.count) bytes of \(mov))")
+            record("A2 aerial .mov open: OK (\(head.count) bytes of \(mov))")
         } catch {
-            record("aerial .mov open: \(Self.describe(error))")
+            record("A2 aerial .mov open: \(Self.describe(error))")
         }
     }
 
@@ -151,18 +160,72 @@ final class AgentProbeView: ScreenSaverView, WKNavigationDelegate, WKScriptMessa
         web.loadFileURL(index, allowingReadAccessTo: URL(fileURLWithPath: candidate.base))
     }
 
+    /// A3 and A4: a page in DATA_DIR/probe with a <video>. The page decides the source,
+    /// so the saver loads it exactly as the real saver loads its page.
+    private func loadVideoPage(_ candidate: Candidate, page: String, id: Int, requires: String? = nil) {
+        let config = WKWebViewConfiguration()
+        let web = WKWebView(frame: .zero, configuration: config)
+        web.navigationDelegate = self
+        web.tag(id)
+        addSubview(web)
+        webViews.append(web)
+
+        if let requires {
+            let status = Self.readStatus(candidate.probeDir + "/" + requires)
+            guard status == "OK" else {
+                record("\(Self.label(id)) video: \(status) (\(requires) not readable)")
+                return
+            }
+        }
+        let url = URL(fileURLWithPath: candidate.probeDir + "/" + page)
+        let status = Self.readStatus(url.path)
+        guard status == "OK" else {
+            record("\(Self.label(id)) video: \(status) (\(page))")
+            return
+        }
+        web.loadFileURL(url, allowingReadAccessTo: URL(fileURLWithPath: candidate.base))
+    }
+
+    private static func label(_ id: Int) -> String {
+        switch id {
+        case aerialVideoID: return "A3"
+        case cloneVideoID: return "A4"
+        default: return "C\(id)"
+        }
+    }
+
+    private func reportVideoState(_ web: WKWebView) {
+        let script = """
+        (function () {
+          var v = document.querySelector('video');
+          if (!v) return JSON.stringify({noVideoElement: true});
+          return JSON.stringify({readyState: v.readyState, playing: v.currentTime > 0,
+            videoWidth: v.videoWidth, errorCode: v.error ? v.error.code : null,
+            errorMessage: v.error ? v.error.message : null});
+        })()
+        """
+        let name = Self.label(web.probeID)
+        web.evaluateJavaScript(script) { [weak self] result, error in
+            let text = (result as? String) ?? "JS error: \(error?.localizedDescription ?? "none")"
+            self?.record("\(name) video after 3s: \(text)")
+        }
+    }
+
     // MARK: - WebKit callbacks
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        record("C\(webView.probeID) web page: OK (loaded)")
+        let id = webView.probeID
+        record("\(Self.label(id)) web page: OK (loaded)")
+        guard id == Self.aerialVideoID || id == Self.cloneVideoID else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.reportVideoState(webView) }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        record("C\(webView.probeID) web page: DENIED (\(error.localizedDescription))")
+        record("\(Self.label(webView.probeID)) web page: DENIED (\(error.localizedDescription))")
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        record("C\(webView.probeID) web page: DENIED (\(error.localizedDescription))")
+        record("\(Self.label(webView.probeID)) web page: DENIED (\(error.localizedDescription))")
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
