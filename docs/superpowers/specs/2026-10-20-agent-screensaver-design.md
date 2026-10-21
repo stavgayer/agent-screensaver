@@ -274,7 +274,7 @@ These sit exactly where the spec already names a second implementation that will
 | `platform.ServiceManager`: starts and stops a background process at login (the daemon and the tray) | launchd (macOS) | systemd (Linux), Task Scheduler (Windows) |
 | `platform.SaverWatcher`: tells when the screen saver starts and stops | macOS distributed notifications | Linux, Windows |
 | `platform.SoundPlayer`: plays the attention sound | `afplay` (macOS) | Linux, Windows |
-| `platform.FilePicker`: native open-file dialog for installing extensions | `osascript` `choose file` (macOS) | Linux, Windows |
+| `platform.FilePicker`: native open-file dialog for installing extensions | `NSOpenPanel` (macOS) | Linux, Windows |
 
 Each adapter or provider registers itself in one list. Adding a new agent tool means one new file that implements `agents.Adapter`, plus one line in that list. Claude's status line limits stay inside the Claude adapter, because they arrive through Claude's own status line.
 
