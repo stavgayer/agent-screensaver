@@ -1,0 +1,82 @@
+<style>
+  .cards{grid-template-columns:1fr !important;max-width:900px;margin:0 auto}
+  .card-image{height:auto !important;display:block !important;padding:0 !important}
+  .scr{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden;font-family:ui-monospace,Menlo,monospace;color:#cfe;}
+  .scr canvas{position:absolute;inset:0;width:100%;height:100%;}
+  .ov{position:absolute;inset:0;padding:14px;box-sizing:border-box;}
+  .c{background:rgba(10,20,14,.82);border:1px solid rgba(0,255,120,.25);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.35;backdrop-filter:blur(2px);}
+  .c b{color:#fff;font-weight:600}
+  .t{font-size:9px;opacity:.65;text-transform:uppercase;letter-spacing:.06em}
+  .urg{border:2px solid #ffb020;background:rgba(60,35,0,.9);box-shadow:0 0 18px rgba(255,176,32,.7);animation:p 1.6s ease-in-out infinite;}
+  .urg b{color:#ffd27a}
+  .done{border-color:rgba(120,200,255,.5)}
+  @keyframes p{50%{box-shadow:0 0 34px rgba(255,176,32,1)}}
+  .bar{height:5px;background:rgba(255,255,255,.12);border-radius:3px;margin:3px 0 5px;overflow:hidden}
+  .bar i{display:block;height:100%;background:#00e07a}
+  .bar i.w{background:#e0c000}
+  .col{display:flex;flex-direction:column;gap:7px}
+  .row{display:flex;gap:7px}
+  .ring{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:11px;color:#fff}
+  .clock{font-size:26px;color:#9fffc8;opacity:.9}
+</style><style>
+ .in{background:#000;border-radius:50%;width:36px;height:36px;display:grid;place-items:center}
+ .clk{color:#b8ffd8;text-shadow:0 0 14px rgba(0,255,140,.55);font-variant-numeric:tabular-nums;font-weight:300}
+ .clk.big{font-size:84px;line-height:1}
+ .clk.small{font-size:24px}
+ .dt{color:#9fdcbc;opacity:.8;font-size:13px;margin-top:4px;text-align:center}
+ .state{font-size:13px;margin:18px 0 6px;opacity:.8}
+</style><h2>B with a clock: two states</h2>
+<p class="subtitle">When nothing needs you, the clock owns the center. When an agent needs approval, the clock moves to the corner and the orange card takes the center. The clock is live.</p>
+<div class="cards">
+ <div class="card" data-choice="idle" onclick="toggleSelect(this)"><div class="card-image"><div class="scr"><canvas></canvas><div class="ov"><div class="row" style="justify-content:flex-end;gap:10px">
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#e0c000 62%,rgba(255,255,255,.15) 0)"><span class="in">62%</span></div><div class="t">Claude 5h · 1h40m</div></div>
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#00e07a 38%,rgba(255,255,255,.15) 0)"><span class="in">38%</span></div><div class="t">Claude week</div></div>
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#00e07a 20%,rgba(255,255,255,.15) 0)"><span class="in">20%</span></div><div class="t">Codex 5h · 3h05m</div></div>
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#e0c000 55%,rgba(255,255,255,.15) 0)"><span class="in">55%</span></div><div class="t">Codex week</div></div>
+</div>
+ <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+  <div class="clk big">--:--</div><div class="dt">--</div></div>
+ <div class="row" style="position:absolute;bottom:14px;left:14px;right:14px">
+ <div class="c" style="flex:1"><div class="t">Codex · 24m</div><b>Refactor auth</b></div>
+ <div class="c" style="flex:1"><div class="t">Claude · 1h 12m</div><b>Integration tests</b></div>
+ <div class="c done" style="flex:1"><div class="t">Claude · 8m ago</div><b>✓ Fix flaky test</b></div>
+</div></div></div></div>
+  <div class="card-body"><h3>1 · Nothing needs you</h3><p>Big clock and date in the middle. Limits on top, running tasks at the bottom.</p></div></div>
+ <div class="card" data-choice="urgent" onclick="toggleSelect(this)"><div class="card-image"><div class="scr"><canvas></canvas><div class="ov">
+ <div style="position:absolute;top:14px;left:16px"><div class="clk small">--:--</div><div class="dt" style="font-size:10px;text-align:left">--</div></div>
+ <div class="row" style="justify-content:flex-end;gap:10px">
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#e0c000 62%,rgba(255,255,255,.15) 0)"><span class="in">62%</span></div><div class="t">Claude 5h · 1h40m</div></div>
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#00e07a 38%,rgba(255,255,255,.15) 0)"><span class="in">38%</span></div><div class="t">Claude week</div></div>
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#00e07a 20%,rgba(255,255,255,.15) 0)"><span class="in">20%</span></div><div class="t">Codex 5h · 3h05m</div></div>
+ <div style="text-align:center"><div class="ring" style="background:conic-gradient(#e0c000 55%,rgba(255,255,255,.15) 0)"><span class="in">55%</span></div><div class="t">Codex week</div></div>
+</div>
+ <div style="display:flex;justify-content:center;margin-top:5%">
+  <div class="c urg" style="width:55%;font-size:15px;text-align:center;padding:14px"><div class="t">Claude Code · waiting 3m</div><b style="font-size:20px">⚠ Needs approval</b><br>api-server: run migrations</div></div>
+ <div class="row" style="position:absolute;bottom:14px;left:14px;right:14px">
+ <div class="c" style="flex:1"><div class="t">Codex · 24m</div><b>Refactor auth</b></div>
+ <div class="c" style="flex:1"><div class="t">Claude · 1h 12m</div><b>Integration tests</b></div>
+ <div class="c done" style="flex:1"><div class="t">Claude · 8m ago</div><b>✓ Fix flaky test</b></div>
+</div></div></div></div>
+  <div class="card-body"><h3>2 · An agent needs you</h3><p>The clock shrinks to the top-left corner. The approval card pulses in the center, with a small sound.</p></div></div>
+</div><script>
+document.querySelectorAll('.scr canvas').forEach(cv=>{
+  const ctx=cv.getContext('2d');
+  const fit=()=>{cv.width=cv.clientWidth;cv.height=cv.clientHeight;};
+  fit();
+  const fs=11, chars='アカサタナハマヤラワ0123456789ABCDEF';
+  let drops=Array(Math.ceil(cv.width/fs)).fill(0).map(()=>Math.random()*-50);
+  setInterval(()=>{ // ponytail: ~24fps, same cap we plan for the real thing
+    ctx.fillStyle='rgba(0,0,0,0.08)';ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle='#0f6';ctx.font=fs+'px monospace';
+    drops.forEach((y,i)=>{ctx.globalAlpha=.55;ctx.fillText(chars[Math.random()*chars.length|0],i*fs,y*fs);
+      drops[i]=(y*fs>cv.height&&Math.random()>.975)?0:y+1;});
+    ctx.globalAlpha=1;
+  },42);
+});
+</script>
+<script>
+const tick=()=>{const n=new Date();const t=n.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',hour12:false});
+const dt=n.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+document.querySelectorAll('.clk').forEach(e=>e.textContent=t);document.querySelectorAll('.dt').forEach(e=>e.textContent=dt);};
+tick();setInterval(tick,1000);
+</script>
