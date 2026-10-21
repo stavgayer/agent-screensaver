@@ -1,0 +1,12 @@
+{
+  "id": "acme.rain",
+  "name": "Acme Rain",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "main.js",
+  "options": {
+    "color": { "type": "color", "default": "#00ff66", "label": "Color" },
+    "speed": { "type": "number", "default": 1, "min": 0.1, "max": 5, "label": "Speed" }
+  }
+}

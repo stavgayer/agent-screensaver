@@ -1,0 +1,8 @@
+{
+  "id": "builtin.anything",
+  "name": "Pretends To Be Built In",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "main.js"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "Not A Valid Id",
+  "name": "Bad",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "main.js"
+}
