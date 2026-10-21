@@ -1,9 +1,11 @@
 package statusline
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"agent-screensaver/internal/event"
@@ -93,6 +95,36 @@ func TestLimitsEvent(t *testing.T) {
 			},
 			wantOK: true,
 		},
+		{
+			name:  "missing session uses fallback",
+			input: []byte(`{"rate_limits":{"five_hour":{"used_percentage":1}}}`),
+			want: event.Event{
+				V: event.Version, Source: "claude", Session: FallbackSession,
+				Kind: event.KindLimits, AtMs: nowMs,
+				Limits: []event.LimitReading{{Window: event.FiveHour, UsedPercent: 1}},
+			},
+			wantOK: true,
+		},
+		{
+			name:  "empty session uses fallback",
+			input: []byte(`{"session_id":"","rate_limits":{"five_hour":{"used_percentage":1}}}`),
+			want: event.Event{
+				V: event.Version, Source: "claude", Session: FallbackSession,
+				Kind: event.KindLimits, AtMs: nowMs,
+				Limits: []event.LimitReading{{Window: event.FiveHour, UsedPercent: 1}},
+			},
+			wantOK: true,
+		},
+		{
+			name:  "oversized session uses fallback",
+			input: []byte(`{"session_id":"` + strings.Repeat("x", event.MaxIdentifierLength+1) + `","rate_limits":{"five_hour":{"used_percentage":1}}}`),
+			want: event.Event{
+				V: event.Version, Source: "claude", Session: FallbackSession,
+				Kind: event.KindLimits, AtMs: nowMs,
+				Limits: []event.LimitReading{{Window: event.FiveHour, UsedPercent: 1}},
+			},
+			wantOK: true,
+		},
 		{name: "invalid json", input: []byte(`{not json`)},
 	}
 
@@ -102,8 +134,18 @@ func TestLimitsEvent(t *testing.T) {
 			if ok != tt.wantOK {
 				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
 			}
-			if ok && !reflect.DeepEqual(got, tt.want) {
+			if !ok {
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("event = %+v, want %+v", got, tt.want)
+			}
+			encoded, err := json.Marshal(got)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if _, err := event.Parse(encoded); err != nil {
+				t.Errorf("event does not round-trip through event.Parse: %v", err)
 			}
 		})
 	}

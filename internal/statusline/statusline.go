@@ -5,11 +5,16 @@ package statusline
 import (
 	"encoding/json"
 	"path/filepath"
+	"unicode/utf8"
 
 	"agent-screensaver/internal/event"
 )
 
 const sourceClaude = "claude"
+
+// FallbackSession names events whose input has no usable session id. Limits
+// are account-wide, so one constant session loses nothing.
+const FallbackSession = "statusline"
 
 // window is one rate-limit window. The percentage is a pointer so that a
 // window Claude Code left out can be told apart from one that is at 0%.
@@ -49,7 +54,7 @@ func LimitsEvent(data []byte, nowMs int64) (event.Event, bool) {
 	return event.Event{
 		V:       event.Version,
 		Source:  sourceClaude,
-		Session: parsed.SessionID,
+		Session: sessionName(parsed.SessionID),
 		Kind:    event.KindLimits,
 		AtMs:    nowMs,
 		Project: projectName(parsed),
@@ -79,4 +84,13 @@ func projectName(parsed input) string {
 		return ""
 	}
 	return filepath.Base(dir)
+}
+
+// sessionName keeps the event valid: event.Parse rejects empty or oversized
+// session ids, which would silently drop a good reading downstream.
+func sessionName(sessionID string) string {
+	if sessionID == "" || utf8.RuneCountInString(sessionID) > event.MaxIdentifierLength {
+		return FallbackSession
+	}
+	return sessionID
 }
