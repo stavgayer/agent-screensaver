@@ -28,20 +28,24 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     // MARK: - Paths
 
     /// Inside the sandbox NSHomeDirectory() is the container, so ask the passwd database.
+    /// There is deliberately no fallback to NSHomeDirectory(): it would load nothing, silently.
     /// AGS_DATA_DIR is for the test harness only; production uses the real-home path.
-    private static let dataDir: URL = {
+    private static let dataDir: URL? = {
         if let override = ProcessInfo.processInfo.environment["AGS_DATA_DIR"] {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
-        let home = getpwuid(getuid()).flatMap { $0.pointee.pw_dir.map { String(cString: $0) } } ?? NSHomeDirectory()
-        return URL(fileURLWithPath: home + "/Library/Application Support/agent-screensaver", isDirectory: true)
+        guard let entry = getpwuid(getuid()), let home = entry.pointee.pw_dir else {
+            NSLog("AgentScreensaver: cannot resolve home")
+            return nil
+        }
+        return URL(fileURLWithPath: String(cString: home) + "/Library/Application Support/agent-screensaver", isDirectory: true)
     }()
 
-    private static var stateURL: URL { dataDir.appendingPathComponent("state.json") }
+    private static var stateURL: URL? { dataDir?.appendingPathComponent("state.json") }
 
     private func loadRuntime() {
-        let index = Self.dataDir.appendingPathComponent("runtime/index.html")
-        webView.loadFileURL(index, allowingReadAccessTo: Self.dataDir)
+        guard let dataDir = Self.dataDir else { return }
+        webView.loadFileURL(dataDir.appendingPathComponent("runtime/index.html"), allowingReadAccessTo: dataDir)
     }
 
     // MARK: - Lifecycle
@@ -100,9 +104,10 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
 
     private func pushStateIfChanged() {
         guard pageLoaded else { return }
-        let modified = (try? Self.stateURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        guard let stateURL = Self.stateURL else { return }
+        let modified = (try? stateURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         guard let modified, modified != lastModified else { return }
-        guard let json = try? String(contentsOf: Self.stateURL, encoding: .utf8) else { return }
+        guard let json = try? String(contentsOf: stateURL, encoding: .utf8) else { return }
         lastModified = modified
         webView.evaluateJavaScript("window.agentScreensaver.setState(\(Self.jsLiteral(json)), \(Self.jsLiteral(displayRole)))")
     }
