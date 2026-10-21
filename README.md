@@ -37,18 +37,18 @@ Open System Settings, then Lock Screen. Set "Require password after screen saver
 
 ## Settings
 
-Change settings with `agent-screensaver` commands. One example each:
+Change settings with `agent-screensaver` commands, run from the unzipped folder. One example each:
 
 | Command | Example |
 | --- | --- |
-| `theme` | `agent-screensaver theme set builtin.default` |
-| `option` | `agent-screensaver option set builtin.matrix color "#00ff66"` |
-| `privacy` | `agent-screensaver privacy on` |
-| `sound` | `agent-screensaver sound on` |
-| `fps` | `agent-screensaver fps max 30` |
-| `ext` | `agent-screensaver ext install ./my-extension` |
+| `theme` | `./agent-screensaver theme set builtin.default` |
+| `option` | `./agent-screensaver option set builtin.matrix color "#00ff66"` |
+| `privacy` | `./agent-screensaver privacy on` |
+| `sound` | `./agent-screensaver sound on` |
+| `fps` | `./agent-screensaver fps max 30` |
+| `ext` | `./agent-screensaver ext install ./my-extension` |
 
-Run `agent-screensaver theme list` to see the themes you can use.
+Run `./agent-screensaver theme list` to see the themes you can use.
 
 ## Uninstall
 
