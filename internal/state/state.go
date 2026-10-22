@@ -39,6 +39,9 @@ type Card struct {
 	StartedAtMs     int64    `json:"started_at_ms"`
 	UpdatedAtMs     int64    `json:"updated_at_ms"`
 	ApprovalSinceMs *int64   `json:"approval_since_ms,omitempty"`
+	// Background is how many background jobs the session still runs. A
+	// finished card with jobs left stays until they are done.
+	Background int `json:"background,omitempty"`
 }
 
 // Limit is the latest usage reading of one source and window.
@@ -86,11 +89,17 @@ func (s *State) Apply(incoming event.Event) {
 }
 
 // applyEnded drops a card, except a finished one: it stays so its result
-// remains visible until the TTL, which counts from the finish.
+// remains visible until the TTL, which counts from the finish. Background
+// jobs end with their session, so its count goes to zero.
 func (s *State) applyEnded(index int) {
-	if index >= 0 && s.Cards[index].Kind != KindFinished {
-		s.Cards = slices.Delete(s.Cards, index, index+1)
+	if index < 0 {
+		return
 	}
+	if s.Cards[index].Kind != KindFinished {
+		s.Cards = slices.Delete(s.Cards, index, index+1)
+		return
+	}
+	s.Cards[index].Background = 0
 }
 
 // Tick ages the cards. Limits are readings, not sessions, so they stay.
@@ -120,6 +129,9 @@ func newCard(incoming event.Event) Card {
 }
 
 func applyToCard(card *Card, incoming event.Event) {
+	if incoming.Background != nil {
+		card.Background = *incoming.Background
+	}
 	switch incoming.Kind {
 	case event.KindStarted:
 		card.Kind = KindRunning
@@ -181,7 +193,8 @@ func isExpired(card Card, nowMs int64) bool {
 	if idleMs > RemoveAfterMs {
 		return true
 	}
-	return card.Kind == KindFinished && idleMs > FinishedTTLMs
+	// A done card whose background jobs still run is not done yet.
+	return card.Kind == KindFinished && card.Background == 0 && idleMs > FinishedTTLMs
 }
 
 // agedKind downgrades a silent card: an agent that stops reporting while

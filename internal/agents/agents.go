@@ -64,6 +64,9 @@ type fields struct {
 	message          string
 	// noTranscript is true when the payload has "transcript_path": null.
 	noTranscript bool
+	// background is the length of "background_tasks", or nil when the
+	// payload has no such list.
+	background *int
 }
 
 // hookFields decodes a payload. It returns false for invalid JSON or when
@@ -93,7 +96,18 @@ func hookFields(input []byte) (fields, bool) {
 		notificationType: stringField(raw, "notification_type"),
 		message:          stringField(raw, "message"),
 		noTranscript:     hasTranscript && transcript == nil,
+		background:       listLength(raw["background_tasks"]),
 	}, true
+}
+
+// listLength returns the length of a JSON array, or nil for anything else.
+func listLength(value any) *int {
+	list, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	length := len(list)
+	return &length
 }
 
 // mapCommon handles the events both tools share.

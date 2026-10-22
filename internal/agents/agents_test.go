@@ -171,3 +171,39 @@ func TestPromptWithOnlyInjectedTextHasNoTitle(t *testing.T) {
 		})
 	}
 }
+
+func TestBackgroundCount(t *testing.T) {
+	two, zero := 2, 0
+	tests := []struct {
+		name    string
+		adapter string
+		fixture string
+		want    *int
+	}{
+		{"claude stop with two background tasks", "claude", "stop_background.json", &two},
+		{"claude stop with none in flight", "claude", "stop.json", &zero},
+		{"claude stop with a broken list has no count", "claude", "stop_background_invalid.json", nil},
+		{"claude payload without the field has no count", "claude", "post_tool_use.json", nil},
+		{"claude prompt has no count", "claude", "user_prompt_submit.json", nil},
+		{"codex never has a count", "codex", "stop.json", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter, _ := ByName(tt.adapter)
+			input, err := os.ReadFile(filepath.Join("testdata", tt.adapter, tt.fixture))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := adapter.Map(input, testNowMs)
+			if !ok {
+				t.Fatal("event was ignored")
+			}
+			switch {
+			case tt.want == nil && got.Background != nil:
+				t.Errorf("Background = %d, want none", *got.Background)
+			case tt.want != nil && (got.Background == nil || *got.Background != *tt.want):
+				t.Errorf("Background = %v, want %d", got.Background, *tt.want)
+			}
+		})
+	}
+}

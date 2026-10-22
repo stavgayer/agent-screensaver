@@ -16,6 +16,8 @@ export interface Card {
   started_at_ms: number;
   updated_at_ms: number;
   approval_since_ms?: number;
+  /** How many background jobs (shells, subagents) the session still runs. Left out when none run or the agent does not say (Codex). */
+  background?: number;
 }
 
 /** One usage limit. `resets_at` is in seconds, the other times are in milliseconds. */

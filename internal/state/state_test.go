@@ -414,3 +414,95 @@ func TestNeedsAttention(t *testing.T) {
 		})
 	}
 }
+
+func withBackground(incoming event.Event, count int) event.Event {
+	incoming.Background = &count
+	return incoming
+}
+
+func TestBackgroundCount(t *testing.T) {
+	tests := []struct {
+		name   string
+		events []event.Event
+		want   []Card
+	}{
+		{
+			name: "finished with jobs left shows the count",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
+				withBackground(claudeEvent("s1", event.KindFinished, 2000, "api", ""), 2),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Project: "api", Title: "Fix bug",
+				StartedAtMs: 1000, UpdatedAtMs: 2000, Background: 2}},
+		},
+		{
+			name: "an event without a count keeps the last count",
+			events: []event.Event{
+				withBackground(claudeEvent("s1", event.KindFinished, 1000, "api", ""), 2),
+				claudeEvent("s1", event.KindStarted, 2000, "api", "Next"),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindRunning, Project: "api", Title: "Next",
+				StartedAtMs: 2000, UpdatedAtMs: 2000, Background: 2}},
+		},
+		{
+			name: "the latest payload wins, down to zero",
+			events: []event.Event{
+				withBackground(claudeEvent("s1", event.KindFinished, 1000, "api", ""), 2),
+				withBackground(claudeEvent("s1", event.KindFinished, 2000, "api", ""), 0),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Project: "api",
+				StartedAtMs: 1000, UpdatedAtMs: 2000}},
+		},
+		{
+			name: "a late payload does not change the count",
+			events: []event.Event{
+				withBackground(claudeEvent("s1", event.KindFinished, 2000, "api", ""), 0),
+				withBackground(claudeEvent("s1", event.KindFinished, 1000, "api", ""), 3),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Project: "api",
+				StartedAtMs: 2000, UpdatedAtMs: 2000}},
+		},
+		{
+			name: "ending the session ends its jobs",
+			events: []event.Event{
+				withBackground(claudeEvent("s1", event.KindFinished, 1000, "api", ""), 2),
+				claudeEvent("s1", event.KindEnded, 2000, "api", ""),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Project: "api",
+				StartedAtMs: 1000, UpdatedAtMs: 1000}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var current State
+			for _, incoming := range tt.events {
+				current.Apply(incoming)
+			}
+			if !sameCards(current.Cards, tt.want) {
+				t.Fatalf("cards:\n got  %+v\n want %+v", current.Cards, tt.want)
+			}
+		})
+	}
+}
+
+func TestTickKeepsDoneCardWhileJobsRun(t *testing.T) {
+	tests := []struct {
+		name       string
+		background int
+		now        int64
+		wantKept   bool
+	}{
+		{"done with jobs kept past the ttl", 1, 2 * FinishedTTLMs, true},
+		{"done with no jobs removed after the ttl", 0, FinishedTTLMs + 1, false},
+		{"done with jobs removed after 12 h", 1, RemoveAfterMs + 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := State{Cards: []Card{{Source: "claude", Session: "s1", Kind: KindFinished, Background: tt.background}}}
+			current.Tick(tt.now)
+			if kept := len(current.Cards) == 1; kept != tt.wantKept {
+				t.Errorf("kept = %v, want %v", kept, tt.wantKept)
+			}
+		})
+	}
+}

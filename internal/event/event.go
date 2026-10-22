@@ -69,6 +69,9 @@ type Event struct {
 	Project string         `json:"project,omitempty"`
 	Title   string         `json:"title,omitempty"`
 	Limits  []LimitReading `json:"limits,omitempty"`
+	// Background is how many background jobs (shells, subagents) the session
+	// still runs. nil means the source did not say; 0 means none are left.
+	Background *int `json:"background,omitempty"`
 }
 
 // Parse decodes and validates one event. It checks the size first so that
@@ -93,6 +96,9 @@ func (e Event) validate() error {
 	}
 	if !knownKinds[e.Kind] {
 		return fmt.Errorf("unknown event kind %q", e.Kind)
+	}
+	if e.Background != nil && *e.Background < 0 {
+		return fmt.Errorf("background is %d, must not be negative", *e.Background)
 	}
 	if err := validateIdentifier("source", e.Source); err != nil {
 		return err

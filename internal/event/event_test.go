@@ -69,6 +69,26 @@ func TestParse(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:     "finished with a background count",
+			input:    `{"v":1,"source":"claude","session":"s1","kind":"finished","at_ms":1,"background":2}`,
+			wantKind: KindFinished,
+		},
+		{
+			name:     "background count of zero",
+			input:    `{"v":1,"source":"claude","session":"s1","kind":"finished","at_ms":1,"background":0}`,
+			wantKind: KindFinished,
+		},
+		{
+			name:    "negative background count",
+			input:   `{"v":1,"source":"claude","session":"s1","kind":"finished","at_ms":1,"background":-1}`,
+			wantErr: true,
+		},
+		{
+			name:    "fractional background count",
+			input:   `{"v":1,"source":"claude","session":"s1","kind":"finished","at_ms":1,"background":1.5}`,
+			wantErr: true,
+		},
+		{
 			name:    "not json",
 			input:   `nope`,
 			wantErr: true,

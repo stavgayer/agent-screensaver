@@ -28,6 +28,7 @@ Any program can be a source. To be one, write one JSON file with one event into 
 | `project` | string | no | The project name shown on the card. |
 | `title` | string | no | The text shown on the card. |
 | `limits` | list | no | Usage limit readings. Used with the `limits` kind. |
+| `background` | number | no | How many background jobs the session still runs, such as shells or subagents. A whole number, 0 or more. |
 
 ## Card titles from prompts
 
@@ -51,6 +52,20 @@ Two sessions with the same `source` and different `session` values are two cards
 | `finished` | The task finished. | `Stop` | `Stop` |
 | `ended` | The session closed. | `SessionEnd` | `SessionEnd` |
 | `limits` | New usage limit numbers. It is not about one task. | status line | `codex app-server` |
+
+## Background jobs
+
+An agent can leave jobs running after it answers, for example a build in a background shell or a subagent. The `background` field says how many still run.
+
+- Leave the field out when you do not know. The card then keeps the count it has.
+- Send `0` when the last job is done.
+- The newest event wins. An event older than the card's last event does not change the count.
+- A done card with jobs left shows "Done" and the count. It does not go away after 30 minutes while the count is above 0. It still goes after 12 hours with no event.
+- An `ended` event sets the count to 0: the jobs end with their session.
+
+The Claude Code hook sends the length of the `background_tasks` list in the `Stop` payload. That list holds the jobs still in flight. When a job ends, Claude Code wakes the session with a `<task-notification>` prompt, and that turn ends with a new `Stop`, so the count is refreshed then. Other Claude Code events carry no list and leave the count as it is. The Codex hooks send no count.
+
+The `SubagentStart` and `SubagentStop` hooks are not used. `SubagentStart` carries no list. `SubagentStop` fires for subagents in the foreground too, while the main task still works, and the `Stop` that follows has the new list anyway.
 
 ## Limits
 

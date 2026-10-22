@@ -7,7 +7,7 @@ import (
 )
 
 // Field names (hook_event_name, session_id, cwd, prompt, tool_name,
-// tool_input, notification_type, message) come from
+// tool_input, notification_type, message, background_tasks) come from
 // https://code.claude.com/docs/en/hooks and were checked against real payloads from Claude Code 2.1.308 in Task 6.1
 // (no Notification payload was recorded; its fixtures come from the docs).
 
@@ -24,7 +24,11 @@ func (adapter Claude) Map(input []byte, nowMs int64) (event.Event, bool) {
 	if hook.hookEvent == hookNotification {
 		return adapter.mapNotification(hook, nowMs)
 	}
-	return mapCommon(adapter.Name(), hook, nowMs)
+	mapped, ok := mapCommon(adapter.Name(), hook, nowMs)
+	// Stop carries "background_tasks", the jobs still in flight, so a done
+	// card can say how many are left. The latest payload wins.
+	mapped.Background = hook.background
+	return mapped, ok
 }
 
 // mapNotification keeps permission prompts only. Idle notifications are not
