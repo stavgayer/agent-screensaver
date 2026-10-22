@@ -124,6 +124,8 @@ Regions: `top-left`, `top-right`, `center`, `bottom`. Other names are refused. A
 
 A theme picks a background and a layout, and sets style values. It needs no entry file.
 
+Two themes are built in: `builtin.default` (Default, on the Matrix background) and `builtin.calm` (Calm, on `builtin.aerials`; it shows Matrix until aerial videos are downloaded).
+
 | Field | Meaning |
 |---|---|
 | `background` | `{ "id": "...", "options": { ... } }`. The id is required. |

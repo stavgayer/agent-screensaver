@@ -192,11 +192,12 @@ function button(label: string, onClick: () => void, kind: "primary" | "plain" | 
 
 // ---------- Theme & background ----------
 
-/** A small static picture of a theme: a dark screen with a clock in the theme's accent. */
+/** A small static picture of a theme: a screen with a clock in the theme's accent. Black, or a dusk sky for the aerials background. */
 function themeTile(theme: ExtensionInfo, selected: boolean): HTMLElement {
   const id = theme.manifest.id;
   const accent = String(theme.manifest.theme?.style?.["--accent"] ?? DEFAULT_ACCENT);
   const swatch = h("span", { class: "tile-screen", "aria-hidden": "true" }, h("span", { class: "tile-clock" }, "9:41"));
+  swatch.dataset.background = theme.manifest.theme?.background.id ?? "";
   swatch.style.setProperty("--tile-accent", /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : DEFAULT_ACCENT);
   return h(
     "label",

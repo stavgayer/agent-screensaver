@@ -1,0 +1,17 @@
+{
+  "id": "builtin.calm",
+  "name": "Calm",
+  "version": "1.0.0",
+  "type": "theme",
+  "api": 1,
+  "theme": {
+    "background": { "id": "builtin.aerials" },
+    "layout": "builtin.spotlight",
+    "style": {
+      "--accent": "#6cc5b9",
+      "--attention": "#ff9a4d",
+      "--done": "#a9c4f5",
+      "--card-opacity": "0.86"
+    }
+  }
+}

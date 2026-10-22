@@ -115,3 +115,18 @@ Taken with the saver harness (a scratchpad copy that takes the window size from 
 - Before: `<scratchpad>/shots/before-idle-1512x982.png`, `<scratchpad>/shots/before-idle-1024x768.png`, `<scratchpad>/shots/before-attention-1512x982.png`, `<scratchpad>/shots/before-attention-1024x768.png`
 - After: `<scratchpad>/shots/after-idle-1512x982.png`, `<scratchpad>/shots/after-idle-1024x768.png`, `<scratchpad>/shots/after-attention-1512x982.png`, `<scratchpad>/shots/after-attention-1024x768.png`
 - Worst case (Hebrew title, long title, long request, +1 more, four rings with stale data): `<scratchpad>/shots/after-state-stress-1512x982.png`, `<scratchpad>/shots/after-state-stress-1024x768.png`
+
+## The Calm theme
+
+`builtin.calm` is the quiet theme: the Apple aerials background, the same Spotlight layout, softer colors. Aerials are bright and they move, so the cards stay dark and the colors do the calming. It shows Matrix until aerial videos are downloaded, the same as any aerials theme.
+
+| Value | Calm | Default | Why |
+| --- | --- | --- | --- |
+| `--accent` | `#6cc5b9` | `#00e07a` | A muted sea teal. It sits on the black disc of a ring, where it measures 10:1, and it tints the clock only 12%, so the clock stays near white. |
+| `--attention` | `#ff9a4d` | `#ffb020` | A warm orange, a little redder than the default. Warm against a mostly blue or grey aerial is the strongest pull from across the room. The approval card is a dark brown box with a 2 px orange edge and the pulse ring, so it does not depend on the video for contrast. |
+| `--done` | `#a9c4f5` | `#78c8ff` | A pale blue, 10.6:1 on the task card. It is clearly not the teal accent. |
+| `--card-opacity` | `0.86` | `0.82` | The cards sit directly on video. At 0.86 over a pure white frame, the weakest text (the 68% white meta line) is 6.8:1 and the title 12.7:1. Over a dark frame they are 9:1 and 18.9:1. |
+
+Numbers are WCAG contrast ratios computed for the card colors over a white frame, a bright sky (200, 225, 250) and a dark frame. The weakest case is white. Checked by eye on two real aerials, one hazy city at dusk and one dark night street: the approval card is the first thing the eye finds in both.
+
+The settings card shows a dusk-sky tile for any theme whose background is `builtin.aerials`, with the clock underlined in the theme accent; the subtitle is the background's name, "Apple aerials".
