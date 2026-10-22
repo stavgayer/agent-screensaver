@@ -169,6 +169,8 @@ h2 { font-size: 13px; font-weight: 600; }
 .row-description { color: var(--secondary); font-size: 12px; }
 .row-error { color: var(--danger); font-size: 12px; -webkit-user-select: text; user-select: text; }
 .panel > .row-error { padding: 10px 14px 0; }
+.panel > .panel-note { margin: 0; padding: 10px 14px; color: var(--secondary); font-size: 12px; }
+.panel-note + .row { border-top: 1px solid var(--line); }
 .row-control { flex: none; display: flex; align-items: center; gap: 8px; }
 
 .muted { color: var(--secondary); }

@@ -67,6 +67,10 @@ The Claude Code hook sends the length of the `background_tasks` list in the `Sto
 
 The `SubagentStart` and `SubagentStop` hooks are not used. `SubagentStart` carries no list. `SubagentStop` fires for subagents in the foreground too, while the main task still works, and the `Stop` that follows has the new list anyway.
 
+## Ignored projects
+
+The service drops every event whose `project` is in the `ignored_projects` list of the settings (General, Ignored projects, in the settings window). Such an event never makes or changes a card, never asks for approval and never plays the sound. An entry matches when it equals the project exactly, case included; an entry written as a path matches by its last folder name. The default list is `["observer-sessions"]`, the folder where the claude-mem plugin runs hidden Claude sessions. A settings file without the field gets the default. Events without a project are never dropped.
+
 ## Limits
 
 A `limits` event carries a list of readings:

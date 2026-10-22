@@ -275,3 +275,45 @@ func TestFinishReadLogsFailureAndEmptyAnswer(t *testing.T) {
 		})
 	}
 }
+
+func TestIgnoredProjectsNeverReachTheScreen(t *testing.T) {
+	tests := []struct {
+		name      string
+		ignored   *[]string // nil: no config file, so the default applies
+		project   string
+		wantCards int
+	}{
+		{"default ignores the claude-mem observer", nil, "observer-sessions", 0},
+		{"default keeps other projects", nil, "web-app", 1},
+		{"a configured folder is ignored", &[]string{"scratch"}, "scratch", 0},
+		{"an empty list ignores nothing", &[]string{}, "observer-sessions", 1},
+		{"an event with no project is kept", &[]string{"scratch"}, "", 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, p := newTestDaemon(t)
+			if tt.ignored != nil {
+				cfg := config.Default()
+				cfg.IgnoredProjects = *tt.ignored
+				if err := cfg.Save(p.ConfigFile); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, kind := range []event.Kind{event.KindStarted, event.KindApproval} {
+				e := event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: kind, AtMs: 1_000, Project: tt.project}
+				if err := spool.Write(p.SpoolDir, e); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			result := d.Step(2_000, true)
+
+			if got := len(readStateFile(t, p).Cards); got != tt.wantCards {
+				t.Errorf("cards = %d, want %d", got, tt.wantCards)
+			}
+			if wantSound := tt.wantCards == 1; result.PlaySound != wantSound {
+				t.Errorf("PlaySound = %v, want %v", result.PlaySound, wantSound)
+			}
+		})
+	}
+}

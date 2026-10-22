@@ -3,6 +3,8 @@ package settings
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"agent-screensaver/internal/config"
@@ -531,5 +533,34 @@ func TestSnapshotShowsActiveBackground(t *testing.T) {
 	snapshot, err := service.Snapshot()
 	if err != nil || snapshot.Background != "acme.rain" {
 		t.Errorf("active background = %q (err %v), want the theme's acme.rain", snapshot.Background, err)
+	}
+}
+
+func TestSetIgnoredProjects(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   []string
+		want    []string
+		wantErr bool
+	}{
+		{"folder names are stored as typed", []string{"observer-sessions", "scratch"}, []string{"observer-sessions", "scratch"}, false},
+		{"paths become their folder name", []string{"/Users/me/tmp/scratch/", " api "}, []string{"scratch", "api"}, false},
+		{"blanks and repeats are dropped, order kept", []string{"b", "", "a", "b", "  "}, []string{"b", "a"}, false},
+		{"an empty list ignores nothing", []string{}, []string{}, false},
+		{"a name longer than a folder name can be fails", []string{strings.Repeat("a", 256)}, config.Default().IgnoredProjects, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := newService(t)
+			err := service.SetIgnoredProjects(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+			// A failed change keeps the file as it was, so the default stays.
+			got := loadConfig(service).IgnoredProjects
+			if !slices.Equal(got, tt.want) || got == nil {
+				t.Errorf("ignored = %#v, want %#v", got, tt.want)
+			}
+		})
 	}
 }

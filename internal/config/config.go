@@ -8,6 +8,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 )
 
 // Config holds the user's settings. A missing field in the file keeps its
@@ -19,7 +21,8 @@ type Config struct {
 	Sound              bool                      `json:"sound"`
 	SoundFile          string                    `json:"sound_file"`
 	Privacy            bool                      `json:"privacy"`
-	MaxFPS             int                       `json:"max_fps"` // 0 = display refresh rate; else 1..240
+	MaxFPS             int                       `json:"max_fps"`          // 0 = display refresh rate; else 1..240
+	IgnoredProjects    []string                  `json:"ignored_projects"` // folder names whose sessions never get a card
 	PreviousStatusline string                    `json:"previous_statusline,omitempty"`
 }
 
@@ -29,7 +32,35 @@ func Default() Config {
 		Theme:     "builtin.default",
 		Sound:     true,
 		SoundFile: "/System/Library/Sounds/Glass.aiff",
+		// The claude-mem plugin runs hidden Claude sessions in this folder.
+		IgnoredProjects: []string{"observer-sessions"},
 	}
+}
+
+// IgnoresProject reports whether events of project (the base name of the
+// session's folder) must be dropped. Entries match by their base name,
+// exactly, so a full path in the file works too.
+func (c Config) IgnoresProject(project string) bool {
+	if project == "" {
+		return false
+	}
+	return slices.ContainsFunc(c.IgnoredProjects, func(entry string) bool {
+		return ProjectName(entry) == project
+	})
+}
+
+// ProjectName turns an ignore entry, a folder name or a path, into the
+// folder name events carry. It is "" when nothing usable is left.
+func ProjectName(entry string) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(entry), "/")
+	if trimmed == "" {
+		return ""
+	}
+	name := filepath.Base(trimmed)
+	if name == "." {
+		return ""
+	}
+	return name
 }
 
 // Load reads path. A missing or broken file gives Default(): the saver must

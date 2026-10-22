@@ -10,9 +10,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"agent-screensaver/internal/aerials"
 	"agent-screensaver/internal/config"
@@ -22,7 +24,9 @@ import (
 )
 
 const (
-	maxFPSLimit   = 240
+	maxFPSLimit = 240
+	// maxFolderName is the longest file name macOS allows.
+	maxFolderName = 255
 	builtinPrefix = "builtin."
 )
 
@@ -240,6 +244,26 @@ func (s Service) SetMaxFPS(fps int) error {
 	}
 	return s.update(func(cfg *config.Config) error {
 		cfg.MaxFPS = fps
+		return nil
+	})
+}
+
+// SetIgnoredProjects replaces the list of folders whose sessions get no
+// card. Each entry is stored as a folder name (a path keeps its last part,
+// which is what events carry); blanks and repeats are dropped.
+func (s Service) SetIgnoredProjects(entries []string) error {
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := config.ProjectName(entry)
+		if utf8.RuneCountInString(name) > maxFolderName {
+			return fmt.Errorf("%q is longer than a folder name can be", name)
+		}
+		if name != "" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return s.update(func(cfg *config.Config) error {
+		cfg.IgnoredProjects = names
 		return nil
 	})
 }

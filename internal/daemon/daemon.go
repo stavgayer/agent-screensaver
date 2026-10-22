@@ -120,9 +120,10 @@ func (d *Daemon) SetLimits(source string, readings []event.LimitReading, nowMs i
 
 // Step does one round of work: no goroutines, no sleeping, only file IO.
 func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
-	changed := d.applyPendingLimits()
+	// The config is read first: draining the spool needs its ignore list.
+	changed := d.refreshView(nowMs)
+	changed = d.applyPendingLimits() || changed
 	changed = d.drainSpool() || changed
-	changed = d.refreshView(nowMs) || changed
 	changed = d.tick(nowMs) || changed
 
 	attention := d.state.NeedsAttention()
@@ -150,6 +151,11 @@ func (d *Daemon) applyPendingLimits() bool {
 func (d *Daemon) drainSpool() bool {
 	events := spool.Drain(d.paths.SpoolDir)
 	for _, incoming := range events {
+		// An ignored project never makes or changes a card, so it can never
+		// ask for approval or play the sound either.
+		if d.cfg.IgnoresProject(incoming.Project) {
+			continue
+		}
 		d.state.Apply(incoming)
 		if incoming.Kind == event.KindFinished && slices.Contains(d.sources, incoming.Source) {
 			d.finished[incoming.Source] = true

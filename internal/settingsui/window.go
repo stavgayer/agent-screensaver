@@ -33,6 +33,7 @@ type Service interface {
 	SetPrivacy(on bool) error
 	SetSound(on bool, file string) error
 	SetMaxFPS(fps int) error
+	SetIgnoredProjects(projects []string) error
 	InstallExtension(path string) (extensions.Manifest, error)
 	RemoveExtension(id string) error
 	Notice(extID string) string
@@ -99,9 +100,12 @@ func (b *bridge) methods() map[string]method {
 		"resetOption": withParams(func(p struct{ Extension, Key string }) (any, error) {
 			return nil, b.svc.ResetOption(p.Extension, p.Key)
 		}),
-		"setPrivacy":       withParams(func(p struct{ On bool }) (any, error) { return nil, b.svc.SetPrivacy(p.On) }),
-		"setSound":         withParams(b.setSound),
-		"setMaxFps":        withParams(func(p struct{ FPS int }) (any, error) { return nil, b.svc.SetMaxFPS(p.FPS) }),
+		"setPrivacy": withParams(func(p struct{ On bool }) (any, error) { return nil, b.svc.SetPrivacy(p.On) }),
+		"setSound":   withParams(b.setSound),
+		"setMaxFps":  withParams(func(p struct{ FPS int }) (any, error) { return nil, b.svc.SetMaxFPS(p.FPS) }),
+		"setIgnoredProjects": withParams(func(p struct{ Projects []string }) (any, error) {
+			return nil, b.svc.SetIgnoredProjects(p.Projects)
+		}),
 		"installExtension": withParams(func(struct{}) (any, error) { return b.installExtension() }),
 		"removeExtension": withParams(func(p struct{ ID string }) (any, error) {
 			return nil, b.svc.RemoveExtension(p.ID)

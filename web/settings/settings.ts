@@ -1,5 +1,6 @@
 import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
+import { withProject, withoutProject } from "./projects.ts";
 import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning } from "./preview-url.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
@@ -11,6 +12,8 @@ interface Snapshot {
     sound_file: string;
     privacy: boolean;
     max_fps: number;
+    /** Folder names whose sessions get no card. */
+    ignored_projects: string[] | null;
   };
   /** The background in effect: the user's choice or the theme's. */
   background: string;
@@ -398,10 +401,61 @@ function generalView(): Node[] {
         description: "Hides task titles and approval requests on the screen saver, and project names in the menu.",
       }),
     ]),
+    ignoredProjectsGroup(),
     group("Performance", [
       row("Maximum frame rate", fps, { id: "max-fps", description: "A ceiling for every background. Display follows the screen's refresh rate." }),
     ]),
   ];
+}
+
+/**
+ * The ignored-projects editor: one row per folder with its Remove button, and
+ * a row to add one. Each change saves the whole list.
+ */
+/** What is typed in the add field, kept across redraws so an error does not wipe it. */
+let ignoreDraft = "";
+
+function ignoredProjectsGroup(): HTMLElement {
+  const projects = (snapshot as Snapshot).config.ignored_projects ?? [];
+  const save = (next: string[], source: string) => void change("setIgnoredProjects", { projects: next }, source);
+  const add = () => {
+    const result = withProject(projects, ignoreDraft);
+    if ("error" in result) {
+      errors = { "ignore-new": result.error };
+      render();
+      return;
+    }
+    ignoreDraft = "";
+    save(result.projects, "ignore-new");
+  };
+  const rows: Node[] = projects.map((name) => {
+    const id = `ignore-remove-${name}`;
+    const remove = button("Remove", () => save(withoutProject(projects, name), id), "plain", id);
+    remove.setAttribute("aria-label", `Stop ignoring ${name}`);
+    return row(name, remove, { id });
+  });
+  const input = h("input", {
+    type: "text",
+    id: "ignore-new",
+    placeholder: "Folder name",
+    value: ignoreDraft,
+    oninput: (event: Event) => {
+      ignoreDraft = (event.target as HTMLInputElement).value;
+    },
+    onkeydown: (event: Event) => {
+      if ((event as KeyboardEvent).key === "Enter") add();
+    },
+  });
+  rows.unshift(
+    h("p", { class: "panel-note" }, "Sessions in these folders never show a card, ask for approval or play the sound. observer-sessions is where the claude-mem plugin runs its hidden sessions."),
+  );
+  rows.push(
+    row("Add a folder", h("span", { class: "file" }, input, button("Add", add, "plain", "ignore-add")), {
+      id: "ignore-new",
+      description: "The folder's name, or its path. Matches the session's folder name exactly.",
+    }),
+  );
+  return group("Ignored projects", rows);
 }
 
 // ---------- the live preview ----------

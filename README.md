@@ -51,6 +51,8 @@ Change settings with `agent-screensaver` commands, run from the unzipped folder.
 
 Run `./agent-screensaver theme list` to see the themes you can use.
 
+To hide the sessions of a folder, add its name under General, Ignored projects, in the settings window. They then get no card, no approval and no sound. The list starts with `observer-sessions`, the folder where the claude-mem plugin runs its hidden Claude sessions.
+
 The menu bar app has a settings window too. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then run `./agent-screensaver settings` to open the settings window directly.
 
 ## Uninstall

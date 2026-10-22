@@ -68,6 +68,9 @@ func (f *fakeService) SetSound(on bool, file string) error {
 func (f *fakeService) SetMaxFPS(fps int) error {
 	return f.record("SetMaxFPS " + strings.Repeat("|", fps))
 }
+func (f *fakeService) SetIgnoredProjects(projects []string) error {
+	return f.record("SetIgnoredProjects " + strings.Join(projects, ","))
+}
 func (f *fakeService) InstallExtension(path string) (extensions.Manifest, error) {
 	return extensions.Manifest{ID: "acme.rain"}, f.record("InstallExtension " + path)
 }
@@ -161,6 +164,8 @@ func TestOpenCallsTheService(t *testing.T) {
 		{"sound keeps the file", "setSound", `{"on":false}`, "", "SetSound off ", nil},
 		{"sound file with the picker", "setSound", `{"on":true,"pick":true}`, "/tmp/ding.aiff", "SetSound on /tmp/ding.aiff", nil},
 		{"max fps", "setMaxFps", `{"fps":3}`, "", "SetMaxFPS |||", nil},
+		{"ignored projects", "setIgnoredProjects", `{"projects":["observer-sessions","scratch"]}`, "", "SetIgnoredProjects observer-sessions,scratch", nil},
+		{"no ignored projects", "setIgnoredProjects", `{"projects":[]}`, "", "SetIgnoredProjects ", nil},
 		{"install with the picker", "installExtension", `{}`, "/tmp/rain.zip", "InstallExtension /tmp/rain.zip", pickResult{Manifest: &extensions.Manifest{ID: "acme.rain"}}},
 		{"remove", "removeExtension", `{"id":"acme.rain"}`, "", "RemoveExtension acme.rain", nil},
 		{"notice", "notice", `{"extension":"builtin.aerials"}`, "", "Notice builtin.aerials", "notice for builtin.aerials"},
