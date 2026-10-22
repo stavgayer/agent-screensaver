@@ -224,6 +224,12 @@ export type CreateExtension = () => BackgroundExt | ComponentExt;
 
 The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
 
+### When macOS shows its lock screen
+
+If the Mac asks for a password after the screen saver starts, macOS draws its lock screen (its clock and the login field) over the running saver when the user moves the mouse or presses a key. While it shows, the page fades out every component and the "service not running" line. The background keeps playing. When the lock screen goes away and the saver still runs, the components come back.
+
+Your extension does not need to do anything. A component stays mounted and keeps getting `update` calls while it is hidden. Nothing tells it that it is hidden.
+
 ## The Apple aerials background
 
 `builtin.aerials` plays Apple aerial videos that macOS has already downloaded. It has three options: `group` (`cities`, `landscapes`, `space` or `underwater`; default `cities`), `fit` and `dim`, the same as `builtin.video`.

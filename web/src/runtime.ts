@@ -3,6 +3,7 @@ import { loadExtension, pendingLoads, safeCall } from "./loader.ts";
 import { createFrameScheduler, requestedFps, type FrameScheduler } from "./frame.ts";
 import { createKeeper, type Instance } from "./instance.ts";
 import { screenMode } from "./mode.ts";
+import { setLockUI } from "./overlay.ts";
 import {
   backgroundSignature,
   cssVariables,
@@ -24,6 +25,8 @@ type Display = "main" | "secondary";
 
 interface AgentScreensaver {
   setState(json: string, display: Display): void;
+  /** The host calls this when macOS shows or hides its lock screen over the saver. */
+  setLockUI(shown: boolean): void;
   register(create: CreateExtension): void;
 }
 
@@ -244,6 +247,7 @@ function setState(json: string, display: Display): void {
 
 window.agentScreensaver = Object.freeze({
   setState,
+  setLockUI: (shown: boolean) => safeCall("setLockUI", () => setLockUI(document.documentElement, shown), logFailure),
   register(create: CreateExtension) {
     if (typeof create !== "function") return;
     pendingLoads.register((document.currentScript as HTMLScriptElement | null)?.src, create);

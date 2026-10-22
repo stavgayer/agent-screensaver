@@ -4,6 +4,7 @@
   --muted: #8a8a8a;
   --gap: 4vmin;
   --fade: 0.5s;
+  --lock-fade: 0.25s;
   /* A strong ease-out: things that arrive start fast and settle, which reads as deliberate. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -63,6 +64,10 @@ html, body {
 }
 
 #service-line[hidden] { display: none; }
+
+/* macOS draws its lock screen (clock, login) over the saver: hide ours, keep the background. */
+#screen, #service-line { transition: opacity var(--lock-fade) var(--ease-out); }
+.lock-ui #screen, .lock-ui #service-line { opacity: 0; }
 
 /* Reduced motion keeps the fade, which helps follow the change, and drops the travel. */
 @keyframes appear-still {

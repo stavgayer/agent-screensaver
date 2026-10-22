@@ -12,7 +12,8 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     private var timer: Timer?
     private var pageLoaded = false
     private var lastModified: Date?
-    private var willStopObserver: NSObjectProtocol?
+    private var hostObservers: [NSObjectProtocol] = []
+    private var lockUIShown = false
 
     override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
@@ -28,7 +29,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         webView.frame = bounds
         webView.autoresizingMask = [.width, .height]
         addSubview(webView)
-        observeWillStop()
+        observeHost()
         loadRuntime()
     }
 
@@ -81,10 +82,30 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         pushStateIfChanged()
     }
 
-    private func observeWillStop() {
-        willStopObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name("com.apple.screensaver.willstop"), object: nil, queue: .main
-        ) { [weak self] _ in self?.shutDown() }
+    /// loginwindow posts screenLockUIIsShown when its lock screen (clock, login) appears over
+    /// the running saver, and screenLockUIIsHidden when it goes away (decision 0005).
+    private func observeHost() {
+        let center = DistributedNotificationCenter.default()
+        let handlers: [(String, (AgentSaverView) -> Void)] = [
+            ("com.apple.screensaver.willstop", { $0.shutDown() }),
+            ("com.apple.screenLockUIIsShown", { $0.setLockUI(true) }),
+            ("com.apple.screenLockUIIsHidden", { $0.setLockUI(false) }),
+        ]
+        hostObservers = handlers.map { name, handle in
+            center.addObserver(forName: Notification.Name(name), object: nil, queue: .main) { [weak self] _ in
+                if let self { handle(self) }
+            }
+        }
+    }
+
+    private func setLockUI(_ shown: Bool) {
+        lockUIShown = shown
+        pushLockUI()
+    }
+
+    private func pushLockUI() {
+        guard pageLoaded else { return }
+        webView.evaluateJavaScript("window.agentScreensaver.setLockUI(\(lockUIShown))")
     }
 
     /// legacyScreenSaver does not always quit after the saver stops (decision 0001), so quit it ourselves.
@@ -103,6 +124,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         pageLoaded = true
         lastModified = nil
         pushStateIfChanged()
+        pushLockUI()
     }
 
     private var displayRole: String {
