@@ -51,6 +51,8 @@ Change settings with `agent-screensaver` commands, run from the unzipped folder.
 
 Run `./agent-screensaver theme list` to see the themes you can use.
 
+The menu bar app has a settings window too. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then run `./agent-screensaver settings` to open the settings window directly.
+
 ## Uninstall
 
 Run `./agent-screensaver uninstall` and confirm the plan. Your settings and extensions in the data folder are kept.
