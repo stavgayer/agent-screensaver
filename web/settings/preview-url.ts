@@ -15,7 +15,36 @@ export function toPreviewUrl(url: string, dataUrl: string): string {
   return url.startsWith(dataUrl) ? PREVIEW_DATA_URL + url.slice(dataUrl.length) : url;
 }
 
-/** state.json text with every data folder file URL (extension entries, aerial videos) as a preview URL. */
+interface Entry {
+  entry_url?: unknown;
+}
+
+/**
+ * state.json text with the extension entry scripts loaded from the preview
+ * scheme. Option values stay as they are: extensions check them (the aerials
+ * background keeps only file:// URLs), and preview.ts maps media `src` in the
+ * frame instead. Text that is not JSON is passed on unchanged.
+ */
 export function previewState(state: string, dataUrl: string): string {
-  return state.split(dataUrl).join(PREVIEW_DATA_URL);
+  let parsed: { view?: { background?: Entry; components?: Entry[] } };
+  try {
+    parsed = JSON.parse(state);
+  } catch {
+    return state;
+  }
+  const entries = [parsed.view?.background, ...(parsed.view?.components ?? [])];
+  for (const entry of entries) {
+    if (typeof entry?.entry_url === "string") entry.entry_url = toPreviewUrl(entry.entry_url, dataUrl);
+  }
+  return JSON.stringify(parsed);
+}
+
+/** Whether the state comes from a running service. Without one the preview shows a note over the idle screen. */
+export function serviceRunning(state: string | null): boolean {
+  if (state === null) return false;
+  try {
+    return (JSON.parse(state) as { service_ok?: unknown }).service_ok === true;
+  } catch {
+    return false;
+  }
 }

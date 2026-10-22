@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PREVIEW_DATA_URL, dataFolderUrl, previewState, toPreviewUrl } from "../settings/preview-url.ts";
+import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning, toPreviewUrl } from "../settings/preview-url.ts";
 
 const DATA = "file:///Users/me/Library/Application%20Support/agent-screensaver/";
 
@@ -23,12 +23,33 @@ describe("toPreviewUrl", () => {
 });
 
 describe("previewState", () => {
-  it("rewrites every data folder URL in the state text", () => {
-    const state = JSON.stringify({
-      view: { background: { entry_url: `${DATA}extensions/builtin.matrix/index.js`, options: { files: [`${DATA}media/a.mov`] } } },
-    });
-    const rewritten = JSON.parse(previewState(state, DATA));
-    assert.equal(rewritten.view.background.entry_url, `${PREVIEW_DATA_URL}extensions/builtin.matrix/index.js`);
-    assert.deepEqual(rewritten.view.background.options.files, [`${PREVIEW_DATA_URL}media/a.mov`]);
+  const state = JSON.stringify({
+    view: {
+      background: { entry_url: `${DATA}extensions/builtin.aerials/index.js`, options: { files: [`${DATA}media/aerials/a.mov`] } },
+      components: [{ entry_url: `${DATA}extensions/builtin.clock/index.js`, options: {} }],
+    },
   });
+  const rewritten = JSON.parse(previewState(state, DATA));
+
+  it("loads extension entries from the preview scheme", () => {
+    assert.equal(rewritten.view.background.entry_url, `${PREVIEW_DATA_URL}extensions/builtin.aerials/index.js`);
+    assert.equal(rewritten.view.components[0].entry_url, `${PREVIEW_DATA_URL}extensions/builtin.clock/index.js`);
+  });
+
+  it("leaves option values as the extension expects them", () => {
+    // The aerials background keeps only file:// URLs; the frame maps media src instead.
+    assert.deepEqual(rewritten.view.background.options.files, [`${DATA}media/aerials/a.mov`]);
+  });
+});
+
+describe("serviceRunning", () => {
+  const cases: [string, string | null, boolean][] = [
+    ["a state from the daemon", '{"service_ok":true}', true],
+    ["the idle state without the daemon", '{"service_ok":false}', false],
+    ["no state", null, false],
+    ["text that is not JSON", "{", false],
+  ];
+  for (const [name, state, want] of cases) {
+    it(name, () => assert.equal(serviceRunning(state), want));
+  }
 });
