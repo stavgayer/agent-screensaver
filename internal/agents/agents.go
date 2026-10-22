@@ -62,6 +62,8 @@ type fields struct {
 	toolInput        map[string]any
 	notificationType string
 	message          string
+	// noTranscript is true when the payload has "transcript_path": null.
+	noTranscript bool
 }
 
 // hookFields decodes a payload. It returns false for invalid JSON or when
@@ -80,6 +82,7 @@ func hookFields(input []byte) (fields, bool) {
 	if cwd := stringField(raw, "cwd"); cwd != "" {
 		project = filepath.Base(cwd)
 	}
+	transcript, hasTranscript := raw["transcript_path"]
 	return fields{
 		hookEvent:        stringField(raw, "hook_event_name"),
 		session:          session,
@@ -89,6 +92,7 @@ func hookFields(input []byte) (fields, bool) {
 		toolInput:        toolInput,
 		notificationType: stringField(raw, "notification_type"),
 		message:          stringField(raw, "message"),
+		noTranscript:     hasTranscript && transcript == nil,
 	}, true
 }
 
