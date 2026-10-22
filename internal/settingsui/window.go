@@ -11,11 +11,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
+	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 	"agent-screensaver/internal/settings"
+	"agent-screensaver/internal/state"
+	"agent-screensaver/internal/statefile"
+	"agent-screensaver/internal/view"
 )
 
 // Service is the part of settings.Service the window uses.
@@ -53,14 +58,15 @@ func Open(p paths.Paths, svc Service, picker platform.FilePicker, window platfor
 	if _, err := os.Stat(page); err != nil {
 		return fmt.Errorf("settings page is missing, run agent-screensaver install: %w", err)
 	}
-	b := &bridge{svc: svc, picker: picker, stateFile: p.StateFile}
+	b := &bridge{svc: svc, picker: picker, paths: p, now: func() int64 { return time.Now().UnixMilli() }}
 	return window.Run(page, p.DataDir, b.handle)
 }
 
 type bridge struct {
-	svc       Service
-	picker    platform.FilePicker
-	stateFile string
+	svc    Service
+	picker platform.FilePicker
+	paths  paths.Paths
+	now    func() int64 // milliseconds, for the idle state
 	// picking is true while the open panel is up. Its modal loop still
 	// delivers the page's messages, so a call could arrive in the middle of
 	// another; those calls are refused instead of nesting.
@@ -185,15 +191,31 @@ func (b *bridge) pick(request platform.FileRequest) (string, bool, error) {
 	return b.picker.PickFile(request)
 }
 
-// state returns state.json as text, ready for the runtime's setState, or nil
-// when the daemon has not written one yet.
+// state returns state.json as text, ready for the runtime's setState. When
+// the daemon has not written one, it is an idle screen built from the
+// settings, so the preview still shows the background and the clock.
 func (b *bridge) state() (any, error) {
-	data, err := os.ReadFile(b.stateFile)
+	data, err := os.ReadFile(b.paths.StateFile)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		return b.idleState()
 	}
 	if err != nil {
 		return nil, err
+	}
+	return string(data), nil
+}
+
+// idleState is what the daemon would write with no agent activity, marked as
+// from a stopped service. Without the daemon there are no aerial clones, so
+// the aerials background falls back to Matrix, as on the real screen.
+func (b *bridge) idleState() (any, error) {
+	cfg := config.Load(b.paths.ConfigFile)
+	resolved := view.Resolve(cfg, extensions.Scan(b.paths.ExtensionsDir), nil)
+	file := statefile.Build(state.State{}, resolved, b.now())
+	file.ServiceOK = false
+	data, err := json.Marshal(file)
+	if err != nil {
+		return nil, fmt.Errorf("encode idle state: %w", err)
 	}
 	return string(data), nil
 }

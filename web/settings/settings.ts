@@ -1,6 +1,6 @@
 import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
-import { PREVIEW_DATA_URL, dataFolderUrl, previewState } from "./preview-url.ts";
+import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning } from "./preview-url.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
 interface Snapshot {
@@ -456,7 +456,7 @@ const preview = {
     } catch {
       return; // the next poll tries again
     }
-    byId("preview-empty").hidden = state !== null;
+    byId("preview-empty").hidden = serviceRunning(state);
     if (frame === undefined || frame !== this.frame || state === null || state === this.lastState) return;
     this.lastState = state;
     // "*": the frame's origin is opaque, so no named target matches it. Only

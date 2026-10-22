@@ -14,6 +14,7 @@ import (
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 	"agent-screensaver/internal/settings"
+	"agent-screensaver/internal/statefile"
 )
 
 // fakeService records every call as "Method arg arg" and fails with err.
@@ -269,12 +270,22 @@ func TestErrors(t *testing.T) {
 
 func TestState(t *testing.T) {
 	p := testPaths(t)
+	if err := (config.Config{Privacy: true, MaxFPS: 30}).Save(p.ConfigFile); err != nil {
+		t.Fatal(err)
+	}
 	window := &fakeWindow{calls: []call{{"state", ``}}}
 	if err := Open(p, &fakeService{}, &fakePicker{}, window); err != nil {
 		t.Fatal(err)
 	}
-	if window.errs[0] != nil || window.results[0] != nil {
-		t.Fatalf("missing state = %#v, %v; want nil, nil", window.results[0], window.errs[0])
+	// With no daemon there is no state.json: the preview still gets an idle
+	// screen built from the settings, marked as from a stopped service.
+	text, ok := window.results[0].(string)
+	var idle statefile.StateFile
+	if window.errs[0] != nil || !ok || json.Unmarshal([]byte(text), &idle) != nil {
+		t.Fatalf("missing state = %#v, %v; want state JSON", window.results[0], window.errs[0])
+	}
+	if idle.ServiceOK || len(idle.Cards) != 0 || !idle.View.Privacy || idle.View.MaxFPS != 30 {
+		t.Fatalf("idle state = %+v; want no service, no cards, the settings' view", idle)
 	}
 
 	const content = `{"version":1,"cards":[]}`
