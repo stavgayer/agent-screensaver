@@ -27,7 +27,6 @@ const (
 	// rewriteEveryMs refreshes generated_at_ms, so the saver can tell a live
 	// daemon from a dead one even when nothing changed.
 	rewriteEveryMs = 30_000
-	readTimeout    = 10 * time.Second
 )
 
 // tickInterval is how often Run calls Step. Polling the spool twice a second
@@ -90,6 +89,7 @@ type Daemon struct {
 
 	sources  []string
 	lastPoll map[string]int64
+	failed   map[string]bool // the last read of the source failed
 	finished map[string]bool // source finished a task since its last poll
 }
 
@@ -99,6 +99,7 @@ func New(p paths.Paths) *Daemon {
 		Logf:     log.Printf,
 		paths:    p,
 		lastPoll: map[string]int64{},
+		failed:   map[string]bool{},
 		finished: map[string]bool{},
 	}
 }
@@ -113,9 +114,17 @@ func (d *Daemon) SoundFile() string { return d.cfg.SoundFile }
 
 // SetLimits queues a provider reading; the next Step folds it into the state.
 func (d *Daemon) SetLimits(source string, readings []event.LimitReading, nowMs int64) {
+	d.failed[source] = false
 	d.pendingLimit = append(d.pendingLimit, event.Event{
 		V: event.Version, Source: source, Kind: event.KindLimits, AtMs: nowMs, Limits: readings,
 	})
+}
+
+// SetReadFailed records that a read of source failed at nowMs. The next
+// read is tried sooner than after a success, counted from the failure.
+func (d *Daemon) SetReadFailed(source string, nowMs int64) {
+	d.failed[source] = true
+	d.lastPoll[source] = nowMs
 }
 
 // Step does one round of work: no goroutines, no sleeping, only file IO.
@@ -204,11 +213,11 @@ func (d *Daemon) duePolls(nowMs int64, saverActive bool) []string {
 		if polledAt, ok := d.lastPoll[source]; ok {
 			last = &polledAt
 		}
-		if !limits.PollDue(last, saverActive, d.finished[source], nowMs) {
+		if !limits.PollDue(last, d.failed[source], saverActive, d.finished[source], nowMs) {
 			continue
 		}
-		// Marked now, not when the read ends, so a failing tool is not
-		// retried on every tick.
+		// Marked now, so a slow read is not started again on every tick;
+		// a failed read moves the mark to its end (SetReadFailed).
 		d.lastPoll[source] = nowMs
 		delete(d.finished, source)
 		due = append(due, source)
@@ -268,6 +277,27 @@ type loop struct {
 	results   chan readResult // buffered for every provider, so a read never blocks
 	saver     bool
 	writeErr  string
+	lastKind  map[string]readKind // per source, to log only changes
+}
+
+// readKind is the outcome of a provider read, for the change-only log.
+type readKind string
+
+const (
+	readOK    readKind = "ok"
+	readEmpty readKind = "empty"
+	readError readKind = "error"
+)
+
+func kindOf(read readResult) readKind {
+	switch {
+	case read.err != nil:
+		return readError
+	case len(read.readings) == 0:
+		return readEmpty
+	default:
+		return readOK
+	}
 }
 
 func newLoop(ctx context.Context, d *Daemon, w platform.SaverWatcher, s platform.SoundPlayer, providers []limits.Provider) *loop {
@@ -281,6 +311,7 @@ func newLoop(ctx context.Context, d *Daemon, w platform.SaverWatcher, s platform
 	return &loop{
 		ctx: ctx, daemon: d, watcher: w, sound: s, providers: byName,
 		inFlight: map[string]bool{},
+		lastKind: map[string]readKind{},
 		results:  make(chan readResult, len(providers)),
 	}
 }
@@ -323,22 +354,33 @@ func (l *loop) startRead(source string) {
 	l.inFlight[source] = true
 	provider := l.providers[source]
 	go func() {
-		ctx, cancel := context.WithTimeout(l.ctx, readTimeout)
+		ctx, cancel := context.WithTimeout(l.ctx, limits.ReadTimeout)
 		defer cancel()
 		readings, err := provider.Read(ctx)
 		l.results <- readResult{source: source, readings: readings, err: err}
 	}()
 }
 
+// finishRead logs a failed or empty answer only when the outcome differs
+// from the previous one of that source, so a tool that stays broken does not
+// fill the log on every poll.
 func (l *loop) finishRead(read readResult) {
 	l.inFlight[read.source] = false
-	if read.err != nil {
+	kind := kindOf(read)
+	changed := kind != l.lastKind[read.source]
+	l.lastKind[read.source] = kind
+	switch kind {
+	case readError:
 		// The previous limits stay on screen.
-		l.daemon.Logf("read %s limits: %v", read.source, read.err)
+		if changed {
+			l.daemon.Logf("read %s limits: %v", read.source, read.err)
+		}
+		l.daemon.SetReadFailed(read.source, time.Now().UnixMilli())
 		return
-	}
-	if len(read.readings) == 0 {
-		l.daemon.Logf("read %s limits: no windows in the answer", read.source)
+	case readEmpty:
+		if changed {
+			l.daemon.Logf("read %s limits: no windows in the answer", read.source)
+		}
 	}
 	l.daemon.SetLimits(read.source, read.readings, time.Now().UnixMilli())
 }

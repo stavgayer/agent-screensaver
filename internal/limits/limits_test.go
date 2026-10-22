@@ -109,24 +109,29 @@ func TestParseCodexRateLimits(t *testing.T) {
 }
 
 func TestPollDue(t *testing.T) {
-	const minute = int64(60_000)
+	const second, minute = int64(1000), int64(60_000)
 	now := 100 * minute
 	tests := []struct {
 		name     string
 		last     *int64
+		failed   bool
 		active   bool
 		finished bool
 		want     bool
 	}{
-		{"never polled and active", nil, true, false, true},
-		{"inactive never due", nil, false, true, false},
-		{"due after 5 min", int64Pointer(now - 5*minute), true, false, true},
-		{"not due at 4 min", int64Pointer(now - 4*minute), true, false, false},
-		{"due after source finished", int64Pointer(now - minute), true, true, true},
+		{"never read is due", nil, false, true, false, true},
+		{"inactive never due", nil, false, false, true, false},
+		{"inactive after failure is not due", int64Pointer(now - 40*second), true, false, false, false},
+		{"failed 20 s ago is not due", int64Pointer(now - 20*second), true, true, false, false},
+		{"failed 40 s ago is due", int64Pointer(now - 40*second), true, true, false, true},
+		{"success 4 min ago is not due", int64Pointer(now - 4*minute), false, true, false, false},
+		{"success 6 min ago is due", int64Pointer(now - 6*minute), false, true, false, true},
+		{"success 40 s ago is not due", int64Pointer(now - 40*second), false, true, false, false},
+		{"due after source finished", int64Pointer(now - minute), false, true, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := PollDue(tt.last, tt.active, tt.finished, now); got != tt.want {
+			if got := PollDue(tt.last, tt.failed, tt.active, tt.finished, now); got != tt.want {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
@@ -147,7 +152,7 @@ func TestAll(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []string
-			for _, provider := range All(tt.lookPath) {
+			for _, provider := range All(tt.lookPath, nil) {
 				got = append(got, provider.Source())
 			}
 			if !reflect.DeepEqual(got, tt.want) {
@@ -172,6 +177,49 @@ func TestToolDirs(t *testing.T) {
 	want := []string{"/h/.nvm/versions/node/v25.5.0/bin", "/h/.nvm/versions/node/v24.14.0/bin"}
 	if !reflect.DeepEqual(nvm, want) {
 		t.Errorf("nvm dirs = %v, want newest first %v", nvm, want)
+	}
+}
+
+func TestToolDirsSortNvmVersionsNumerically(t *testing.T) {
+	glob := func(string) ([]string, error) {
+		return []string{
+			"/h/.nvm/versions/node/v9.11.2/bin",
+			"/h/.nvm/versions/node/v100.0.0/bin",
+			"/h/.nvm/versions/node/v25.5.0/bin",
+			"/h/.nvm/versions/node/v25.10.1/bin",
+			"/h/.nvm/versions/node/system/bin",
+		}, nil
+	}
+	got := ToolDirs("/h", glob)
+	want := []string{
+		"/h/.nvm/versions/node/v100.0.0/bin",
+		"/h/.nvm/versions/node/v25.10.1/bin",
+		"/h/.nvm/versions/node/v25.5.0/bin",
+		"/h/.nvm/versions/node/v9.11.2/bin",
+		"/h/.nvm/versions/node/system/bin",
+	}
+	if tail := got[len(got)-len(want):]; !reflect.DeepEqual(tail, want) {
+		t.Errorf("nvm dirs = %v, want %v", tail, want)
+	}
+}
+
+func TestCodexEnv(t *testing.T) {
+	tests := []struct {
+		name string
+		base []string
+		want []string
+	}{
+		{"folder goes first, old PATH follows", []string{"A=1", "PATH=/usr/bin:/bin"}, []string{"A=1", "PATH=/n/bin:/usr/bin:/bin"}},
+		{"no PATH gives only the folder, no empty entry", []string{"A=1"}, []string{"A=1", "PATH=/n/bin"}},
+		{"empty PATH gives only the folder, no empty entry", []string{"PATH="}, []string{"PATH=/n/bin"}},
+		{"nil base", nil, []string{"PATH=/n/bin"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := codexEnv(tt.base, "/n/bin"); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -250,7 +298,7 @@ func TestCodexRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			got, err := Codex{Bin: fakeCodex(t, tt.script)}.Read(ctx)
+			got, err := Codex{Bin: fakeCodex(t, tt.script), Env: os.Environ()}.Read(ctx)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -268,7 +316,7 @@ func TestCodexReadPutsItsFolderFirstOnPath(t *testing.T) {
 		`echo "{\"id\":2,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":$p}}}}"`
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	got, err := Codex{Bin: fakeCodex(t, script)}.Read(ctx)
+	got, err := Codex{Bin: fakeCodex(t, script), Env: os.Environ()}.Read(ctx)
 	if err != nil || len(got) != 1 || got[0].UsedPercent != 1 {
 		t.Errorf("got %+v, %v; want one reading with 1 (folder first on PATH)", got, err)
 	}
@@ -284,7 +332,7 @@ func TestCodexReadTimeoutKillsProcessGroup(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, err := Codex{Bin: script}.Read(ctx)
+	_, err := Codex{Bin: script, Env: os.Environ()}.Read(ctx)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want DeadlineExceeded", err)
 	}
@@ -314,9 +362,9 @@ func TestCodexReadLive(t *testing.T) {
 	if err != nil {
 		t.Skip("codex is not on PATH")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), liveTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), ReadTimeout)
 	defer cancel()
-	readings, err := Codex{Bin: bin}.Read(ctx)
+	readings, err := Codex{Bin: bin, Env: os.Environ()}.Read(ctx)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}

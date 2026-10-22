@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"agent-screensaver/internal/event"
 )
@@ -35,7 +34,6 @@ import (
 const (
 	codexBinary       = "codex"
 	rateLimitsRequest = 2
-	liveTimeout       = 10 * time.Second
 	// Resets above this are milliseconds: as seconds it would be year 33658.
 	millisecondsThreshold = int64(1e12)
 	handshake             = `{"id":1,"method":"initialize","params":{"clientInfo":{"name":"agent-screensaver","version":"1"}}}` + "\n" +
@@ -46,6 +44,9 @@ const (
 // Codex reads limits through the Codex app-server.
 type Codex struct {
 	Bin string
+	// Env is the environment the child starts with. The caller passes it in
+	// (os.Environ() in the daemon) so tests never read the real one.
+	Env []string
 }
 
 // Source implements Provider.
@@ -60,7 +61,7 @@ func (codex Codex) Read(ctx context.Context) ([]event.LimitReading, error) {
 	cmd.Cancel = func() error { return killGroup(cmd) }
 	// codex is a script with "#!/usr/bin/env node". Under launchd the PATH
 	// has no node, so its own folder (where nvm keeps node) goes first.
-	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(codex.Bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cmd.Env = codexEnv(codex.Env, filepath.Dir(codex.Bin))
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("codex stdin: %w", err)
@@ -88,6 +89,26 @@ func (codex Codex) Read(ctx context.Context) ([]event.LimitReading, error) {
 		return nil, err
 	}
 	return ParseCodexRateLimits(result), nil
+}
+
+// codexEnv returns base with PATH replaced by binDir followed by the old
+// PATH. An empty old PATH adds nothing: a trailing empty entry would mean
+// the current folder.
+func codexEnv(base []string, binDir string) []string {
+	const prefix = "PATH="
+	pathValue := ""
+	env := make([]string, 0, len(base)+1)
+	for _, entry := range base {
+		if value, ok := strings.CutPrefix(entry, prefix); ok {
+			pathValue = value
+			continue
+		}
+		env = append(env, entry)
+	}
+	if pathValue != "" {
+		binDir += string(os.PathListSeparator) + pathValue
+	}
+	return append(env, prefix+binDir)
 }
 
 func killGroup(cmd *exec.Cmd) error {

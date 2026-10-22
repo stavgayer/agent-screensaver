@@ -276,6 +276,59 @@ func TestFinishReadLogsFailureAndEmptyAnswer(t *testing.T) {
 	}
 }
 
+func TestFinishReadLogsOnlyWhenTheOutcomeChanges(t *testing.T) {
+	boom := readResult{source: "codex", err: errors.New("boom")}
+	empty := readResult{source: "codex"}
+	ok := readResult{source: "codex", readings: []event.LimitReading{{Window: event.Plan, UsedPercent: 1}}}
+	tests := []struct {
+		name  string
+		reads []readResult
+		want  int
+	}{
+		{"same error twice logs once", []readResult{boom, boom, boom}, 1},
+		{"same empty twice logs once", []readResult{empty, empty}, 1},
+		{"error then empty logs both", []readResult{boom, empty}, 2},
+		{"error, ok, error logs both errors", []readResult{boom, ok, boom}, 2},
+		{"ok is quiet", []readResult{ok, ok}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, _ := newTestDaemon(t)
+			logs := 0
+			d.Logf = func(string, ...any) { logs++ }
+			loop := newLoop(context.Background(), d, &fakeWatcher{}, &fakeSound{}, nil)
+			for _, read := range tt.reads {
+				loop.finishRead(read)
+			}
+			if logs != tt.want {
+				t.Errorf("logged %d times, want %d", logs, tt.want)
+			}
+		})
+	}
+}
+
+func TestFailedReadIsRetriedAfter30sButSuccessWaits5Min(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	d.SetSources("codex")
+	if got := d.Step(0, true).PollSources; !slices.Equal(got, []string{"codex"}) {
+		t.Fatalf("first step polls %v", got)
+	}
+	d.SetReadFailed("codex", 1_000)
+	if got := d.Step(20_000, true).PollSources; got != nil {
+		t.Errorf("19 s after a failure polled %v", got)
+	}
+	if got := d.Step(31_000, true).PollSources; !slices.Equal(got, []string{"codex"}) {
+		t.Errorf("30 s after a failure polled %v, want codex", got)
+	}
+	d.SetLimits("codex", []event.LimitReading{{Window: event.Plan, UsedPercent: 1}}, 32_000)
+	if got := d.Step(100_000, true).PollSources; got != nil {
+		t.Errorf("after a success polled %v within 5 min", got)
+	}
+	if got := d.Step(31_000+5*60_000, true).PollSources; !slices.Equal(got, []string{"codex"}) {
+		t.Errorf("5 min after a success polled %v, want codex", got)
+	}
+}
+
 func TestIgnoredProjectsNeverReachTheScreen(t *testing.T) {
 	tests := []struct {
 		name      string
