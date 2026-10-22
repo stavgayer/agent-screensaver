@@ -65,6 +65,15 @@ func TestApply(t *testing.T) {
 				Title: "Fix bug", StartedAtMs: 1000, UpdatedAtMs: 3000}},
 		},
 		{
+			name: "started with an empty title keeps the previous title",
+			events: []event.Event{
+				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),
+				claudeEvent("s1", event.KindStarted, 2000, "api", ""),
+			},
+			want: []Card{{Source: "claude", Session: "s1", Kind: KindRunning, Project: "api",
+				Title: "Fix bug", StartedAtMs: 2000, UpdatedAtMs: 2000}},
+		},
+		{
 			name: "approval keeps prompt title and sets request",
 			events: []event.Event{
 				claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug"),

@@ -29,6 +29,15 @@ Any program can be a source. To be one, write one JSON file with one event into 
 | `title` | string | no | The text shown on the card. |
 | `limits` | list | no | Usage limit readings. Used with the `limits` kind. |
 
+## Card titles from prompts
+
+The Claude Code and Codex hooks make the card title from the prompt the user typed. Tools often add text to a prompt that the user did not write. The hooks skip that text:
+
+- Tag blocks at the start, such as `<system-reminder>...</system-reminder>`, `<task-notification>`, `<agent-message ...>` or `<command-name>`. A lone tag on its own line is skipped too.
+- Banner lines made of dashes, such as `--- MODE SWITCH ---`.
+
+The title is the first human text that remains. If nothing human remains, the event has no title, and the card keeps the title it already had. A file mention such as `@"/Users/me/photo.png"` shows only the file name (`photo.png`). Secrets are masked first, then the title is cut to 40 characters.
+
 Two sessions with the same `source` and different `session` values are two cards.
 
 ## Kinds

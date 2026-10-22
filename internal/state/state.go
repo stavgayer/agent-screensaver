@@ -123,7 +123,11 @@ func applyToCard(card *Card, incoming event.Event) {
 	switch incoming.Kind {
 	case event.KindStarted:
 		card.Kind = KindRunning
-		card.Title = incoming.Title
+		// An empty title means the prompt had only machine text: keep the
+		// title the card already has.
+		if incoming.Title != "" {
+			card.Title = incoming.Title
+		}
 		card.StartedAtMs = incoming.AtMs
 		card.Request = ""
 		card.ApprovalSinceMs = nil

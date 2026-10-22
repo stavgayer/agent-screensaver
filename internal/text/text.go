@@ -2,6 +2,7 @@
 package text
 
 import (
+	"path"
 	"regexp"
 	"strings"
 )
@@ -67,6 +68,91 @@ func MaskSecrets(s string) string {
 func ShortTitle(s string) string {
 	line := strings.Join(strings.Fields(MaskSecrets(firstNonEmptyLine(s))), " ")
 	return truncateAtWord([]rune(line), TitleMax)
+}
+
+// PromptTitle makes a card title from what the user typed. Tools add text
+// to prompts that the user never wrote: tag blocks such as <system-reminder>
+// or <task-notification>, and banner lines such as "--- MODE SWITCH ---".
+// Those are skipped and the first human text is used. A file mention
+// (@"/a/b/photo.png") shows only the file name. Secrets are masked before
+// the cut, like in ShortTitle. The result is empty when nothing human is left.
+func PromptTitle(prompt string) string {
+	line := firstNonEmptyLine(firstHumanText(prompt))
+	return ShortTitle(replaceFileMentions(line))
+}
+
+var (
+	// An opening tag at the start of the text, with attributes.
+	openTag  = regexp.MustCompile(`^<([A-Za-z][A-Za-z0-9_:.-]*)(?:\s[^<>]*)?(/?)>`)
+	closeTag = regexp.MustCompile(`^</[A-Za-z][A-Za-z0-9_:.-]*>`)
+	banner   = regexp.MustCompile(`^(?:-{3,}|-{3,}.*-{3,})$`)
+	// @"path with spaces", @'path', or @path that has a slash in it.
+	quotedMention = regexp.MustCompile(`@(?:"([^"]+)"|'([^']+)')`)
+	plainMention  = regexp.MustCompile(`@(\S*/\S+)`)
+)
+
+// firstHumanText drops leading machine-made parts and returns the rest.
+func firstHumanText(s string) string {
+	for {
+		s = strings.TrimLeft(s, " \t\r\n")
+		if rest, ok := skipTagBlock(s); ok {
+			s = rest
+		} else if rest, ok := skipBanner(s); ok {
+			s = rest
+		} else {
+			return s
+		}
+	}
+}
+
+// skipTagBlock removes <tag ...>...</tag>, a self-closing tag, a stray
+// closing tag, or a lone opening tag on its own line. An opening tag with
+// text after it and no closing tag (<Button> does not render) is the
+// user's own words and is kept.
+func skipTagBlock(s string) (string, bool) {
+	if closing := closeTag.FindString(s); closing != "" {
+		return s[len(closing):], true
+	}
+	match := openTag.FindStringSubmatch(s)
+	if match == nil {
+		return "", false
+	}
+	afterTag := s[len(match[0]):]
+	if match[2] == "/" {
+		return afterTag, true
+	}
+	closing := "</" + match[1] + ">"
+	if end := strings.Index(afterTag, closing); end >= 0 {
+		return afterTag[end+len(closing):], true
+	}
+	lineEnd := strings.IndexByte(afterTag, '\n')
+	if lineEnd < 0 {
+		lineEnd = len(afterTag)
+	}
+	if strings.TrimSpace(afterTag[:lineEnd]) == "" {
+		return afterTag[lineEnd:], true
+	}
+	return "", false
+}
+
+// skipBanner removes a first line made of --- (alone or around a label).
+func skipBanner(s string) (string, bool) {
+	line, rest, _ := strings.Cut(s, "\n")
+	if !banner.MatchString(strings.TrimSpace(line)) {
+		return "", false
+	}
+	return rest, true
+}
+
+// replaceFileMentions turns @path into the file name. Real paths can be long
+// and the secret mask would turn them into •••.
+func replaceFileMentions(line string) string {
+	line = quotedMention.ReplaceAllStringFunc(line, func(mention string) string {
+		return path.Base(strings.Trim(mention[1:], `"'`))
+	})
+	return plainMention.ReplaceAllStringFunc(line, func(mention string) string {
+		return path.Base(mention[1:])
+	})
 }
 
 func firstNonEmptyLine(s string) string {

@@ -139,3 +139,43 @@ func TestShortTitleLongWordIsHardCut(t *testing.T) {
 		t.Fatalf("title has %d runes, want %d", n, TitleMax)
 	}
 }
+
+func TestPromptTitle(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"normal prompt", "Fix the login bug", "Fix the login bug"},
+		{"normal prompt is cut at 40", "Refactor the authentication module so it uses the new session store", "Refactor the authentication module so…"},
+		{"lone agent-message tag", `<agent-message from="a005f5d42630ca89f">`, ""},
+		{"agent-message block with body", "<agent-message from=\"a005f5d42630ca89f\">\nplease continue\n</agent-message>", ""},
+		{"lone task-notification tag", "<task-notification>", ""},
+		{"task-notification block", "<task-notification>\n<task-id>x1</task-id>\n<status>done</status>\n</task-notification>", ""},
+		{"only a tag block", "<system-reminder>\nUse the skill.\n</system-reminder>", ""},
+		{"tag block then human text", "<system-reminder>\nUse the skill.\n</system-reminder>\nFix the login bug", "Fix the login bug"},
+		{"several tag blocks then human text", "<command-name>/clear</command-name>\n<local-command-stdout></local-command-stdout>\n\nAdd a retry", "Add a retry"},
+		{"tag block and text on one line", "<system-reminder>x</system-reminder> Fix it", "Fix it"},
+		{"banner only", "--- MODE SWITCH: PROGRESS SUMMARY ---", ""},
+		{"banner then human text", "--- MODE SWITCH: PROGRESS SUMMARY ---\nSummarize what changed", "Summarize what changed"},
+		{"plain dashes line", "-----\nFix it", "Fix it"},
+		{"tag then banner then text", "<system-reminder>x</system-reminder>\n--- NOTE ---\nFix it", "Fix it"},
+		{"unclosed tag with text is the user's", "<Button> does not render", "<Button> does not render"},
+		{"less-than sign is not a tag", "<3 this app", "<3 this app"},
+		{"dash in a sentence is kept", "--force is not working", "--force is not working"},
+		{"quoted file mentions show the file name", `@"/Users/me/Desktop/IMG_7324.HEIC" @"/Users/me/Desktop/IMG_7325.HEIC"`, "IMG_7324.HEIC IMG_7325.HEIC"},
+		{"quoted path with spaces", `@"/Users/me/My Photos/beach day.png" what is this`, "beach day.png what is this"},
+		{"plain file mention", "look at @src/app/main.go please", "look at main.go please"},
+		{"handle without slash is kept", "ask @alice about it", "ask @alice about it"},
+		{"mention and secret", "@/tmp/notes.txt TOKEN=abc123", "notes.txt TOKEN=•••"},
+		{"secret is masked before the cut", "export TOKEN=supersecretvalue and then do many more things after", "export TOKEN=••• and then do many more…"},
+		{"empty", "  \n ", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PromptTitle(tt.input); got != tt.want {
+				t.Fatalf("PromptTitle(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

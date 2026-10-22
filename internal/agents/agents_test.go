@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,6 +142,31 @@ func TestDescribeTool(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("DescribeTool = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPromptWithOnlyInjectedTextHasNoTitle(t *testing.T) {
+	tests := []struct {
+		name   string
+		prompt string
+		want   string
+	}{
+		{"tag block", "<task-notification>", ""},
+		{"tag block then prompt", "<system-reminder>x</system-reminder>\nFix it", "Fix it"},
+		{"attached files", `@"/Users/me/IMG_7324.HEIC"`, "IMG_7324.HEIC"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter, _ := ByName("claude")
+			input, err := json.Marshal(map[string]string{"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": tt.prompt})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := adapter.Map(input, testNowMs)
+			if !ok || got.Title != tt.want {
+				t.Errorf("got %q (ok=%v), want %q", got.Title, ok, tt.want)
 			}
 		})
 	}

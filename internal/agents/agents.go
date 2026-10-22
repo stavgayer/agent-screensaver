@@ -102,7 +102,7 @@ func mapCommon(source string, hook fields, nowMs int64) (event.Event, bool) {
 	title := ""
 	switch hook.hookEvent {
 	case hookUserPromptSubmit:
-		kind, title = event.KindStarted, text.ShortTitle(hook.prompt)
+		kind, title = event.KindStarted, text.PromptTitle(hook.prompt)
 	case hookPreToolUse:
 		kind, title = event.KindToolIntent, DescribeTool(hook.toolName, hook.toolInput)
 	case hookPermission:
