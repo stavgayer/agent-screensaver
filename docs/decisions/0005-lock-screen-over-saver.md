@@ -33,6 +33,8 @@ In two runs, the owner started the saver, waited, moved the mouse and then unloc
 - The runtime puts the class `lock-ui` on `<html>`. The CSS fades out `#screen` (all component regions) and the service line in 0.25 s. The background is not touched, so it keeps playing. With reduced motion the fade stays, because it has no travel; this is the same rule as the other fades on the page.
 - Anything but `true` shows the components, so a bad call can never leave the screen empty.
 - If `screenLockUIIsHidden` comes without `willstop` (the lock screen timed out while the saver keeps running), the components come back. The owner's runs did not hit this case: the lock screen stayed until unlock.
+- `startAnimation` always sends `setLockUI(false)`: the lock screen cannot be up when the saver starts, and the System Settings preview process never quits, so a missed `screenLockUIIsHidden` must not leave the components hidden there.
+- A saver view created while the lock screen already shows (for example a display plugged in during the run) starts with the components shown, because it missed `screenLockUIIsShown`. This is rare, and it shows the old two-clock screen only on that display.
 - Extensions do not change. Components stay mounted while hidden.
 
 ## Alternatives

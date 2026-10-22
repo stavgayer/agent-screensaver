@@ -22,7 +22,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         // legacyScreenSaver's window always reports itself as covered, so WebKit would hide
         // the page and pause it: black screen. Ignore the window; we hide the view ourselves
         // in stopAnimation (decision 0004).
-        if webView.responds(to: NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")) {
+        if Self.canIgnoreOcclusion {
             webView.setValue(false, forKey: "windowOcclusionDetectionEnabled")
         }
         // The thumbnail view starts at 0 x 0 and grows later; the web view follows it.
@@ -34,6 +34,15 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError("not loaded from a nib") }
+
+    deinit { removeHostObservers() }
+
+    /// Checked once per process; a missing setter means the page may be black again (decision 0004).
+    private static let canIgnoreOcclusion: Bool = {
+        let available = WKWebView.instancesRespond(to: NSSelectorFromString("_setWindowOcclusionDetectionEnabled:"))
+        if !available { NSLog("AgentScreensaver: WKWebView has no _setWindowOcclusionDetectionEnabled:, the page may stay hidden") }
+        return available
+    }()
 
     // MARK: - Paths
 
@@ -63,6 +72,9 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     override func startAnimation() {
         super.startAnimation()
         webView.isHidden = false
+        // The lock screen cannot be up when the saver starts; a missed ...Hidden (the System
+        // Settings preview never quits) must not leave the components hidden.
+        setLockUI(false)
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.pushStateIfChanged() }
     }
@@ -98,6 +110,12 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         }
     }
 
+    private func removeHostObservers() {
+        let center = DistributedNotificationCenter.default()
+        hostObservers.forEach(center.removeObserver)
+        hostObservers = []
+    }
+
     private func setLockUI(_ shown: Bool) {
         lockUIShown = shown
         pushLockUI()
@@ -111,6 +129,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     /// legacyScreenSaver does not always quit after the saver stops (decision 0001), so quit it ourselves.
     /// A preview runs inside System Settings' process tree and must stay alive.
     private func shutDown() {
+        removeHostObservers()
         timer?.invalidate()
         timer = nil
         webView.stopLoading()
