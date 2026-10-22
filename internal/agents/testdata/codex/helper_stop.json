@@ -1,0 +1,1 @@
+{"session_id":"44444444-4444-4444-8444-444444444444","turn_id":"55555555-5555-4555-8555-555555555555","transcript_path":null,"cwd":"/Users/example/workspace","hook_event_name":"Stop","model":"gpt-example-mini","permission_mode":"default","stop_hook_active":false,"last_assistant_message":"{\"title\":\"Refactor the parser\"}"}

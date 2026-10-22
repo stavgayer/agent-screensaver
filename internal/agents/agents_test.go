@@ -9,7 +9,11 @@ import (
 	"agent-screensaver/internal/event"
 )
 
-const testNowMs = 1_760_000_000_000
+const (
+	testNowMs     = 1_760_000_000_000
+	claudeSession = "11111111-1111-4111-8111-111111111111"
+	codexSession  = "33333333-3333-4333-8333-333333333333"
+)
 
 func TestMap(t *testing.T) {
 	tests := []struct {
@@ -22,24 +26,31 @@ func TestMap(t *testing.T) {
 		wantProject string
 		wantTitle   string
 	}{
-		{"claude started", "claude", "user_prompt_submit.json", true, event.KindStarted, "s1", "my-project", "Fix the login bug and add a regression…"},
-		{"claude tool intent", "claude", "pre_tool_use.json", true, event.KindToolIntent, "s1", "my-project", "Bash: npm run migrate"},
+		{"claude started", "claude", "user_prompt_submit.json", true, event.KindStarted, claudeSession, "workspace", "Fix the login bug and add a regression…"},
+		{"claude tool intent", "claude", "pre_tool_use.json", true, event.KindToolIntent, claudeSession, "workspace", "Bash: npm run migrate"},
 		{"claude permission notification", "claude", "notification_permission.json", true, event.KindApproval, "s1", "my-project", ""},
 		{"claude idle notification is ignored", "claude", "notification_idle.json", false, "", "", "", ""},
-		{"claude permission request", "claude", "permission_request.json", true, event.KindApproval, "s1", "my-project", "Edit: /home/user/my-project/main.go"},
-		{"claude resumed", "claude", "post_tool_use.json", true, event.KindResumed, "s1", "my-project", ""},
-		{"claude finished", "claude", "stop.json", true, event.KindFinished, "s1", "my-project", ""},
-		{"claude ended", "claude", "session_end.json", true, event.KindEnded, "s1", "my-project", ""},
+		{"claude permission request", "claude", "permission_request.json", true, event.KindApproval, claudeSession, "workspace", "Bash: printf 'hi\\n' > /tmp/hello.txt &&…"},
+		{"claude edit permission request", "claude", "permission_request_edit.json", true, event.KindApproval, "s1", "my-project", "Edit: /home/user/my-project/main.go"},
+		{"claude resumed", "claude", "post_tool_use.json", true, event.KindResumed, claudeSession, "workspace", ""},
+		{"claude finished", "claude", "stop.json", true, event.KindFinished, claudeSession, "workspace", ""},
+		{"claude ended", "claude", "session_end.json", true, event.KindEnded, claudeSession, "workspace", ""},
 		{"claude missing session is ignored", "claude", "missing_session.json", false, "", "", "", ""},
 		{"claude unknown event is ignored", "claude", "unknown_event.json", false, "", "", "", ""},
 		{"claude invalid json is ignored", "claude", "invalid.json", false, "", "", "", ""},
-		{"codex started", "codex", "user_prompt_submit.json", true, event.KindStarted, "thr_1", "codex-app", "Refactor the parser"},
-		{"codex tool intent joins command array", "codex", "pre_tool_use.json", true, event.KindToolIntent, "thr_1", "codex-app", "shell: git status"},
-		{"codex permission request", "codex", "permission_request.json", true, event.KindApproval, "thr_1", "codex-app", "apply_patch: src/parser.go"},
-		{"codex resumed", "codex", "post_tool_use.json", true, event.KindResumed, "thr_1", "codex-app", ""},
-		{"codex finished", "codex", "stop.json", true, event.KindFinished, "thr_1", "codex-app", ""},
-		{"codex ended", "codex", "session_end.json", true, event.KindEnded, "thr_1", "codex-app", ""},
+		{"codex started", "codex", "user_prompt_submit.json", true, event.KindStarted, codexSession, "workspace", "Refactor the parser"},
+		{"codex tool intent", "codex", "pre_tool_use.json", true, event.KindToolIntent, codexSession, "workspace", "Bash: git status"},
+		{"codex tool intent joins command array", "codex", "pre_tool_use_command_array.json", true, event.KindToolIntent, "thr_1", "codex-app", "shell: git status"},
+		{"codex permission request", "codex", "permission_request.json", true, event.KindApproval, codexSession, "workspace", "Bash: touch /tmp/hello3.txt"},
+		{"codex apply_patch permission request", "codex", "permission_request_apply_patch.json", true, event.KindApproval, "thr_1", "codex-app", "apply_patch: src/parser.go"},
+		{"codex resumed", "codex", "post_tool_use.json", true, event.KindResumed, codexSession, "workspace", ""},
+		{"codex resumed after mcp tool", "codex", "post_tool_use_mcp.json", true, event.KindResumed, codexSession, "workspace", ""},
+		{"codex finished", "codex", "stop.json", true, event.KindFinished, codexSession, "workspace", ""},
+		{"codex ended", "codex", "session_end.json", true, event.KindEnded, codexSession, "workspace", ""},
 		{"codex session from thread_id", "codex", "thread_id_only.json", true, event.KindFinished, "th9", "codex-app", ""},
+		{"codex helper prompt is ignored", "codex", "helper_user_prompt_submit.json", false, "", "", "", ""},
+		{"codex helper stop is ignored", "codex", "helper_stop.json", false, "", "", "", ""},
+		{"codex helper session end is ignored", "codex", "helper_session_end.json", false, "", "", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

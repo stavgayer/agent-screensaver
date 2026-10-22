@@ -1,0 +1,1 @@
+{"session_id":"44444444-4444-4444-8444-444444444444","turn_id":"55555555-5555-4555-8555-555555555555","transcript_path":null,"cwd":"/Users/example/workspace","hook_event_name":"UserPromptSubmit","model":"gpt-example-mini","permission_mode":"default","prompt":"Generate a concise, single-line task title of at most 36 characters.\n\nUser prompt:\nRefactor the parser"}

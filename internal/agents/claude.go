@@ -8,7 +8,8 @@ import (
 
 // Field names (hook_event_name, session_id, cwd, prompt, tool_name,
 // tool_input, notification_type, message) come from
-// https://code.claude.com/docs/en/hooks and are re-checked in Task 6.1.
+// https://code.claude.com/docs/en/hooks and were checked against real payloads from Claude Code 2.1.308 in Task 6.1
+// (no Notification payload was recorded; its fixtures come from the docs).
 
 // Claude maps Claude Code hook input.
 type Claude struct{}
