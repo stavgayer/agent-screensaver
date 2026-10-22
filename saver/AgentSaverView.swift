@@ -18,6 +18,15 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         super.init(frame: frame, isPreview: isPreview)
         webView.navigationDelegate = self
         webView.setValue(false, forKey: "drawsBackground")
+        // legacyScreenSaver's window always reports itself as covered, so WebKit would hide
+        // the page and pause it: black screen. Ignore the window; we hide the view ourselves
+        // in stopAnimation (decision 0004).
+        if webView.responds(to: NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")) {
+            webView.setValue(false, forKey: "windowOcclusionDetectionEnabled")
+        }
+        // The thumbnail view starts at 0 x 0 and grows later; the web view follows it.
+        webView.frame = bounds
+        webView.autoresizingMask = [.width, .height]
         addSubview(webView)
         observeWillStop()
         loadRuntime()
@@ -50,19 +59,17 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
 
     // MARK: - Lifecycle
 
-    override func layout() {
-        super.layout()
-        webView.frame = bounds
-    }
-
     override func startAnimation() {
         super.startAnimation()
+        webView.isHidden = false
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.pushStateIfChanged() }
     }
 
     override func stopAnimation() {
         super.stopAnimation()
+        // A hidden view makes the page hidden, so the runtime pauses its frames and videos.
+        webView.isHidden = true
         timer?.invalidate()
         timer = nil
     }
