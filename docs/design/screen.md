@@ -130,3 +130,44 @@ Taken with the saver harness (a scratchpad copy that takes the window size from 
 Numbers are WCAG contrast ratios computed for the card colors over a white frame, a bright sky (200, 225, 250) and a dark frame. The weakest case is white. Checked by eye on two real aerials, one hazy city at dusk and one dark night street: the approval card is the first thing the eye finds in both.
 
 The settings card shows a dusk-sky tile for any theme whose background is `builtin.aerials`, with the clock underlined in the theme accent; the subtitle is the background's name, "Apple aerials".
+
+## Understandable task cards (22 October)
+
+The owner looked at real cards from across the room and could not tell what each card was about or whether anything still ran. The state was a small grey line ("Claude · running 24m") above the title, and nothing said that a done task still had jobs in the background.
+
+### What each card answers now
+
+Three lines, the same height in every state, so nothing shifts when a card changes:
+
+1. **State**, in words and in its color, with a drawn mark: "Working · 24m" (accent, a dot that breathes), "Done · 3m ago" (`--done`, a check), "No activity · 1h" (white, an empty ring), "Check the terminal" (`--attention`, a dot). Under one minute, done reads "Done · just now".
+2. **What**: the title, the start of the prompt. In privacy mode the project takes its place, and with neither, the agent.
+3. **Where**: the project, the agent, and "N in background" in the accent when background jobs still run.
+
+### What changed
+
+| Change | Why |
+| --- | --- |
+| The state line comes first, in sentence case, 2.2vmin semibold in the state's color | The color and the first word answer "is it working, done or stuck?" from 3 m. The grey 1.8vmin meta line did not. |
+| Plain words: Working, Done, No activity, Check the terminal | Everyday words instead of "running" and "finished"; each fits one line on the narrowest card. |
+| Drawn marks: breathing dot, check, empty ring, solid dot | A second cue next to the color. The breathing dot (opacity only, 2.4 s, sine ease, alternate) says "alive"; reduced motion keeps it still. Its delay follows the clock, so the redraw every minute does not restart it. |
+| The check moved from the title to the state line | The title is now only the task; the state lives in one place. |
+| The card border takes the state's color (30% mix) | The state reads even when the text is too small to read. |
+| The last line is "project · agent", then "N in background" in the accent | Where the task runs, and whether anything still runs after it is done. |
+| On a narrow card the project shortens first, down to a few letters; with a count, a card under 33vmin wide leaves the agent out | The count is the answer to "is anything still running", so it is never cut. Checked with four cards at 1024x768. |
+| Each part of the last line is isolated (`dir="auto"`) | A Hebrew project name keeps its own direction next to English words. |
+
+The approval card in the center is unchanged.
+
+### Checks
+
+- `impeccable detect` on the task row: no findings. `design-taste-frontend` lint (`--app`) on the task row: 0 FAIL, 0 WARN.
+- Motion: one animated property (opacity of the dot). No layout change: every line is one line with an ellipsis.
+
+### Screenshots
+
+Saver harness, live times, Default (Matrix) and Calm (a real aerial). Not committed.
+
+- Before: `<scratchpad>/t62/shots/before-idle-default-1512x982.png`, `<scratchpad>/t62/shots/before-idle-default-1024x768.png`, `<scratchpad>/t62/shots/before-attention-default-1512x982.png`, `<scratchpad>/t62/shots/before-attention-default-1024x768.png`, `<scratchpad>/t62/shots/before-idle-calm-1512x982.png`, `<scratchpad>/t62/shots/before-idle-calm-1024x768.png`, `<scratchpad>/t62/shots/before-attention-calm-1512x982.png`, `<scratchpad>/t62/shots/before-attention-calm-1024x768.png`
+- After: the same names with `after-` in place of `before-`.
+- Worst case (Hebrew title and project, long title, long project, no activity, check the terminal, 12 in background, four cards): `<scratchpad>/t62/shots/after-state-stress-default-1512x982.png`, `<scratchpad>/t62/shots/after-state-stress-default-1024x768.png`, `<scratchpad>/t62/shots/after-state-stress-calm-1512x982.png`, `<scratchpad>/t62/shots/after-state-stress-calm-1024x768.png`
+- Settings, General, Ignored projects (scratch copy of the page with a stub bridge): `<scratchpad>/t62/shots/settings-ignored-projects.jpg`

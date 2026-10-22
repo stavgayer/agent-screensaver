@@ -29,7 +29,8 @@
       "project": "web-app",
       "title": "Fix flaky test",
       "started_at_ms": -1800000,
-      "updated_at_ms": -480000
+      "updated_at_ms": -480000,
+      "background": 2
     },
     {
       "source": "claude",

@@ -5,7 +5,7 @@ import { displayName, formatResetDate } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
 import { orderLimits, ringCaption, ringCaptionLines, ringPercent } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha, numberOption } from "../src/builtins/matrix/logic.ts";
-import { taskCards, taskLabel } from "../src/builtins/task-row/logic.ts";
+import { taskCards, taskHeading, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
 
 const MINUTE_MS = 60_000;
 const NOW_MS = 10_000_000_000;
@@ -39,21 +39,38 @@ describe("displayName", () => {
   }
 });
 
-describe("taskLabel", () => {
-  it("task_row_label_running", () => {
-    const running = card({ kind: "running", started_at_ms: NOW_MS - 24 * MINUTE_MS });
-    assert.equal(taskLabel(running, NOW_MS), "running 24m");
-  });
+describe("taskStatus", () => {
+  const cases: Array<[string, Partial<Card>, { tone: string; text: string }]> = [
+    ["running counts from the start", { kind: "running", started_at_ms: NOW_MS - 24 * MINUTE_MS }, { tone: "working", text: "Working · 24m" }],
+    ["running over an hour", { kind: "running", started_at_ms: NOW_MS - 72 * MINUTE_MS }, { tone: "working", text: "Working · 1h 12m" }],
+    ["running just started", { kind: "running", started_at_ms: NOW_MS - 10_000 }, { tone: "working", text: "Working · <1m" }],
+    ["done counts from the finish", { kind: "finished", updated_at_ms: NOW_MS - 3 * MINUTE_MS }, { tone: "done", text: "Done · 3m ago" }],
+    ["done under a minute ago", { kind: "finished", updated_at_ms: NOW_MS - 20_000 }, { tone: "done", text: "Done · just now" }],
+    ["no activity counts from the last event", { kind: "no_activity", updated_at_ms: NOW_MS - 60 * MINUTE_MS }, { tone: "quiet", text: "No activity · 1h" }],
+    ["unknown sends you to the terminal", { kind: "unknown" }, { tone: "check", text: "Check the terminal" }],
+    ["approval needs you", { kind: "approval" }, { tone: "check", text: "Needs you" }],
+  ];
+  for (const [name, overrides, want] of cases) {
+    it(name, () => assert.deepEqual(taskStatus(card(overrides), NOW_MS), want));
+  }
+});
 
-  it("task_row_label_finished", () => {
-    const finished = card({ kind: "finished", updated_at_ms: NOW_MS - 8 * MINUTE_MS });
-    assert.equal(taskLabel(finished, NOW_MS), "finished 8m ago");
-  });
-
-  it("unknown and no_activity have fixed labels", () => {
-    assert.equal(taskLabel(card({ kind: "unknown" }), NOW_MS), "check the terminal");
-    assert.equal(taskLabel(card({ kind: "no_activity" }), NOW_MS), "no activity");
-  });
+describe("taskHeading and taskWhere", () => {
+  const cases: Array<[string, Partial<Card>, string, { parts: string[]; background: string }]> = [
+    ["title, then project and agent", { title: "Fix flaky test", project: "web-app" }, "Fix flaky test", { parts: ["web-app", "Claude"], background: "" }],
+    ["background jobs are counted", { title: "Fix flaky test", project: "web-app", background: 2 }, "Fix flaky test", { parts: ["web-app", "Claude"], background: "2 in background" }],
+    ["one background job", { title: "Fix", project: "web-app", background: 1 }, "Fix", { parts: ["web-app", "Claude"], background: "1 in background" }],
+    ["zero jobs say nothing", { title: "Fix", project: "web-app", background: 0 }, "Fix", { parts: ["web-app", "Claude"], background: "" }],
+    ["privacy mode: the project is the heading", { project: "web-app", background: 3 }, "web-app", { parts: ["Claude"], background: "3 in background" }],
+    ["no title and no project: the agent is the heading", { source: "codex" }, "Codex", { parts: [], background: "" }],
+    ["no project", { title: "Fix" }, "Fix", { parts: ["Claude"], background: "" }],
+  ];
+  for (const [name, overrides, heading, where] of cases) {
+    it(name, () => {
+      assert.equal(taskHeading(card(overrides)), heading);
+      assert.deepEqual(taskWhere(card(overrides)), where);
+    });
+  }
 });
 
 describe("taskCards", () => {
