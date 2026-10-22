@@ -37,7 +37,7 @@ The Claude Code and Codex hooks make the card title from the prompt the user typ
 - Tag blocks at the start, such as `<system-reminder>...</system-reminder>`, `<task-notification>`, `<agent-message ...>` or `<command-name>`. A lone tag on its own line is skipped too.
 - Banner lines made of dashes, such as `--- MODE SWITCH ---`.
 
-The title is the first human text that remains. If nothing human remains, the event has no title, and the card keeps the title it already had. A file mention such as `@"/Users/me/photo.png"` shows only the file name (`photo.png`). Secrets are masked first, then the title is cut to 40 characters.
+The title is the first human text that remains. If nothing human remains, the event has no title, and the card keeps the title it already had. A prompt that is fully wrapped in one tag, such as `<command-name>/clear</command-name>`, therefore gives no title. Tags that come after human text are not skipped, so `fix <Button> please` keeps its tag in the title. A file mention such as `@"/Users/me/photo.png"` shows only the file name (`photo.png`). Secrets are masked first, then the title is cut to 40 characters.
 
 Two sessions with the same `source` and different `session` values are two cards.
 

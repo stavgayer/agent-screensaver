@@ -3,6 +3,7 @@ package text
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -166,6 +167,9 @@ func TestPromptTitle(t *testing.T) {
 		{"quoted file mentions show the file name", `@"/Users/me/Desktop/IMG_7324.HEIC" @"/Users/me/Desktop/IMG_7325.HEIC"`, "IMG_7324.HEIC IMG_7325.HEIC"},
 		{"quoted path with spaces", `@"/Users/me/My Photos/beach day.png" what is this`, "beach day.png what is this"},
 		{"plain file mention", "look at @src/app/main.go please", "look at main.go please"},
+		{"address with a path is not a file mention", "mail me@host.com/path now", "mail me@host.com/path now"},
+		{"prompt wrapped in one tag gives no title", "<command-name>/clear</command-name>", ""},
+		{"inline tag after human text is kept", "fix <Button> please", "fix <Button> please"},
 		{"handle without slash is kept", "ask @alice about it", "ask @alice about it"},
 		{"mention and secret", "@/tmp/notes.txt TOKEN=abc123", "notes.txt TOKEN=•••"},
 		{"secret is masked before the cut", "export TOKEN=supersecretvalue and then do many more things after", "export TOKEN=••• and then do many more…"},
@@ -177,5 +181,25 @@ func TestPromptTitle(t *testing.T) {
 				t.Fatalf("PromptTitle(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPromptTitleIsFastOnManyLoneTags(t *testing.T) {
+	prompt := strings.Repeat("<a>\n", 256*1024) // 1 MB, no closing tag
+	start := time.Now()
+	PromptTitle(prompt)
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Errorf("PromptTitle took %v on 1 MB of lone tags, want well under 100 ms", elapsed)
+	}
+}
+
+func TestPromptTitleIsFastOnOneHugeLine(t *testing.T) {
+	start := time.Now()
+	got := PromptTitle(strings.Repeat("word ", 200*1024))
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Errorf("PromptTitle took %v on 1 MB single line", elapsed)
+	}
+	if want := "word word word word word word word word…"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // TitleMax is the longest title in runes, including the ellipsis.
@@ -78,7 +79,28 @@ func ShortTitle(s string) string {
 // the cut, like in ShortTitle. The result is empty when nothing human is left.
 func PromptTitle(prompt string) string {
 	line := firstNonEmptyLine(firstHumanText(prompt))
-	return ShortTitle(replaceFileMentions(line))
+	return ShortTitle(replaceFileMentions(cutRunes(line, maxTitleLineBytes)))
+}
+
+const (
+	// Hooks must finish fast, so the work on a prompt is bounded: no more
+	// than maxSkipSteps machine-made parts are skipped, a closing tag is
+	// looked for only in the next maxTagScanBytes, and only the first
+	// maxTitleLineBytes of the title line are read.
+	maxSkipSteps      = 32
+	maxTagScanBytes   = 4096
+	maxTitleLineBytes = 4096
+)
+
+// cutRunes returns at most limit bytes of s, never ending inside a character.
+func cutRunes(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	for limit > 0 && !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	return s[:limit]
 }
 
 var (
@@ -88,12 +110,14 @@ var (
 	banner   = regexp.MustCompile(`^(?:-{3,}|-{3,}.*-{3,})$`)
 	// @"path with spaces", @'path', or @path that has a slash in it.
 	quotedMention = regexp.MustCompile(`@(?:"([^"]+)"|'([^']+)')`)
-	plainMention  = regexp.MustCompile(`@(\S*/\S+)`)
+	// Only at the start of the text or after a space, so an address such as
+	// me@host.com/path is not a file mention.
+	plainMention = regexp.MustCompile(`(?:^|\s)@(\S*/\S+)`)
 )
 
 // firstHumanText drops leading machine-made parts and returns the rest.
 func firstHumanText(s string) string {
-	for {
+	for range maxSkipSteps {
 		s = strings.TrimLeft(s, " \t\r\n")
 		if rest, ok := skipTagBlock(s); ok {
 			s = rest
@@ -103,6 +127,7 @@ func firstHumanText(s string) string {
 			return s
 		}
 	}
+	return strings.TrimLeft(s, " \t\r\n")
 }
 
 // skipTagBlock removes <tag ...>...</tag>, a self-closing tag, a stray
@@ -122,7 +147,7 @@ func skipTagBlock(s string) (string, bool) {
 		return afterTag, true
 	}
 	closing := "</" + match[1] + ">"
-	if end := strings.Index(afterTag, closing); end >= 0 {
+	if end := strings.Index(cutRunes(afterTag, maxTagScanBytes), closing); end >= 0 {
 		return afterTag[end+len(closing):], true
 	}
 	lineEnd := strings.IndexByte(afterTag, '\n')
@@ -151,7 +176,8 @@ func replaceFileMentions(line string) string {
 		return path.Base(strings.Trim(mention[1:], `"'`))
 	})
 	return plainMention.ReplaceAllStringFunc(line, func(mention string) string {
-		return path.Base(mention[1:])
+		at := strings.IndexByte(mention, '@')
+		return mention[:at] + path.Base(mention[at+1:])
 	})
 }
 
