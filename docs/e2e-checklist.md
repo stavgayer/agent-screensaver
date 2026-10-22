@@ -29,7 +29,7 @@ What was different:
 - Codex `tool_name` is `Bash` (capital B) and `tool_input.command` is a string, not a list. The title is `Bash: touch /tmp/hello3.txt`. The list form is still accepted and has its own fixture.
 - Codex `PermissionRequest` has `tool_input.description` ("Allow creating ... with touch?"). The title uses `command`, so the card says `Bash: touch /tmp/hello3.txt`.
 - Codex `PostToolUse` has `tool_response` as a string (`""`) for Bash and as an object for MCP tools. The mapping does not read it.
-- Codex MCP tools arrive as `mcp__<server>__<tool>`, for example `mcp__engram__mem_session_summary`. The title falls back to the tool name, and the secret mask turned a long name like that into `•••`. The mask is in `internal/text` and was not changed.
+- Codex MCP tools arrive as `mcp__<server>__<tool>`, for example `mcp__engram__mem_session_summary`. The title falls back to the tool name. The secret mask used to turn a long name like that into `•••`; it now keeps lowercase snake_case names and still masks random keys (`internal/text`).
 - Claude has extra fields the mapping does not read: `prompt_id`, `scratchpad_dir`, `permission_mode`, `effort`, `tool_use_id`, `duration_ms`, `permission_suggestions`, `background_tasks`, `session_crons`. `SessionEnd.reason` was `prompt_input_exit`.
 - Claude `tool_response` is an object with `stdout`, `stderr`, `interrupted` and more. Not read.
 

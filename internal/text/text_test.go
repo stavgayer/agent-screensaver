@@ -55,6 +55,26 @@ func TestMaskSecrets(t *testing.T) {
 	}
 }
 
+func TestMaskSecretsKeepsIdentifiers(t *testing.T) {
+	tests := []struct {
+		name, input, want string
+	}{
+		{"mcp tool name", "mcp__engram__mem_session_summary", "mcp__engram__mem_session_summary"},
+		{"long snake_case name", "update_customer_billing_address_record_v2", "update_customer_billing_address_record_v2"},
+		{"tool name in title", "Tool: mcp__engram__mem_session_summary", "Tool: mcp__engram__mem_session_summary"},
+		{"random key with underscores still masked", "k_9fA3Zq8LmN2xR7vB1cD5eG0hJ4kP6sT", mask},
+		{"mixed case long run still masked", "Mcp__Engram__Mem_Session_Summary_Value", mask},
+		{"hex hash still masked", "0123456789abcdef0123456789abcdef", mask},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MaskSecrets(tt.input); got != tt.want {
+				t.Fatalf("MaskSecrets(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMaskSecretsKeepsContext(t *testing.T) {
 	tests := []struct {
 		name, input, want string
@@ -87,6 +107,8 @@ func TestShortTitle(t *testing.T) {
 		{"collapses whitespace", "Fix   the\ttypo", "Fix the typo"},
 		{"masks before cutting", "export TOKEN=supersecretvalue", "export TOKEN=•••"},
 		{"empty input", "  \n ", ""},
+		{"mcp tool name kept", "mcp__engram__mem_session_summary", "mcp__engram__mem_session_summary"},
+		{"long tool name cut after masking", "mcp__engram__mem_session_summary: save the whole session notes now", "mcp__engram__mem_session_summary: save…"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

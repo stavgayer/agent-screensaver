@@ -38,9 +38,15 @@ var maskRules = []maskRule{
 	// name=value, name: value, --name value, "name": "value", where the name
 	// contains a secret-like word (DB_PASSWORD, access_token, secrets, ...)
 	{regexp.MustCompile(`(?i)([A-Za-z0-9_\-]*(?:token|key|secret|password|passwd|passphrase|pwd)[A-Za-z0-9_\-]*)(["']?\s*[:=]\s*["']?|\s+)\S+`), "${1}${2}" + mask},
-	// any long unbroken token-like run (API keys, hashes)
-	{regexp.MustCompile(`[A-Za-z0-9+/_\-]{32,}`), mask},
 }
+
+// longRun finds any long unbroken token-like run (API keys, hashes).
+var longRun = regexp.MustCompile(`[A-Za-z0-9+/_\-]{32,}`)
+
+// identifier is a lowercase snake_case name such as the tool name
+// mcp__engram__mem_session_summary: words that start with a letter, joined by
+// one or two underscores. Random keys do not look like this.
+var identifier = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_{1,2}[a-z][a-z0-9]*)+$`)
 
 // MaskSecrets replaces likely secrets with a mask, keeping the surrounding
 // context (the "Bearer" word, the key name and separator) readable.
@@ -48,7 +54,12 @@ func MaskSecrets(s string) string {
 	for _, rule := range maskRules {
 		s = rule.pattern.ReplaceAllString(s, rule.replacement)
 	}
-	return s
+	return longRun.ReplaceAllStringFunc(s, func(run string) string {
+		if identifier.MatchString(run) {
+			return run
+		}
+		return mask
+	})
 }
 
 // ShortTitle returns the first non-empty line of s, whitespace collapsed,
