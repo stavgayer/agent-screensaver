@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -131,7 +132,7 @@ func runDaemon(args []string, stderr io.Writer) int {
 	defer stop()
 	service := daemon.New(paths.ForHome(home))
 	service.Cloner = platform.NewFileCloner()
-	providers := limits.All(exec.LookPath)
+	providers := limits.All(limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob)))
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.
 	finished := make(chan struct{})

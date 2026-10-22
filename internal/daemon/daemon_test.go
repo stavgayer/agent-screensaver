@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"sync"
@@ -247,5 +249,29 @@ func TestRunPlaysSoundOnceOnNewApproval(t *testing.T) {
 	}
 	if got := provider.reads.Load(); got != 1 {
 		t.Errorf("provider read %d times, want 1", got)
+	}
+}
+
+func TestFinishReadLogsFailureAndEmptyAnswer(t *testing.T) {
+	tests := []struct {
+		name string
+		read readResult
+		want string
+	}{
+		{"error", readResult{source: "codex", err: errors.New("boom")}, "read codex limits: boom"},
+		{"no windows", readResult{source: "codex"}, "read codex limits: no windows in the answer"},
+		{"readings are quiet", readResult{source: "codex", readings: []event.LimitReading{{Window: event.Plan, UsedPercent: 1}}}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, _ := newTestDaemon(t)
+			var logs []string
+			d.Logf = func(format string, args ...any) { logs = append(logs, fmt.Sprintf(format, args...)) }
+			loop := newLoop(context.Background(), d, &fakeWatcher{}, &fakeSound{}, nil)
+			loop.finishRead(tt.read)
+			if tt.want == "" && len(logs) != 0 || tt.want != "" && !slices.Contains(logs, tt.want) {
+				t.Errorf("logs = %q, want %q", logs, tt.want)
+			}
+		})
 	}
 }

@@ -225,6 +225,11 @@ func (d *Daemon) writeState(nowMs int64, result *StepResult) {
 // own goroutines, one per provider at a time, and come back through a channel
 // so only this goroutine touches the daemon.
 func Run(ctx context.Context, d *Daemon, w platform.SaverWatcher, s platform.SoundPlayer, providers []limits.Provider) error {
+	var sources []string
+	for _, provider := range providers {
+		sources = append(sources, provider.Source())
+	}
+	d.Logf("limit providers: %v", sources)
 	loop := newLoop(ctx, d, w, s, providers)
 	loop.step()
 	ticker := time.NewTicker(tickInterval)
@@ -325,6 +330,9 @@ func (l *loop) finishRead(read readResult) {
 		// The previous limits stay on screen.
 		l.daemon.Logf("read %s limits: %v", read.source, read.err)
 		return
+	}
+	if len(read.readings) == 0 {
+		l.daemon.Logf("read %s limits: no windows in the answer", read.source)
 	}
 	l.daemon.SetLimits(read.source, read.readings, time.Now().UnixMilli())
 }

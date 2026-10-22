@@ -4,6 +4,8 @@ package limits
 
 import (
 	"context"
+	"path/filepath"
+	"slices"
 	"time"
 
 	"agent-screensaver/internal/event"
@@ -28,6 +30,45 @@ func All(lookPath func(string) (string, error)) []Provider {
 		providers = append(providers, Codex{Bin: bin})
 	}
 	return providers
+}
+
+// ToolDirs lists folders where command line tools are usually installed but
+// which a LaunchAgent does not have on its PATH (launchd only gives it
+// /usr/bin:/bin:/usr/sbin:/sbin). Codex installed with npm lives under nvm,
+// for example. glob is filepath.Glob; tests pass a fake.
+func ToolDirs(home string, glob func(string) ([]string, error)) []string {
+	dirs := []string{
+		"/opt/homebrew/bin",
+		"/usr/local/bin",
+		filepath.Join(home, ".local/bin"),
+		filepath.Join(home, ".npm-global/bin"),
+		filepath.Join(home, ".volta/bin"),
+		filepath.Join(home, ".bun/bin"),
+	}
+	// Newest node version first, so an upgrade wins over an old install.
+	if nvm, err := glob(filepath.Join(home, ".nvm/versions/node/*/bin")); err == nil {
+		slices.Sort(nvm)
+		slices.Reverse(nvm)
+		dirs = append(dirs, nvm...)
+	}
+	return dirs
+}
+
+// WithFallbackDirs returns a lookPath that tries PATH first and then each of
+// dirs in order.
+func WithFallbackDirs(lookPath func(string) (string, error), dirs []string) func(string) (string, error) {
+	return func(name string) (string, error) {
+		found, err := lookPath(name)
+		if err == nil {
+			return found, nil
+		}
+		for _, dir := range dirs {
+			if candidate, candidateErr := lookPath(filepath.Join(dir, name)); candidateErr == nil {
+				return candidate, nil
+			}
+		}
+		return "", err
+	}
 }
 
 // PollDue says whether the limits should be read again. Reading costs a

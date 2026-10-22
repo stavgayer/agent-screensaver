@@ -1,0 +1,27 @@
+{
+  "ordinaryUsageAllowed": null,
+  "rateLimits": {
+    "limitId": "codex",
+    "limitName": null,
+    "normalModelSlug": null,
+    "primary": null,
+    "secondary": null,
+    "credits": {"hasCredits": true, "unlimited": false, "balance": null},
+    "individualLimit": {"limit": "8824", "used": "1647.7005500793457", "remainingPercent": 81, "resetsAt": 1793491200},
+    "spendControlReached": false,
+    "planType": "enterprise_cbp_usage_based",
+    "rateLimitReachedType": null
+  },
+  "rateLimitsByLimitId": {
+    "codex": {
+      "limitId": "codex",
+      "primary": null,
+      "secondary": null,
+      "individualLimit": {"limit": "8824", "used": "1647.7005500793457", "remainingPercent": 81, "resetsAt": 1793491200},
+      "planType": "enterprise_cbp_usage_based"
+    }
+  },
+  "rateLimitResetCredits": {"availableCount": 0, "credits": []},
+  "accountId": "00000000-0000-0000-0000-000000000000",
+  "rateLimitUpsell": null
+}

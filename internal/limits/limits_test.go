@@ -23,11 +23,20 @@ func TestParseCodexRateLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	usageBased, err := os.ReadFile("testdata/codex_0162_usage_based_response.json")
+	if err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
 		name     string
 		response string
 		want     []event.LimitReading
 	}{
+		{
+			name:     "codex 0.162.0 usage-based answer gives the plan reading",
+			response: string(usageBased),
+			want:     []event.LimitReading{{Window: event.Plan, UsedPercent: 19, ResetsAt: int64Pointer(1793491200)}},
+		},
 		{
 			name:     "primary is 5h and secondary is week",
 			response: string(fixture),
@@ -148,6 +157,61 @@ func TestAll(t *testing.T) {
 	}
 }
 
+func TestToolDirs(t *testing.T) {
+	glob := func(pattern string) ([]string, error) {
+		if pattern != "/h/.nvm/versions/node/*/bin" {
+			t.Errorf("unexpected pattern %q", pattern)
+		}
+		return []string{"/h/.nvm/versions/node/v24.14.0/bin", "/h/.nvm/versions/node/v25.5.0/bin"}, nil
+	}
+	got := ToolDirs("/h", glob)
+	if got[0] != "/opt/homebrew/bin" {
+		t.Errorf("first dir = %q", got[0])
+	}
+	nvm := got[len(got)-2:]
+	want := []string{"/h/.nvm/versions/node/v25.5.0/bin", "/h/.nvm/versions/node/v24.14.0/bin"}
+	if !reflect.DeepEqual(nvm, want) {
+		t.Errorf("nvm dirs = %v, want newest first %v", nvm, want)
+	}
+}
+
+func TestWithFallbackDirs(t *testing.T) {
+	installed := map[string]bool{"codex": false}
+	lookPath := func(name string) (string, error) {
+		switch name {
+		case "codex":
+			if installed["codex"] {
+				return "/usr/bin/codex", nil
+			}
+		case "/b/codex", "/c/codex":
+			return name, nil
+		}
+		return "", errors.New("not found")
+	}
+	dirs := []string{"/a", "/b", "/c"}
+	tests := []struct {
+		name    string
+		onPath  bool
+		want    string
+		wantErr bool
+	}{
+		{"PATH wins", true, "/usr/bin/codex", false},
+		{"first fallback dir that has it", false, "/b/codex", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			installed["codex"] = tt.onPath
+			got, err := WithFallbackDirs(lookPath, dirs)("codex")
+			if err != nil || got != tt.want {
+				t.Errorf("got %q, %v; want %q", got, err, tt.want)
+			}
+		})
+	}
+	if _, err := WithFallbackDirs(lookPath, dirs)("other"); err == nil {
+		t.Error("missing tool must fail")
+	}
+}
+
 // fakeCodex writes a shell script that stands in for the codex binary.
 func fakeCodex(t *testing.T, body string) string {
 	t.Helper()
@@ -194,6 +258,19 @@ func TestCodexRead(t *testing.T) {
 				t.Errorf("got %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// launchd gives no node on PATH, and codex starts with "env node": the
+// child must get its own folder first on PATH.
+func TestCodexReadPutsItsFolderFirstOnPath(t *testing.T) {
+	script := "case \"$PATH\" in \"$(dirname \"$0\")\":*) p=1;; *) p=2;; esac\n" +
+		`echo "{\"id\":2,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":$p}}}}"`
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	got, err := Codex{Bin: fakeCodex(t, script)}.Read(ctx)
+	if err != nil || len(got) != 1 || got[0].UsedPercent != 1 {
+		t.Errorf("got %+v, %v; want one reading with 1 (folder first on PATH)", got, err)
 	}
 }
 

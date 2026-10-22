@@ -2,7 +2,7 @@ package limits
 
 // Codex limits come from `codex app-server`, which speaks newline-delimited
 // JSON-RPC (no "jsonrpc" field) on stdin and stdout. Checked against
-// codex-cli 0.144.4, whose JSON schema comes from
+// codex-cli 0.144.4 and 0.162.0, whose JSON schema comes from
 // `codex app-server generate-json-schema`. The handshake, in order:
 //
 //  1. client request      {"id":1,"method":"initialize","params":{"clientInfo":{"name":"agent-screensaver","version":"1"}}}
@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -56,6 +58,9 @@ func (codex Codex) Read(ctx context.Context) ([]event.LimitReading, error) {
 	cmd := exec.CommandContext(ctx, codex.Bin, "app-server")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return killGroup(cmd) }
+	// codex is a script with "#!/usr/bin/env node". Under launchd the PATH
+	// has no node, so its own folder (where nvm keeps node) goes first.
+	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(codex.Bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("codex stdin: %w", err)
