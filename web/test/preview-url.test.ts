@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning, toPreviewUrl } from "../settings/preview-url.ts";
+import { readFileSync } from "node:fs";
+import { PREVIEW_DATA_URL, PREVIEW_ONLY_CSS, dataFolderUrl, previewState, serviceRunning, toPreviewUrl } from "../settings/preview-url.ts";
 
 const DATA = "file:///Users/me/Library/Application%20Support/agent-screensaver/";
 
@@ -52,4 +53,18 @@ describe("serviceRunning", () => {
   for (const [name, state, want] of cases) {
     it(name, () => assert.equal(serviceRunning(state), want));
   }
+});
+
+describe("PREVIEW_ONLY_CSS", () => {
+  const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+
+  it("hides the element the runtime page really has", () => {
+    const selector = PREVIEW_ONLY_CSS.split(" ")[0];
+    assert.equal(selector, "#service-line");
+    assert.ok(page.includes('id="service-line"'));
+  });
+
+  it("wins over the runtime's own display rules", () => {
+    assert.match(PREVIEW_ONLY_CSS, /display: none !important/);
+  });
 });

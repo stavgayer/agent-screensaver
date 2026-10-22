@@ -48,3 +48,10 @@ export function serviceRunning(state: string | null): boolean {
     return false;
   }
 }
+
+/**
+ * The runtime's own "service not running" line. In the settings preview the
+ * page already says so in a sentence, so the frame hides the line to show one
+ * note, not two. The real screen saver does not load this rule.
+ */
+export const PREVIEW_ONLY_CSS = "#service-line { display: none !important; }";

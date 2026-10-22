@@ -2,9 +2,13 @@
 // next to the real runtime. The frame is sandboxed and served from
 // ags-preview://, so the settings page cannot reach into it: it posts the
 // state, and this hands it to the runtime.
-import { toPreviewUrl } from "./preview-url.ts";
+import { PREVIEW_ONLY_CSS, toPreviewUrl } from "./preview-url.ts";
 
 let dataUrl: string | undefined;
+
+const previewOnly = document.createElement("style");
+previewOnly.textContent = PREVIEW_ONLY_CSS;
+document.head.append(previewOnly);
 
 /**
  * Built-in media backgrounds build file:// URLs from the paths in their
