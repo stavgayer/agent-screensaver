@@ -15,6 +15,31 @@ const (
 	codexSession  = "33333333-3333-4333-8333-333333333333"
 )
 
+// builtinAgent is a built-in agent of the repo's extensions folder.
+func builtinAgent(t *testing.T, source string) Agent {
+	t.Helper()
+	loaded, _ := Load(builtinDir)
+	agent, ok := BySource(loaded, source)
+	if !ok {
+		t.Fatalf("no built-in agent for %s", source)
+	}
+	return agent
+}
+
+// mapHook maps a hook payload with a built-in manifest. A hook payload
+// gives at most one event.
+func mapHook(t *testing.T, source string, input []byte) (event.Event, bool) {
+	t.Helper()
+	events, ok := builtinAgent(t, source).Hooks.Map(input, "", testNowMs)
+	if len(events) > 1 {
+		t.Fatalf("one payload gave %d events", len(events))
+	}
+	if !ok {
+		return event.Event{}, false
+	}
+	return events[0], true
+}
+
 func TestMap(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -54,15 +79,11 @@ func TestMap(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adapter, found := ByName(tt.adapter)
-			if !found {
-				t.Fatalf("adapter %q not registered", tt.adapter)
-			}
 			input, err := os.ReadFile(filepath.Join("testdata", tt.adapter, tt.fixture))
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, ok := adapter.Map(input, testNowMs)
+			got, ok := mapHook(t, tt.adapter, input)
 			if ok != tt.wantOK {
 				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
 			}
@@ -90,28 +111,12 @@ func TestClaudeNotificationWithoutType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := `{"session_id":"s1","hook_event_name":"Notification","message":"` + tt.message + `"}`
-			_, ok := Claude{}.Map([]byte(input), testNowMs)
+			_, ok := mapHook(t, "claude", []byte(input))
 			if ok != tt.wantOK {
 				t.Errorf("ok = %v, want %v", ok, tt.wantOK)
 			}
 		})
 	}
-}
-
-func TestRegistry(t *testing.T) {
-	for _, name := range []string{"claude", "codex"} {
-		t.Run(name, func(t *testing.T) {
-			adapter, ok := ByName(name)
-			if !ok || adapter.Name() != name {
-				t.Errorf("ByName(%q) = %v, %v", name, adapter, ok)
-			}
-		})
-	}
-	t.Run("unknown", func(t *testing.T) {
-		if _, ok := ByName("x"); ok {
-			t.Error("ByName(\"x\") found an adapter")
-		}
-	})
 }
 
 func TestDescribeTool(t *testing.T) {
@@ -158,12 +163,11 @@ func TestPromptWithOnlyInjectedTextHasNoTitle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adapter, _ := ByName("claude")
 			input, err := json.Marshal(map[string]string{"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": tt.prompt})
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, ok := adapter.Map(input, testNowMs)
+			got, ok := mapHook(t, "claude", input)
 			if !ok || got.Title != tt.want {
 				t.Errorf("got %q (ok=%v), want %q", got.Title, ok, tt.want)
 			}
@@ -188,12 +192,11 @@ func TestBackgroundCount(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adapter, _ := ByName(tt.adapter)
 			input, err := os.ReadFile(filepath.Join("testdata", tt.adapter, tt.fixture))
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, ok := adapter.Map(input, testNowMs)
+			got, ok := mapHook(t, tt.adapter, input)
 			if !ok {
 				t.Fatal("event was ignored")
 			}
@@ -231,7 +234,6 @@ func TestSessionDetails(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adapter, _ := ByName(tt.adapter)
 			input := []byte(tt.input)
 			if !strings.HasPrefix(tt.input, "{") {
 				var err error
@@ -239,7 +241,7 @@ func TestSessionDetails(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got, ok := adapter.Map(input, testNowMs)
+			got, ok := mapHook(t, tt.adapter, input)
 			if !ok {
 				t.Fatal("event was ignored")
 			}

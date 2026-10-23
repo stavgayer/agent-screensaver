@@ -16,6 +16,13 @@ var updateGolden = flag.Bool("update-golden", false, "rewrite testdata/golden")
 // homeMarker stands for the temp home in the golden files.
 const homeMarker = "$HOME"
 
+// The one planned change since the golden files were written: the status
+// line command names its agent (spec §7d "Moving Claude Code and Codex").
+var (
+	statuslineBefore = []byte(`agent-screensaver' statusline"`)
+	statuslineNow    = []byte(`agent-screensaver' statusline --tool claude"`)
+)
+
 func TestInstallGoldenFiles(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -55,6 +62,7 @@ func TestInstallGoldenFiles(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				want = bytes.ReplaceAll(want, statuslineBefore, statuslineNow)
 				if !bytes.Equal(got, want) {
 					t.Errorf("%s differs from %s:\n%s", path(home), goldenPath, got)
 				}

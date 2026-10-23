@@ -15,7 +15,7 @@ import (
 
 	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/config"
-	"agent-screensaver/internal/jsonedit"
+	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 )
@@ -33,18 +33,11 @@ const (
 )
 
 // PlannedStep is one thing install or uninstall will do, shown to the user
-// before anything changes.
+// before anything changes. Warning marks a line the user must read: an
+// outside agent that runs its own program or copies a plugin file.
 type PlannedStep struct {
 	Name, Description string
-}
-
-// Record says what Apply did, so Uninstall can reverse exactly that.
-type Record struct {
-	Bin                string   `json:"bin"`
-	Agents             []string `json:"agents"`
-	PreviousStatusline string   `json:"previous_statusline,omitempty"`
-	Services           []string `json:"services"` // service labels
-	Saver              string   `json:"saver"`
+	Warning           bool
 }
 
 // locations are the files install owns, derived from the home directory.
@@ -63,89 +56,113 @@ func locationsFor(home string) locations {
 	}
 }
 
-// hookInstallers lists the agents we can install hooks for, by name.
-func hookInstallers() []namedInstaller {
-	var found []namedInstaller
-	for _, adapter := range agents.All() {
-		if installer, ok := adapter.(agents.HookInstaller); ok {
-			found = append(found, namedInstaller{name: adapter.Name(), installer: installer, adapter: adapter})
-		}
-	}
-	return found
-}
-
-type namedInstaller struct {
-	name      string
-	installer agents.HookInstaller
-	adapter   agents.Adapter
-}
-
-func (n namedInstaller) hookCommand(bin string) string {
-	return shellQuote(bin) + " hook --tool " + n.name
-}
-
-func statuslineCommand(bin string) string { return shellQuote(bin) + " statusline" }
-
 // shellQuote quotes for sh. The installed path contains a space, and the
 // tools run the command through a shell.
 func shellQuote(text string) string {
 	return "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
 }
 
-// Plan lists what Apply will do for home, one step per change.
-func Plan(home string) []PlannedStep {
-	where := locationsFor(home)
-	steps := []PlannedStep{
-		{"binary", "Copy the agent-screensaver binary to " + where.bin},
-		{"runtime", "Copy the screen saver web page to " + where.paths.RuntimeDir},
-		{"extensions", "Copy the built-in extensions to " + where.paths.ExtensionsDir + " (other extensions stay)"},
-		{"saver", "Install the screen saver at " + where.saver},
+// installAgents are the agents Apply adds hooks for: the built-in agents
+// of the build whose tool is on this Mac (their detect path exists).
+func installAgents(home, artifacts string) ([]agents.Agent, error) {
+	// Problems of other extensions do not stop an install; a broken agent
+	// manifest does.
+	installed, _ := extensions.ScanWithProblems(filepath.Join(artifacts, "extensions"))
+	loaded, err := agents.FromInstalled(installed, nil)
+	if err != nil {
+		return nil, fmt.Errorf("built-in agents: %w", err)
 	}
-	for _, target := range hookInstallers() {
-		path := target.installer.ConfigPath(home)
-		steps = append(steps, PlannedStep{"hooks-" + target.name,
-			fmt.Sprintf("Add %s hooks to %s (backup: %s%s)", target.name, path, path, backupSuffix)})
-		if _, isClaude := target.adapter.(agents.Claude); isClaude {
-			steps = append(steps, PlannedStep{"statusline",
-				"Point the Claude status line in " + path + " at agent-screensaver (your command is saved and still runs)"})
+	var found []agents.Agent
+	for _, agent := range loaded {
+		if agent.Builtin && detected(home, agent.Install.Detect) {
+			found = append(found, agent)
 		}
 	}
+	return found, nil
+}
+
+func detected(home, detect string) bool {
+	if detect == "" {
+		return true
+	}
+	path, err := expandHome(home, detect)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
+}
+
+// Plan lists what Apply will do for home, one step per change. artifacts
+// is the build folder, whose built-in agents say which hooks are added.
+func Plan(home, artifacts string) ([]PlannedStep, error) {
+	where := locationsFor(home)
+	steps := []PlannedStep{
+		{Name: "binary", Description: "Copy the agent-screensaver binary to " + where.bin},
+		{Name: "runtime", Description: "Copy the screen saver web page to " + where.paths.RuntimeDir},
+		{Name: "extensions", Description: "Copy the built-in extensions to " + where.paths.ExtensionsDir + " (other extensions stay)"},
+		{Name: "saver", Description: "Install the screen saver at " + where.saver},
+	}
+	found, err := installAgents(home, artifacts)
+	if err != nil {
+		return nil, err
+	}
+	prior, _ := LoadRecord(where.paths.InstallRecord, found)
+	for _, agent := range found {
+		agentSteps, err := PlanAgent(home, where.bin, agent, prior)
+		if err != nil {
+			return nil, err
+		}
+		steps = append(steps, agentSteps...)
+	}
 	return append(steps,
-		PlannedStep{"service", "Start the daemon at every login (launch agent " + DaemonLabel + ")"},
-		PlannedStep{"tray", "Show the menu bar icon at every login (launch agent " + TrayLabel + ")"},
-	)
+		PlannedStep{Name: "service", Description: "Start the daemon at every login (launch agent " + DaemonLabel + ")"},
+		PlannedStep{Name: "tray", Description: "Show the menu bar icon at every login (launch agent " + TrayLabel + ")"},
+	), nil
+}
+
+// Notes are the lines the installed agents ask to show after install.
+func Notes(home, artifacts string) []string {
+	found, _ := installAgents(home, artifacts)
+	var notes []string
+	for _, agent := range found {
+		notes = append(notes, agent.Install.Notes...)
+	}
+	return notes
 }
 
 // PlanUninstall lists what Uninstall will do, read from the install record.
 func PlanUninstall(home string) ([]PlannedStep, error) {
 	where := locationsFor(home)
-	record, err := loadRecord(where.paths.InstallRecord)
+	record, err := loadInstalledRecord(where)
 	if err != nil {
 		return nil, err
 	}
 	var steps []PlannedStep
-	for _, name := range record.Agents {
-		if target, ok := installerByName(name); ok {
-			steps = append(steps, PlannedStep{"hooks-" + name, "Remove our " + name + " hooks from " + target.installer.ConfigPath(home)})
+	for _, entry := range record.Agents {
+		if entry.File != "" {
+			path, _ := expandHome(home, entry.File)
+			steps = append(steps, PlannedStep{Name: "hooks-" + entry.Source, Description: "Remove our " + entry.Source + " hooks from " + path})
+		}
+		for _, file := range entry.Files {
+			steps = append(steps, PlannedStep{Name: "hooks-" + entry.Source, Description: "Remove our copied file " + file.Path})
 		}
 	}
 	for _, label := range record.Services {
-		steps = append(steps, PlannedStep{"service", "Stop and remove the launch agent " + label})
+		steps = append(steps, PlannedStep{Name: "service", Description: "Stop and remove the launch agent " + label})
 	}
 	return append(steps,
-		PlannedStep{"files", fmt.Sprintf("Delete %s, %s, %s, the aerial clones in %s and the built-in extensions in %s",
+		PlannedStep{Name: "files", Description: fmt.Sprintf("Delete %s, %s, %s, the aerial clones in %s and the built-in extensions in %s",
 			where.bin, where.paths.RuntimeDir, where.saver, where.paths.AerialClonesDir, where.paths.ExtensionsDir)},
-		PlannedStep{"record", "Delete " + where.paths.InstallRecord + " (your settings and spool stay)"},
+		PlannedStep{Name: "record", Description: "Delete " + where.paths.InstallRecord + " (your settings and spool stay)"},
 	), nil
 }
 
-func installerByName(name string) (namedInstaller, bool) {
-	for _, target := range hookInstallers() {
-		if target.name == name {
-			return target, true
-		}
-	}
-	return namedInstaller{}, false
+// loadInstalledRecord reads the record, upgrading a version 1 record with
+// the built-in agents installed in the extensions folder.
+func loadInstalledRecord(where locations) (Record, error) {
+	installed, _ := agents.Load(where.paths.ExtensionsDir)
+	return LoadRecord(where.paths.InstallRecord, installed)
 }
 
 // configEdit is a config file change prepared in memory. Nothing is written
@@ -155,6 +172,7 @@ type configEdit struct {
 	original []byte // nil when the file does not exist
 	updated  []byte
 	backup   bool // install only, and only while the file is still the user's own
+	remove   bool // the file install created holds nothing of the user's
 }
 
 // Apply installs everything. The source binary is bin; artifacts is a folder
@@ -162,19 +180,8 @@ type configEdit struct {
 // is checked before the first change, so invalid JSON aborts cleanly.
 func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, error) {
 	where := locationsFor(home)
-	prior, _ := loadRecord(where.paths.InstallRecord) // missing record: first install
-	// Our own settings file is checked up front too: saving the status line
-	// later must never replace a damaged file with defaults.
-	_, err := config.LoadStrict(where.paths.ConfigFile)
-	var edits []configEdit
-	var previous string
-	if err == nil {
-		edits, previous, err = prepareInstall(home, where.bin, prior.PreviousStatusline)
-	}
+	w, record, err := prepareInstall(home, artifacts, where)
 	if err != nil {
-		return Record{}, fmt.Errorf("cannot install: %w; nothing was changed", err)
-	}
-	if err := checkArtifacts(artifacts); err != nil {
 		return Record{}, fmt.Errorf("cannot install: %w; nothing was changed", err)
 	}
 	if err := copyArtifacts(bin, artifacts, where); err != nil {
@@ -184,20 +191,14 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, err
 	// user file is touched, so a failure later still leaves uninstall (and a
 	// retry) able to find and restore everything. The service is listed before
 	// it is installed for the same reason: a failed bootstrap can leave a plist.
-	record := Record{Bin: where.bin, PreviousStatusline: previous, Saver: where.saver, Services: []string{DaemonLabel, TrayLabel}}
-	for _, target := range hookInstallers() {
-		record.Agents = append(record.Agents, target.name)
-	}
-	if err := saveStatusline(where.paths.ConfigFile, previous); err != nil {
+	if err := saveStatusline(where.paths.ConfigFile, previousStatusline(record)); err != nil {
 		return Record{}, err
 	}
-	if err := saveRecord(where.paths.InstallRecord, record); err != nil {
+	if err := SaveRecord(where.paths.InstallRecord, record); err != nil {
 		return Record{}, err
 	}
-	for _, edit := range edits {
-		if err := writeEdit(edit); err != nil {
-			return Record{}, err
-		}
+	if err := w.write(); err != nil {
+		return Record{}, err
 	}
 	if _, err := sm.Install(DaemonLabel, []string{where.bin, "daemon"}); err != nil {
 		return Record{}, fmt.Errorf("install service %s: %w", DaemonLabel, err)
@@ -208,34 +209,53 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, err
 	return record, nil
 }
 
-func prepareInstall(home, bin, savedPrevious string) (edits []configEdit, previous string, err error) {
-	previous = savedPrevious
-	for _, target := range hookInstallers() {
-		path := target.installer.ConfigPath(home)
-		cfg, original, err := readConfig(path)
-		if err != nil {
-			return nil, "", err
-		}
-		if err := target.installer.AddHooks(cfg, target.hookCommand(bin)); err != nil {
-			return nil, "", fmt.Errorf("%s: %w", path, err)
-		}
-		if _, isClaude := target.adapter.(agents.Claude); isClaude {
-			swapped, err := agents.SwapStatusline(cfg, statuslineCommand(bin))
-			if err != nil {
-				return nil, "", fmt.Errorf("%s: %w", path, err)
-			}
-			if swapped != "" {
-				previous = swapped
-			}
-		}
-		updated, err := cfg.Marshal()
-		if err != nil {
-			return nil, "", fmt.Errorf("%s: %w", path, err)
-		}
-		edits = append(edits, configEdit{path: path, original: original, updated: updated,
-			backup: original != nil && !strings.Contains(string(original), jsonEscaped(target.hookCommand(bin)))})
+// prepareInstall reads and edits every file in memory. Our own settings
+// file is checked up front too: saving the status line later must never
+// replace a damaged file with defaults.
+func prepareInstall(home, artifacts string, where locations) (*workspace, Record, error) {
+	if _, err := config.LoadStrict(where.paths.ConfigFile); err != nil {
+		return nil, Record{}, err
 	}
-	return edits, previous, nil
+	if err := checkArtifacts(artifacts); err != nil {
+		return nil, Record{}, err
+	}
+	found, err := installAgents(home, artifacts)
+	if err != nil {
+		return nil, Record{}, err
+	}
+	prior, _ := LoadRecord(where.paths.InstallRecord, found) // missing record: first install
+	record := Record{Version: RecordVersion, Bin: where.bin, Saver: where.saver, Services: []string{DaemonLabel, TrayLabel}}
+	w := newWorkspace(home)
+	for _, agent := range found {
+		previous, _ := prior.agentRecord(agent.ID)
+		entry, err := w.addAgent(where.bin, agent, previous)
+		if err != nil {
+			return nil, Record{}, err
+		}
+		record.Agents = append(record.Agents, entry)
+	}
+	// An agent an older install hooked that this build no longer adds (its
+	// tool is gone, or so is its extension) keeps its hooks and its entry.
+	for _, entry := range prior.Agents {
+		if _, kept := record.agentRecord(entry.ID); !kept {
+			record.Agents = append(record.Agents, entry)
+		}
+	}
+	if _, err := w.edits(); err != nil {
+		return nil, Record{}, err
+	}
+	return w, record, nil
+}
+
+// previousStatusline is the user's own status line command, which the
+// status line runner keeps running. One agent has a status line today.
+func previousStatusline(record Record) string {
+	for _, entry := range record.Agents {
+		if entry.PreviousCommand != "" {
+			return entry.PreviousCommand
+		}
+	}
+	return ""
 }
 
 // Uninstall reverses Apply as described by the install record. Services are
@@ -243,18 +263,21 @@ func prepareInstall(home, bin, savedPrevious string) (edits []configEdit, previo
 // a service cannot be removed, the record stays so the command can be run again.
 func Uninstall(home string, sm platform.ServiceManager) error {
 	where := locationsFor(home)
-	record, err := loadRecord(where.paths.InstallRecord)
+	record, err := loadInstalledRecord(where)
 	if err != nil {
 		return err
 	}
-	edits, err := prepareUninstall(home, record)
-	if err != nil {
+	w := newWorkspace(home)
+	for _, entry := range record.Agents {
+		if err := w.removeAgent(entry); err != nil {
+			return fmt.Errorf("cannot uninstall: %w; nothing was changed", err)
+		}
+	}
+	if _, err := w.edits(); err != nil {
 		return fmt.Errorf("cannot uninstall: %w; nothing was changed", err)
 	}
-	for _, edit := range edits {
-		if err := writeEdit(edit); err != nil {
-			return err
-		}
+	if err := w.write(); err != nil {
+		return err
 	}
 	for _, label := range record.Services {
 		if err := sm.Uninstall(label); err != nil {
@@ -270,64 +293,16 @@ func Uninstall(home string, sm platform.ServiceManager) error {
 	return os.Remove(where.paths.InstallRecord)
 }
 
-func prepareUninstall(home string, record Record) ([]configEdit, error) {
-	var edits []configEdit
-	for _, name := range record.Agents {
-		target, ok := installerByName(name)
-		if !ok {
-			continue
-		}
-		path := target.installer.ConfigPath(home)
-		cfg, original, err := readConfig(path)
-		if err != nil {
-			return nil, err
-		}
-		if original == nil {
-			continue // the user deleted the file; nothing of ours is left in it
-		}
-		if err := target.installer.RemoveHooks(cfg, target.hookCommand(record.Bin)); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-		if _, isClaude := target.adapter.(agents.Claude); isClaude {
-			if err := agents.RestoreStatusline(cfg, record.PreviousStatusline, statuslineCommand(record.Bin)); err != nil {
-				return nil, fmt.Errorf("%s: %w", path, err)
-			}
-		}
-		updated, err := cfg.Marshal()
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-		edits = append(edits, configEdit{path: path, original: original, updated: updated})
-	}
-	return edits, nil
-}
-
-var byteOrderMark = []byte{0xEF, 0xBB, 0xBF}
-
-// readConfig reads a user file. A missing file is an empty object with a nil
-// original. A file that is not exactly one JSON object is an error.
-func readConfig(path string) (*jsonedit.Object, []byte, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return &jsonedit.Object{}, nil, nil
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("read %s: %w", path, err)
-	}
-	if strings.HasPrefix(string(data), string(byteOrderMark)) {
-		return nil, nil, fmt.Errorf("%s starts with a UTF-8 byte order mark; remove it and run again", path)
-	}
-	cfg, err := jsonedit.Parse(data)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%s is not valid JSON (%v)", path, err)
-	}
-	return cfg, data, nil
-}
-
 // writeEdit writes the new content, after a backup of the old one when asked.
 // A file that already holds our entries is not backed up: it is no longer the
 // user's original, and the older backup of ours must survive a retry.
 func writeEdit(edit configEdit) error {
+	if edit.remove {
+		if err := os.Remove(edit.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove %s: %w", edit.path, err)
+		}
+		return nil
+	}
 	if edit.backup {
 		if err := writeFileAtomic(edit.path+backupSuffix, edit.original, 0o600); err != nil {
 			return fmt.Errorf("back up %s: %w", edit.path, err)
@@ -362,27 +337,4 @@ func clearSavedStatusline(configFile string) error {
 		return nil // a damaged file is the user's to fix; do not block uninstall
 	}
 	return saveStatusline(configFile, "")
-}
-
-func loadRecord(path string) (Record, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return Record{}, fmt.Errorf("agent-screensaver is not installed (no record at %s)", path)
-	}
-	if err != nil {
-		return Record{}, fmt.Errorf("read install record: %w", err)
-	}
-	var record Record
-	if err := json.Unmarshal(data, &record); err != nil {
-		return Record{}, fmt.Errorf("install record %s is damaged: %w", path, err)
-	}
-	return record, nil
-}
-
-func saveRecord(path string, record Record) error {
-	data, err := json.MarshalIndent(record, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode install record: %w", err)
-	}
-	return writeFileAtomic(path, append(data, '\n'), 0o644)
 }

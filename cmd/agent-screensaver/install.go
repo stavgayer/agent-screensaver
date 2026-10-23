@@ -51,14 +51,19 @@ func (s setup) install(args []string) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	if !s.confirm(install.Plan(s.home), *yes) {
+	plan, err := install.Plan(s.home, *artifacts)
+	if err != nil {
+		fmt.Fprintf(s.stderr, "agent-screensaver install: %v\n", err)
+		return 1
+	}
+	if !s.confirm(plan, *yes) {
 		return 1
 	}
 	if _, err := install.Apply(s.home, s.executable, *artifacts, s.services); err != nil {
 		fmt.Fprintf(s.stderr, "agent-screensaver install: %v\n", err)
 		return 1
 	}
-	s.printInstalled()
+	s.printInstalled(install.Notes(s.home, *artifacts))
 	return 0
 }
 
@@ -89,6 +94,10 @@ func (s setup) uninstall(args []string) int {
 func (s setup) confirm(plan []install.PlannedStep, yes bool) bool {
 	fmt.Fprintln(s.stdout, "This will:")
 	for _, step := range plan {
+		if step.Warning {
+			fmt.Fprintf(s.stdout, "  ! WARNING: %s\n", step.Description)
+			continue
+		}
 		fmt.Fprintf(s.stdout, "  - %s\n", step.Description)
 	}
 	if yes {
@@ -103,10 +112,14 @@ func (s setup) confirm(plan []install.PlannedStep, yes bool) bool {
 	return false
 }
 
-func (s setup) printInstalled() {
-	fmt.Fprintln(s.stdout, "\nInstalled. Two things are left for you:")
-	fmt.Fprintln(s.stdout, "  1. In Codex, run /hooks and approve the new agent-screensaver hooks.")
-	fmt.Fprintln(s.stdout, `  2. In System Settings -> Lock Screen, set "Require password after screen saver begins" to Immediately.`)
+// printInstalled tells what is left to do: the agents' own notes (for
+// example approving new hooks in Codex) and the macOS settings.
+func (s setup) printInstalled(notes []string) {
+	fmt.Fprintln(s.stdout, "\nInstalled. What is left for you:")
+	for _, note := range notes {
+		fmt.Fprintf(s.stdout, "  - %s\n", note)
+	}
+	fmt.Fprintln(s.stdout, `  - In System Settings -> Lock Screen, set "Require password after screen saver begins" to Immediately.`)
 	fmt.Fprintln(s.stdout, "\nTo select the screen saver: System Settings -> Screen Saver -> AgentScreensaver.")
 	fmt.Fprintln(s.stdout, `The first time, open System Settings -> Privacy & Security and click "Open Anyway".`)
 }

@@ -1,4 +1,4 @@
-package statusline
+package agents
 
 import (
 	"encoding/json"
@@ -11,15 +11,27 @@ import (
 	"agent-screensaver/internal/event"
 )
 
-func int64Pointer(value int64) *int64 { return &value }
-
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", name))
+	data, err := os.ReadFile(filepath.Join("testdata", "statusline", name))
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
 	return data
+}
+
+// statuslineEvent maps a status line payload with the built-in Claude
+// manifest and returns its event of one kind.
+func statuslineEvent(t *testing.T, input []byte, nowMs int64, kind event.Kind) (event.Event, bool) {
+	t.Helper()
+	claude := builtinAgent(t, "claude")
+	events, _ := claude.Statusline.Map(input, "", nowMs)
+	for _, mapped := range events {
+		if mapped.Kind == kind {
+			return mapped, true
+		}
+	}
+	return event.Event{}, false
 }
 
 func TestLimitsEvent(t *testing.T) {
@@ -99,7 +111,7 @@ func TestLimitsEvent(t *testing.T) {
 			name:  "missing session uses fallback",
 			input: []byte(`{"rate_limits":{"five_hour":{"used_percentage":1}}}`),
 			want: event.Event{
-				V: event.Version, Source: "claude", Session: FallbackSession,
+				V: event.Version, Source: "claude", Session: LimitsSession,
 				Kind: event.KindLimits, AtMs: nowMs,
 				Limits: []event.LimitReading{{Window: event.FiveHour, UsedPercent: 1}},
 			},
@@ -109,7 +121,7 @@ func TestLimitsEvent(t *testing.T) {
 			name:  "empty session uses fallback",
 			input: []byte(`{"session_id":"","rate_limits":{"five_hour":{"used_percentage":1}}}`),
 			want: event.Event{
-				V: event.Version, Source: "claude", Session: FallbackSession,
+				V: event.Version, Source: "claude", Session: LimitsSession,
 				Kind: event.KindLimits, AtMs: nowMs,
 				Limits: []event.LimitReading{{Window: event.FiveHour, UsedPercent: 1}},
 			},
@@ -119,7 +131,7 @@ func TestLimitsEvent(t *testing.T) {
 			name:  "oversized session uses fallback",
 			input: []byte(`{"session_id":"` + strings.Repeat("x", event.MaxIdentifierLength+1) + `","rate_limits":{"five_hour":{"used_percentage":1}}}`),
 			want: event.Event{
-				V: event.Version, Source: "claude", Session: FallbackSession,
+				V: event.Version, Source: "claude", Session: LimitsSession,
 				Kind: event.KindLimits, AtMs: nowMs,
 				Limits: []event.LimitReading{{Window: event.FiveHour, UsedPercent: 1}},
 			},
@@ -130,7 +142,7 @@ func TestLimitsEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := LimitsEvent(tt.input, nowMs)
+			got, ok := statuslineEvent(t, tt.input, nowMs, event.KindLimits)
 			if ok != tt.wantOK {
 				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
 			}
@@ -151,8 +163,6 @@ func TestLimitsEvent(t *testing.T) {
 	}
 }
 
-func float64Pointer(value float64) *float64 { return &value }
-
 func TestInfoEvent(t *testing.T) {
 	const nowMs = int64(1_738_400_000_000)
 	const transcript = "/Users/dev/.claude/projects/-Users-dev-work-my-project/abc123.jsonl"
@@ -166,7 +176,7 @@ func TestInfoEvent(t *testing.T) {
 			name:  "name, model and context",
 			input: readFixture(t, "session.json"),
 			want: event.Event{V: event.Version, Source: "claude", Session: "abc123", Kind: event.KindInfo, AtMs: nowMs,
-				Project: "my-project", Name: "Login fix", Model: "Opus 5.5", ContextPercent: float64Pointer(42),
+				Project: "my-project", Name: "Login fix", Model: "Opus 5.5", ContextPercent: floatPointer(42),
 				ModelID: "claude-opus-5-5[1m]", ContextWindow: 1_000_000,
 				Cwd: "/Users/dev/work/my-project", Transcript: transcript},
 			wantOK: true,
@@ -189,7 +199,7 @@ func TestInfoEvent(t *testing.T) {
 			name:  "context kept inside 0 to 100",
 			input: []byte(`{"session_id":"s1","context_window":{"used_percentage":104}}`),
 			want: event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: event.KindInfo, AtMs: nowMs,
-				ContextPercent: float64Pointer(100)},
+				ContextPercent: floatPointer(100)},
 			wantOK: true,
 		},
 		{
@@ -205,7 +215,7 @@ func TestInfoEvent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := InfoEvent(tt.input, nowMs)
+			got, ok := statuslineEvent(t, tt.input, nowMs, event.KindInfo)
 			if ok != tt.wantOK {
 				t.Fatalf("ok = %v, want %v (event %+v)", ok, tt.wantOK, got)
 			}

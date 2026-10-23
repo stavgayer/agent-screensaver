@@ -17,8 +17,10 @@ import (
 	"unicode/utf8"
 
 	"agent-screensaver/internal/aerials"
+	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
+	"agent-screensaver/internal/install"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/view"
 )
@@ -268,14 +270,44 @@ func (s Service) SetIgnoredProjects(entries []string) error {
 	})
 }
 
-// InstallExtension installs an extension from a folder or a .zip file.
+// InstallExtension installs an extension from a folder or a .zip file. An
+// agent extension must also pass every agent check and the recipe safety
+// rules; installing it adds no hooks (that is a separate, confirmed step).
 func (s Service) InstallExtension(path string) (extensions.Manifest, error) {
-	return extensions.InstallFrom(path, s.Paths.ExtensionsDir)
+	return extensions.InstallChecked(path, s.Paths.ExtensionsDir, s.checkAgent)
 }
 
-// RemoveExtension removes an installed extension. Built-ins are refused.
+func (s Service) checkAgent(m extensions.Manifest, dir string) error {
+	if m.Type != extensions.TypeAgent {
+		return nil
+	}
+	agent, err := agents.FromManifest(m, dir)
+	if err != nil {
+		return err
+	}
+	return install.CheckRecipe(s.Paths.Home, s.Paths.DataDir, agent.Install)
+}
+
+// RemoveExtension removes an installed extension. Built-ins are refused. An
+// agent extension's hooks are removed first; when that fails, the
+// extension stays, so its hooks can still be removed later.
 func (s Service) RemoveExtension(id string) error {
+	if err := s.removeAgentHooks(id); err != nil {
+		return fmt.Errorf("remove %s: its hooks could not be removed, so it stays: %w", id, err)
+	}
 	return extensions.Remove(id, s.Paths.ExtensionsDir)
+}
+
+func (s Service) removeAgentHooks(id string) error {
+	if _, err := os.Stat(s.Paths.InstallRecord); os.IsNotExist(err) {
+		return nil // nothing installed, so no hooks were added
+	}
+	loaded, _ := agents.Load(s.Paths.ExtensionsDir)
+	record, err := install.LoadRecord(s.Paths.InstallRecord, loaded)
+	if err != nil {
+		return err
+	}
+	return install.RemoveAgentHooks(s.Paths.Home, agents.Agent{ID: id}, &record)
 }
 
 // update loads the config, applies change and saves it. When change or the

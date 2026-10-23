@@ -60,10 +60,36 @@ func artifactsFixture(t *testing.T) (artifacts, binary string) {
 	artifacts = filepath.Join(root, "artifacts")
 	writeFile(t, filepath.Join(artifacts, "runtime", "index.html"), []byte("<html>"))
 	writeFile(t, filepath.Join(artifacts, "extensions", "builtin.clock", "extension.json"), []byte("{}"))
+	for _, id := range []string{"builtin.claude", "builtin.codex"} {
+		for _, name := range []string{"extension.json", "mark.svg"} {
+			writeFile(t, filepath.Join(artifacts, "extensions", id, name), readRepoFile(t, filepath.Join("extensions", id, name)))
+		}
+	}
 	writeFile(t, filepath.Join(artifacts, "AgentScreensaver.saver", "Contents", "Info.plist"), []byte("plist"))
 	binary = filepath.Join(root, "agent-screensaver")
 	writeFile(t, binary, []byte("fake binary"))
 	return artifacts, binary
+}
+
+// readRepoFile reads a file of the repository, such as a built-in manifest.
+func readRepoFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+// withTools makes the folders that say Claude Code and Codex are on this
+// Mac (their recipes' detect paths), as on the owner's Mac.
+func withTools(t *testing.T, home string) {
+	t.Helper()
+	for _, dir := range []string{".claude", ".codex"} {
+		if err := os.MkdirAll(filepath.Join(home, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func claudePath(home string) string { return filepath.Join(home, ".claude", "settings.json") }
@@ -117,6 +143,7 @@ func countOf(commands []string, want string) int {
 
 func apply(t *testing.T, home string, sm *fakeServices) Record {
 	t.Helper()
+	withTools(t, home)
 	artifacts, binary := artifactsFixture(t)
 	record, err := Apply(home, binary, artifacts, sm)
 	if err != nil {
@@ -219,8 +246,8 @@ func TestInstallIsIdempotent(t *testing.T) {
 	if !bytes.Equal(claudeAfterFirst, claudeAfterSecond) || !bytes.Equal(codexAfterFirst, codexAfterSecond) {
 		t.Error("second install changed the files")
 	}
-	if second.PreviousStatusline != first.PreviousStatusline || second.PreviousStatusline == "" {
-		t.Errorf("previous statusline lost: %q then %q", first.PreviousStatusline, second.PreviousStatusline)
+	if previousStatusline(second) != previousStatusline(first) || previousStatusline(second) == "" {
+		t.Errorf("previous statusline lost: %q then %q", previousStatusline(first), previousStatusline(second))
 	}
 	ours := shellQuote(first.Bin) + " hook --tool codex"
 	if count := countOf(commandsOf(t, readJSON(t, codexPath(home)), "Stop"), ours); count != 1 {
@@ -247,14 +274,14 @@ func TestStatuslineSwappedAndSaved(t *testing.T) {
 			record := apply(t, home, &fakeServices{})
 
 			line := readJSON(t, claudePath(home))["statusLine"].(map[string]any)
-			if line["command"] != shellQuote(record.Bin)+" statusline" || line["type"] != "command" {
+			if line["command"] != shellQuote(record.Bin)+" statusline --tool claude" || line["type"] != "command" {
 				t.Errorf("statusLine = %v", line)
 			}
 			if _, hasPadding := line["padding"]; hasPadding != tt.wantPadding {
 				t.Errorf("padding kept = %v, want %v", hasPadding, tt.wantPadding)
 			}
-			if record.PreviousStatusline != tt.wantPrevious {
-				t.Errorf("record previous = %q, want %q", record.PreviousStatusline, tt.wantPrevious)
+			if previousStatusline(record) != tt.wantPrevious {
+				t.Errorf("record previous = %q, want %q", previousStatusline(record), tt.wantPrevious)
 			}
 			if got := config.Load(paths.ForHome(home).ConfigFile).PreviousStatusline; got != tt.wantPrevious {
 				t.Errorf("config previous = %q, want %q", got, tt.wantPrevious)
@@ -468,9 +495,15 @@ func TestShellQuote(t *testing.T) {
 }
 
 func TestPlanNamesRealPaths(t *testing.T) {
-	home := "/home/example"
+	home := t.TempDir()
+	withTools(t, home)
+	artifacts, _ := artifactsFixture(t)
+	plan, err := Plan(home, artifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var text strings.Builder
-	for _, step := range Plan(home) {
+	for _, step := range plan {
 		text.WriteString(step.Description + "\n")
 	}
 	for _, want := range []string{claudePath(home), codexPath(home), paths.ForHome(home).DataDir, "Screen Savers"} {
@@ -543,16 +576,17 @@ func TestRetryAfterPartialFailureKeepsOriginalStatusline(t *testing.T) {
 func TestUninstallDeletesOnlyOwnPathsNotRecordPaths(t *testing.T) {
 	home := t.TempDir()
 	sm := &fakeServices{}
+	writeFile(t, claudePath(home), readFixture(t, "claude_settings.json")) // a file of the user's
 	apply(t, home, sm)
 	p := paths.ForHome(home)
 	writeFile(t, filepath.Join(p.ExtensionsDir, "acme.rain", "extension.json"), []byte("{}"))
-	record, err := loadRecord(p.InstallRecord)
+	record, err := LoadRecord(p.InstallRecord, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	record.Bin = p.DataDir
 	record.Saver = home
-	if err := saveRecord(p.InstallRecord, record); err != nil {
+	if err := SaveRecord(p.InstallRecord, record); err != nil {
 		t.Fatal(err)
 	}
 
@@ -600,7 +634,11 @@ func TestInstallAddsTrayService(t *testing.T) {
 	if !slices.Contains(record.Services, TrayLabel) {
 		t.Errorf("record services = %v, want %s in it", record.Services, TrayLabel)
 	}
-	steps := Plan(home)
+	artifacts, _ := artifactsFixture(t)
+	steps, err := Plan(home, artifacts)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !slices.ContainsFunc(steps, func(step PlannedStep) bool { return strings.Contains(step.Description, TrayLabel) }) {
 		t.Errorf("plan does not mention %s: %v", TrayLabel, steps)
 	}

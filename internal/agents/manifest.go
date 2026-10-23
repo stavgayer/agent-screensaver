@@ -32,26 +32,6 @@ var (
 	detailsProviders = []string{DetailsClaudeTranscriptContext}
 )
 
-// Agent is one valid agent extension: data that teaches the service one
-// coding agent (docs/agents.md).
-type Agent struct {
-	ID, Name, Version string
-	// Source is the event source, the --tool value and the card's source.
-	Source string
-	// Dir is the extension folder and Mark the mark file's path inside it.
-	Dir, Mark  string
-	Hooks      Mapping
-	Statusline *Mapping
-	Install    Recipe
-	Details    *Details
-	// Limits is the id of a Go limits provider, "" for none.
-	Limits  string
-	Builtin bool
-}
-
-// MarkPath is the full path of the agent's mark file.
-func (a Agent) MarkPath() string { return filepath.Join(a.Dir, a.Mark) }
-
 // agentManifest is the "agent" object of extension.json.
 type agentManifest struct {
 	Source     string          `json:"source"`

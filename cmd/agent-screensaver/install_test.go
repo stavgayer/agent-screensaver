@@ -36,7 +36,18 @@ func newSetup(t *testing.T, stdin string) (setup, *noServices, *bytes.Buffer, st
 		"artifacts/extensions/builtin.clock/extension.json":    "{}",
 		"artifacts/AgentScreensaver.saver/Contents/Info.plist": "x",
 		"agent-screensaver":                                    "binary",
+		"home/.claude/projects/.keep":                          "",
+		"home/.codex/.keep":                                    "",
 	})
+	for _, id := range []string{"builtin.claude", "builtin.codex"} {
+		for _, name := range []string{"extension.json", "mark.svg"} {
+			data, err := os.ReadFile(filepath.Join("..", "..", "extensions", id, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeTree(t, artifacts, map[string]string{filepath.Join("extensions", id, name): string(data)})
+		}
+	}
 	services := &noServices{}
 	var stdout bytes.Buffer
 	env := setup{home: home, executable: filepath.Join(root, "agent-screensaver"), services: services,

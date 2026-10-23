@@ -1,180 +1,29 @@
-// Package agents turns the hook input of coding agents (JSON on stdin) into
-// events. Adding a tool means one new file and one line in All.
+// Package agents is the engine behind agent extensions (docs/agents.md).
+// An agent extension is data: how a coding agent's hook payloads become
+// events, how its hooks are added, and where the service reads extra
+// details. Claude Code and Codex are built-in agent extensions; no Go code
+// here names them. Adding an agent needs no Go change: the user installs an
+// extension folder.
 package agents
 
-import (
-	"encoding/json"
-	"path/filepath"
+import "path/filepath"
 
-	"agent-screensaver/internal/event"
-	"agent-screensaver/internal/jsonedit"
-	"agent-screensaver/internal/text"
-)
-
-// Adapter maps one tool's hook input to an event.
-type Adapter interface {
-	// Name is the tool name, for example "claude". It is also the event Source.
-	Name() string
-	// Map returns false when the input must be ignored.
-	Map(input []byte, nowMs int64) (event.Event, bool)
+// Agent is one valid agent extension: data that teaches the service one
+// coding agent (docs/agents.md).
+type Agent struct {
+	ID, Name, Version string
+	// Source is the event source, the --tool value and the card's source.
+	Source string
+	// Dir is the extension folder and Mark the mark file's path inside it.
+	Dir, Mark  string
+	Hooks      Mapping
+	Statusline *Mapping
+	Install    Recipe
+	Details    *Details
+	// Limits is the id of a Go limits provider, "" for none.
+	Limits  string
+	Builtin bool
 }
 
-// All is the one registry of adapters.
-func All() []Adapter {
-	return []Adapter{Claude{}, Codex{}}
-}
-
-// ByName finds an adapter by its name.
-func ByName(name string) (Adapter, bool) {
-	for _, adapter := range All() {
-		if adapter.Name() == name {
-			return adapter, true
-		}
-	}
-	return nil, false
-}
-
-// Hook event names shared by the tools.
-const (
-	hookUserPromptSubmit = "UserPromptSubmit"
-	hookPreToolUse       = "PreToolUse"
-	hookNotification     = "Notification"
-	hookPermission       = "PermissionRequest"
-	hookPostToolUse      = "PostToolUse"
-	hookStop             = "Stop"
-	hookSessionEnd       = "SessionEnd"
-)
-
-// fields holds what every adapter reads from a hook payload.
-type fields struct {
-	hookEvent  string
-	session    string
-	project    string
-	cwd        string
-	transcript string
-	model      string
-	// sessionTitle is the conversation name some payloads carry.
-	sessionTitle     string
-	prompt           string
-	toolName         string
-	toolInput        map[string]any
-	notificationType string
-	message          string
-	// noTranscript is true when the payload has "transcript_path": null.
-	noTranscript bool
-	// background is the length of "background_tasks", or nil when the
-	// payload has no such list.
-	background *int
-}
-
-// hookFields decodes a payload. It returns false for invalid JSON or when
-// there is no session id.
-func hookFields(input []byte) (fields, bool) {
-	var raw map[string]any
-	if err := json.Unmarshal(input, &raw); err != nil {
-		return fields{}, false
-	}
-	session := firstString(raw, "session_id", "thread_id", "conversation_id")
-	if session == "" {
-		return fields{}, false
-	}
-	toolInput, _ := raw["tool_input"].(map[string]any)
-	cwd := stringField(raw, "cwd")
-	project := ""
-	if cwd != "" {
-		project = filepath.Base(cwd)
-	}
-	transcript, hasTranscript := raw["transcript_path"]
-	return fields{
-		hookEvent:        stringField(raw, "hook_event_name"),
-		session:          session,
-		project:          project,
-		cwd:              cwd,
-		transcript:       stringField(raw, "transcript_path"),
-		model:            stringField(raw, "model"),
-		sessionTitle:     stringField(raw, "session_title"),
-		prompt:           stringField(raw, "prompt"),
-		toolName:         stringField(raw, "tool_name"),
-		toolInput:        toolInput,
-		notificationType: stringField(raw, "notification_type"),
-		message:          stringField(raw, "message"),
-		noTranscript:     hasTranscript && transcript == nil,
-		background:       listLength(raw["background_tasks"]),
-	}, true
-}
-
-// listLength returns the length of a JSON array, or nil for anything else.
-func listLength(value any) *int {
-	list, ok := value.([]any)
-	if !ok {
-		return nil
-	}
-	length := len(list)
-	return &length
-}
-
-// mapCommon handles the events both tools share.
-func mapCommon(source string, hook fields, nowMs int64) (event.Event, bool) {
-	var kind event.Kind
-	title := ""
-	switch hook.hookEvent {
-	case hookUserPromptSubmit:
-		kind, title = event.KindStarted, text.PromptTitle(hook.prompt)
-	case hookPreToolUse:
-		kind, title = event.KindToolIntent, DescribeTool(hook.toolName, hook.toolInput)
-	case hookPermission:
-		kind, title = event.KindApproval, DescribeTool(hook.toolName, hook.toolInput)
-	case hookPostToolUse:
-		kind = event.KindResumed
-	case hookStop:
-		kind = event.KindFinished
-	case hookSessionEnd:
-		kind = event.KindEnded
-	default:
-		return event.Event{}, false
-	}
-	return newEvent(source, hook, kind, title, nowMs), true
-}
-
-func newEvent(source string, hook fields, kind event.Kind, title string, nowMs int64) event.Event {
-	return event.Event{
-		V:       event.Version,
-		Source:  source,
-		Session: hook.session,
-		Kind:    kind,
-		AtMs:    nowMs,
-		Project: hook.project,
-		Title:   title,
-		// The service reads the branch and the conversation name from
-		// these places later; the hook itself must stay fast.
-		Cwd:        hook.cwd,
-		Transcript: hook.transcript,
-		Model:      text.ShortModel(hook.model),
-		Name:       text.ShortTitle(hook.sessionTitle),
-	}
-}
-
-func stringField(values map[string]any, key string) string {
-	value, _ := values[key].(string)
-	return value
-}
-
-func firstString(values map[string]any, keys ...string) string {
-	for _, key := range keys {
-		if value := stringField(values, key); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-// HookInstaller edits one tool's hook config file. Both adapters implement it,
-// so install loops over All instead of naming tools.
-type HookInstaller interface {
-	// ConfigPath is the tool's hook config file under home.
-	ConfigPath(home string) string
-	// AddHooks appends our entries for command. It is idempotent.
-	AddHooks(cfg *jsonedit.Object, command string) error
-	// RemoveHooks removes only the entries whose command is exactly command.
-	RemoveHooks(cfg *jsonedit.Object, command string) error
-}
+// MarkPath is the full path of the agent's mark file.
+func (a Agent) MarkPath() string { return filepath.Join(a.Dir, a.Mark) }
