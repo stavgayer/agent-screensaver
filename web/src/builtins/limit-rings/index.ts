@@ -1,8 +1,10 @@
 import type { ComponentExt, Limit, ViewState } from "../../api.ts";
 import { ringLevel } from "../../format.ts";
-import { orderLimits, ringCaption, ringCaptionLines, ringPercent } from "./logic.ts";
+import { orderLimits, ringView } from "./logic.ts";
 
 // Captions are two short lines that never wrap: the name, then the reset time in a quieter tone.
+// An old reading dims its ring and says its age; after a reset the ring is empty and says so,
+// so an old number is never read as the current one.
 const STYLE = `
 .rings { display: flex; justify-content: flex-end; align-items: flex-start; gap: 3vmin; }
 .ring-item { display: flex; flex-direction: column; align-items: center; text-align: center; white-space: nowrap; }
@@ -11,6 +13,8 @@ const STYLE = `
   background: conic-gradient(var(--ring) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.16) 0); } /* taste-skill-ignore: the conic fill is the ring's arc (the chart itself) */
 .ring.warn { --ring: #e0c000; }
 .ring.high { --ring: #ff5040; }
+.ring.stale { opacity: 0.45; }
+.ring.reset .inner { font-size: 1.7vmin; font-weight: 500; color: rgba(255, 255, 255, 0.8); letter-spacing: 0; }
 .ring .inner { width: 80%; height: 80%; border-radius: 50%; background: #000; display: grid; place-items: center; }
 .ring-name { margin-top: 1.2vmin; font-size: 1.9vmin; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
 .ring-detail { margin-top: 0.3vmin; font-size: 1.7vmin; color: rgba(255, 255, 255, 0.68); font-variant-numeric: tabular-nums; }
@@ -25,17 +29,16 @@ function textLine(className: string, text: string): HTMLElement {
 }
 
 function createRing(limit: Limit, nowMs: number): HTMLElement {
-  const percent = ringPercent(limit.used_percent);
+  const { look, percent, center, name, detail } = ringView(limit, nowMs);
   const item = document.createElement("div");
   item.className = "ring-item";
   const ring = document.createElement("div");
-  ring.className = `ring ${ringLevel(percent)}`;
+  ring.className = `ring ${ringLevel(percent)} ${look}`;
   ring.style.setProperty("--pct", String(percent));
   const inner = document.createElement("span");
   inner.className = "inner";
-  inner.textContent = `${percent}%`;
+  inner.textContent = center;
   ring.appendChild(inner);
-  const { name, detail } = ringCaptionLines(limit, nowMs);
   item.append(ring, textLine("ring-name", name));
   // An empty detail still takes its line, so rings with and without a reset time line up.
   item.appendChild(textLine("ring-detail", detail === "" ? "\u00a0" : detail));
@@ -57,7 +60,7 @@ function createLimitRings(): ComponentExt {
   function update(state: ViewState): void {
     const ordered = orderLimits(state.limits);
     // Rebuild only when something visible changed.
-    const key = JSON.stringify(ordered.map((limit) => [ringPercent(limit.used_percent), ringCaption(limit, state.nowMs)]));
+    const key = JSON.stringify(ordered.map((limit) => ringView(limit, state.nowMs)));
     if (key === lastKey) return;
     lastKey = key;
     rings?.replaceChildren(...ordered.map((limit) => createRing(limit, state.nowMs)));

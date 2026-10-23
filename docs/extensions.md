@@ -232,6 +232,14 @@ export interface ComponentExt {
 export type CreateExtension = () => BackgroundExt | ComponentExt;
 ```
 
+A limit is the last reading the service got, and it can be old: Claude limits come only from the Claude Code status line, which runs only while a Claude Code session runs in a terminal. The built-in rings therefore never show an old number as the current one:
+
+- When `nowMs` is at or after `resets_at`, the window has reset since the reading. The ring is empty and says "Reset" until a newer reading arrives.
+- When the reading is older than 30 minutes (5h window) or 6 hours (week and plan windows), the ring is dimmed and its caption adds the age, for example "20h ago".
+- Otherwise the ring shows the reading as it is.
+
+Components that show limits should follow the same rule.
+
 The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
 
 ### When macOS shows its lock screen

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Card, Limit } from "../src/api.ts";
 import { displayName, formatResetDate } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
-import { orderLimits, ringCaption, ringCaptionLines, ringPercent } from "../src/builtins/limit-rings/logic.ts";
+import { orderLimits, ringCaption, ringPercent, ringView } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha, numberOption } from "../src/builtins/matrix/logic.ts";
 import { SOURCE_MARK_STYLE } from "../src/builtins/task-row/marks.ts";
 import { CONTEXT_HIGH_PERCENT, taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
@@ -214,30 +214,38 @@ describe("ringCaption", () => {
     assert.equal(ringCaption(limit("codex", "plan"), NOW_MS), "Codex plan");
   });
 
-  it("a ring older than 15 minutes says how old it is", () => {
-    const stale = limit("claude", "week", { updated_at_ms: NOW_MS - 20 * MINUTE_MS });
-    assert.equal(ringCaption(stale, NOW_MS), "Claude week · updated 20m ago");
-  });
-
-  it("a ring of exactly 15 minutes is not stale yet", () => {
-    const edge = limit("claude", "week", { updated_at_ms: NOW_MS - 15 * MINUTE_MS });
-    assert.equal(ringCaption(edge, NOW_MS), "Claude week");
-  });
 });
 
-describe("ringCaptionLines", () => {
-  const resetsAtS = (NOW_MS + 100 * MINUTE_MS) / 1000;
-  const cases: Array<[string, Limit, { name: string; detail: string }]> = [
-    ["splits the name from the reset time", limit("claude", "5h", { resets_at: resetsAtS }), { name: "Claude 5h", detail: "1h40m" }],
-    ["has an empty detail when there is nothing to add", limit("claude", "week"), { name: "Claude week", detail: "" }],
-    [
-      "keeps every detail on the second line",
-      limit("claude", "5h", { resets_at: resetsAtS, updated_at_ms: NOW_MS - 20 * MINUTE_MS }),
-      { name: "Claude 5h", detail: "1h40m · updated 20m ago" },
-    ],
+describe("ringView", () => {
+  const HOUR_MS = 60 * MINUTE_MS;
+  const inS = (ms: number) => (NOW_MS + ms) / 1000;
+  type View = ReturnType<typeof ringView>;
+  const cases: Array<[string, Limit, View]> = [
+    ["a fresh 5h reading", limit("claude", "5h", { used_percent: 62, resets_at: inS(100 * MINUTE_MS) }),
+      { look: "fresh", percent: 62, center: "62%", name: "Claude 5h", detail: "1h40m" }],
+    ["a fresh week reading has no detail", limit("claude", "week", { used_percent: 38 }),
+      { look: "fresh", percent: 38, center: "38%", name: "Claude week", detail: "" }],
+    ["a 5h reading of exactly 30 minutes is still fresh", limit("claude", "5h", { updated_at_ms: NOW_MS - 30 * MINUTE_MS }),
+      { look: "fresh", percent: 10, center: "10%", name: "Claude 5h", detail: "" }],
+    ["a 5h reading older than 30 minutes is stale", limit("claude", "5h", { updated_at_ms: NOW_MS - 31 * MINUTE_MS, resets_at: inS(100 * MINUTE_MS) }),
+      { look: "stale", percent: 10, center: "10%", name: "Claude 5h", detail: "1h40m · 31m ago" }],
+    ["a week reading of 5 hours is still fresh", limit("claude", "week", { updated_at_ms: NOW_MS - 5 * HOUR_MS }),
+      { look: "fresh", percent: 10, center: "10%", name: "Claude week", detail: "" }],
+    ["a week reading older than 6 hours is stale, in whole hours", limit("claude", "week", { updated_at_ms: NOW_MS - (20 * HOUR_MS + 40 * MINUTE_MS) }),
+      { look: "stale", percent: 10, center: "10%", name: "Claude week", detail: "20h ago" }],
+    ["a plan reading older than 6 hours is stale", limit("codex", "plan", { updated_at_ms: NOW_MS - 7 * HOUR_MS }),
+      { look: "stale", percent: 10, center: "10%", name: "Codex plan", detail: "7h ago" }],
+    ["a stale reading days old says days", limit("codex", "plan", { updated_at_ms: NOW_MS - 50 * HOUR_MS }),
+      { look: "stale", percent: 10, center: "10%", name: "Codex plan", detail: "2d ago" }],
+    ["after the reset the old percent is not shown", limit("claude", "5h", { used_percent: 20, resets_at: inS(-MINUTE_MS), updated_at_ms: NOW_MS - 20 * HOUR_MS }),
+      { look: "reset", percent: 0, center: "Reset", name: "Claude 5h", detail: "" }],
+    ["the reset moment itself counts as reset", limit("claude", "week", { used_percent: 90, resets_at: inS(0) }),
+      { look: "reset", percent: 0, center: "Reset", name: "Claude week", detail: "" }],
+    ["a reading newer than the reset is shown again", limit("claude", "5h", { used_percent: 4, resets_at: inS(5 * HOUR_MS) }),
+      { look: "fresh", percent: 4, center: "4%", name: "Claude 5h", detail: "5h" }],
   ];
-  for (const [name, input, expected] of cases) {
-    it(name, () => assert.deepEqual(ringCaptionLines(input, NOW_MS), expected));
+  for (const [name, input, want] of cases) {
+    it(name, () => assert.deepEqual(ringView(input, NOW_MS), want));
   }
 });
 
