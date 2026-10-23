@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"os"
 	"path/filepath"
@@ -85,9 +86,15 @@ var markRules = []struct {
 
 var svgRoot = regexp.MustCompile(`(?i)^(?:\s|<\?xml[^>]*\?>|<!--.*?-->)*<svg[\s>]`)
 
-// CheckMark checks an agent's mark file: a regular file of at most
-// MaxMarkBytes with an <svg> root and none of the parts in markRules.
+// CheckMark checks an agent's mark file: a regular file (not a symlink) of
+// at most MaxMarkBytes with an <svg> root and none of the parts in
+// markRules, also after character references such as &#40; are decoded.
 func CheckMark(path string) error {
+	if info, err := os.Lstat(path); err != nil {
+		return fmt.Errorf("mark: %w", err)
+	} else if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("mark %s is a symlink", path)
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("mark: %w", err)
@@ -110,8 +117,9 @@ func CheckMark(path string) error {
 	if !svgRoot.Match(bytes.TrimPrefix(content, []byte{0xEF, 0xBB, 0xBF})) {
 		return errors.New("mark must be an SVG file with an <svg> root")
 	}
+	decoded := []byte(html.UnescapeString(string(content)))
 	for _, rule := range markRules {
-		if rule.pattern.Match(content) {
+		if rule.pattern.Match(content) || rule.pattern.Match(decoded) {
 			return fmt.Errorf("mark holds %s", rule.reason)
 		}
 	}

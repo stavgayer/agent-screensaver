@@ -54,6 +54,9 @@ func TestValidateAgent(t *testing.T) {
 		{"mark with @import", "acme", `<svg><style>@import "x.css";</style></svg>`, nil, "@import"},
 		{"mark with local href and url is fine", "acme",
 			`<svg><defs><linearGradient id="g"/></defs><use href="#g"/><rect fill="url(#g)"/></svg>`, nil, ""},
+		{"mark with an encoded url(", "acme", `<svg><rect style="fill:url&#40;http://x/y)"/></svg>`, nil, "url("},
+		{"mark with an encoded href", "acme", `<svg><image href="&#104;ttp://x/y.png"/></svg>`, nil, "link"},
+		{"mark with an encoded script tag", "acme", `<svg>&lt;script&gt;x()&lt;/script&gt;</svg>`, nil, "script"},
 		{"agent with entry", "acme", goodMark, func(m *Manifest) { m.Entry = "x.js" }, "no entry"},
 		{"agent without body", "acme", goodMark, func(m *Manifest) { m.Agent = nil }, "agent is required"},
 	}
@@ -113,4 +116,18 @@ func TestScanWithProblemsNamesSkippedFolders(t *testing.T) {
 	if len(found) != 0 || err == nil || !strings.Contains(err.Error(), "acme.bad") {
 		t.Errorf("found %v, err %v", found, err)
 	}
+}
+
+func TestSymlinkedMarkIsRefused(t *testing.T) {
+	dir := agentFolder(t, "acme.agent", "acme", goodMark)
+	real := filepath.Join(t.TempDir(), "real.svg")
+	writeFile(t, real, goodMark)
+	if err := os.Remove(filepath.Join(dir, "mark.svg")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(dir, "mark.svg")); err != nil {
+		t.Fatal(err)
+	}
+
+	assertError(t, CheckMark(filepath.Join(dir, "mark.svg")), "symlink")
 }

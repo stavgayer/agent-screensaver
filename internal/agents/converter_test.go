@@ -117,8 +117,13 @@ func TestConverterEnvironment(t *testing.T) {
 }
 
 func TestConverterMustBeExecutable(t *testing.T) {
-	dir, err := filepath.Abs(filepath.Join("testdata", "converter"))
+	source, err := filepath.Abs(filepath.Join("testdata", "converter"))
 	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	copyFolder(t, source, dir)
+	if err := os.Symlink(filepath.Join(source, "one.sh"), filepath.Join(dir, "linked.sh")); err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
@@ -130,6 +135,7 @@ func TestConverterMustBeExecutable(t *testing.T) {
 		{"non-executable file refused", "not-executable.sh", "execute"},
 		{"path outside the folder refused", "../converter/one.sh", "inside"},
 		{"missing file refused", "nope.sh", "no such file"},
+		{"symlinked program refused", "linked.sh", "regular file"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
