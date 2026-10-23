@@ -34,6 +34,9 @@ export const STALE_AFTER_MS: Record<Limit["window"], number> = {
   plan: 6 * MS_PER_HOUR,
 };
 
+/** Said after an estimated percent, so it is never taken for an exact one. */
+const ESTIMATE_MARK = "est.";
+
 /** fresh: as read. stale: older than STALE_AFTER_MS, dimmed with its age. reset: the window reset after the reading. */
 export type RingLook = "fresh" | "stale" | "reset";
 
@@ -45,7 +48,7 @@ export interface RingView {
   center: string;
   /** First caption line, for example "Claude 5h". */
   name: string;
-  /** Second caption line: the reset time and, when stale, the age. Empty when there is nothing to add. */
+  /** Second caption line: the reset time, the age when stale, and "est." for an estimate. Empty when there is nothing to add. */
   detail: string;
 }
 
@@ -66,6 +69,7 @@ export function ringView(limit: Limit, nowMs: number): RingView {
   const ageMs = nowMs - limit.updated_at_ms;
   const stale = ageMs > STALE_AFTER_MS[limit.window];
   if (stale) details.push(`${shortAge(ageMs)} ago`);
+  if (limit.estimated === true) details.push(ESTIMATE_MARK);
   return { look: stale ? "stale" : "fresh", percent, center: `${percent}%`, name, detail: details.filter((part) => part !== "").join(" · ") };
 }
 

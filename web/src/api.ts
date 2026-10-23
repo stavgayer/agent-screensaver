@@ -35,6 +35,8 @@ export interface Limit {
   used_percent: number;
   resets_at?: number;
   updated_at_ms: number;
+  /** True when the percent was worked out locally between exact readings. */
+  estimated?: boolean;
 }
 
 export interface ViewState {

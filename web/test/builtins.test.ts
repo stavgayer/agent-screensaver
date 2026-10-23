@@ -243,6 +243,12 @@ describe("ringView", () => {
       { look: "reset", percent: 0, center: "Reset", name: "Claude week", detail: "" }],
     ["a reading newer than the reset is shown again", limit("claude", "5h", { used_percent: 4, resets_at: inS(5 * HOUR_MS) }),
       { look: "fresh", percent: 4, center: "4%", name: "Claude 5h", detail: "5h" }],
+    ["an estimate says so after the reset time", limit("claude", "5h", { used_percent: 47.6, resets_at: inS(100 * MINUTE_MS), estimated: true }),
+      { look: "fresh", percent: 48, center: "48%", name: "Claude 5h", detail: "1h40m · est." }],
+    ["an estimate with nothing else to say", limit("claude", "week", { used_percent: 61, estimated: true }),
+      { look: "fresh", percent: 61, center: "61%", name: "Claude week", detail: "est." }],
+    ["an old estimate is stale too", limit("claude", "5h", { updated_at_ms: NOW_MS - 31 * MINUTE_MS, estimated: true }),
+      { look: "stale", percent: 10, center: "10%", name: "Claude 5h", detail: "31m ago · est." }],
   ];
   for (const [name, input, want] of cases) {
     it(name, () => assert.deepEqual(ringView(input, NOW_MS), want));

@@ -132,6 +132,7 @@ func approvalLine(card state.Card, privacy bool, nowMs int64) string {
 // limitLine is "Claude 62% · resets in 1h40m" for the 5 hour window (its name
 // is left out because it is the one people mean), "Codex week 55%" and
 // "Codex plan 55% · resets 3 Nov". The week shows no reset, as on the screen.
+// A local estimate ends with "est.", as on the screen.
 func limitLine(reading state.Limit, nowMs int64) string {
 	name := DisplayName(reading.Source)
 	if reading.Window != event.FiveHour {
@@ -143,6 +144,9 @@ func limitLine(reading state.Limit, nowMs int64) string {
 	}
 	if age := nowMs - reading.UpdatedAtMs; age > limitStaleAfterMs {
 		line += " · updated " + FormatDuration(age) + " ago"
+	}
+	if reading.Estimated {
+		line += " · est."
 	}
 	return line
 }

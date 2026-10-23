@@ -109,6 +109,20 @@ func TestBuildMenu(t *testing.T) {
 			wantSound: true,
 		},
 		{
+			name: "an estimated limit says so",
+			file: statefile.StateFile{Limits: []state.Limit{
+				estimatedLimit(limit("claude", event.FiveHour, 47.6, inMinutes(100))),
+				estimatedLimit(limit("claude", event.Week, 61, 0)),
+			}},
+			cfg: soundOn,
+			wantInfo: []Item{
+				plain("All quiet"),
+				plain("Claude 48% · resets in 1h40m · est."),
+				plain("Claude week 61% · est."),
+			},
+			wantSound: true,
+		},
+		{
 			name: "plan reset far away shows the date",
 			file: statefile.StateFile{Limits: []state.Limit{
 				limit("codex", event.Plan, 20, (nowMs+13*24*60*minuteMs)/1000),
@@ -216,4 +230,9 @@ func TestBuildMenuServiceDown(t *testing.T) {
 			t.Errorf("first line = %q", got.Items[0].Label)
 		}
 	})
+}
+
+func estimatedLimit(reading state.Limit) state.Limit {
+	reading.Estimated = true
+	return reading
 }
