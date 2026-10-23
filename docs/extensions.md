@@ -191,6 +191,8 @@ export interface Limit {
   used_percent: number;
   resets_at?: number;
   updated_at_ms: number;
+  /** True when the percent was worked out locally between exact readings. */
+  estimated?: boolean;
 }
 
 export interface ViewState {
@@ -232,7 +234,7 @@ export interface ComponentExt {
 export type CreateExtension = () => BackgroundExt | ComponentExt;
 ```
 
-A limit is the last reading the service got, and it can be old: Claude limits come only from the Claude Code status line, which runs only while a Claude Code session runs in a terminal. The built-in rings therefore never show an old number as the current one:
+A limit is the last reading the service got, and it can be old. Between exact Claude readings the service estimates the Claude limits from local token use (`docs/event-format.md`, "Live Claude limits"); such a limit has `estimated: true`, and the built-in rings add "est." to its caption. The built-in rings never show an old number as the current one:
 
 - When `nowMs` is at or after `resets_at`, the window has reset since the reading. The ring is empty and says "Reset" until a newer reading arrives.
 - When the reading is older than 30 minutes (5h window) or 6 hours (week and plan windows), the ring is dimmed and its caption adds the age, for example "20h ago".

@@ -69,7 +69,7 @@ A card can show a conversation name, the model, how full the context window is a
 |---|---|---|
 | Name | 1. `session_name` in the status line input (set with `/rename`). 2. The last `custom-title` entry in the transcript, else the last `ai-title` entry, of the same session. 3. `session_title` in a hook payload. | The last `thread_name` of the thread in `~/.codex/session_index.jsonl` (`$CODEX_HOME` when set). Codex writes it about 5 seconds into the first turn. |
 | Model | `model.display_name` in the status line input, made short (`Opus 5.5 (1M context)` becomes `Opus 5.5`); `message.model` of the last answer in the transcript (the desktop app runs no status line); `model` in a hook payload. | `model` in the hook payload. |
-| Context | `context_window.used_percentage` in the status line input. The transcript does not have the window size. | The last `token_count` event in the rollout file: `last_token_usage.total_tokens` divided by `model_context_window`. The running total (`total_token_usage`) counts every call of the thread, so it is not used. No window size means no bar. |
+| Context | 1. `context_window.used_percentage` in the status line input. 2. The last answer in the transcript: its input, cache read and cache write tokens, divided by the window size. The transcript does not say the window size, so it comes from the model name: `[1m]` or `(1M context)` in it means 1,000,000 tokens; any other `claude-` model has 200,000, unless the turn is already larger, which only the 1,000,000 window can hold. Any other model name means no bar. | The last `token_count` event in the rollout file: `last_token_usage.total_tokens` divided by `model_context_window`. The running total (`total_token_usage`) counts every call of the thread, so it is not used. No window size means no bar. |
 | Branch | `.git/HEAD` in the session's folder or a folder above it (a worktree's `.git` file is followed). A detached head shows the short commit. | Same. |
 
 When no name is known, the card shows the title made from the prompt, then the project.
@@ -119,6 +119,38 @@ A `limits` event carries a list of readings:
 | `window` | string | yes | `5h` for the five-hour limit. `week` for the weekly limit. `plan` for a usage-based plan limit with no fixed period. |
 | `used_percent` | number | yes | How much of the limit is used. |
 | `resets_at` | number | no | When the limit resets. Unix time in seconds. Leave it out if you do not know it. |
+| `estimated` | boolean | no | `true` when the percent was worked out locally between exact readings. Leave it out for a number the tool itself gave. |
+
+## Live Claude limits
+
+The Claude Code status line gives exact limits, but only while a Claude Code session runs in a terminal. The desktop app runs no status line. So the service keeps the Claude rings live this way, with local files only (no network, no login tokens):
+
+1. **Exact readings.** The newest one of each window wins:
+   - the status line `rate_limits`;
+   - `~/Library/Application Support/Claude/plan-usage-history.json`, which the Claude desktop app writes when it shows plan usage (`fh` is the 5h percent, `sd` the week percent). It has no reset time: a reading made inside a window whose end is known takes that end;
+   - `cachedUsageUtilization` in `~/.claude.json`, which Claude Code writes when `/usage` runs. Only this key is read.
+2. **Tokens since then.** The service reads the Claude Code transcripts (`~/.claude/projects/**/*.jsonl`, subagent files too) and adds up the tokens of every model call after the newest exact reading. A call written twice (a streamed answer, a resumed session) counts once. Each kind of token is weighted by its price relative to an input token:
+
+   | Token kind | Weight |
+   |---|---|
+   | input | 1 |
+   | output | 5 |
+   | cache write | 1.25 |
+   | cache read | 0.1 |
+
+   After the first read, the service reads only the lines added since the last poll (every 10 seconds).
+3. **Calibration.** Two exact readings of the same window give a ratio: the percent they rose, divided by the weighted tokens used between them. The rise must be at least 3 points for the 5h window and 2 points for the week, because the desktop app reports whole percents. The last good ratio is kept in `claude-usage.json` in the data folder, so a restart does not lose it.
+4. **Estimate.** Percent = the newest exact reading + the weighted tokens used since then × the ratio, kept between 0 and 100. When the window has reset since the reading, the count starts again from 0 in the window open now (a window opens at the first call after the last one closed). Until a ratio is known, the ring shows the exact reading only.
+
+The screen marks an estimate with "est." in the ring caption. The menu bar does the same.
+
+Limits of the estimate:
+
+- Use of claude.ai chat, Cowork or Claude on another computer counts toward the same limits but is not in the transcripts. The estimate can then run low until the next exact reading.
+- Anthropic does not publish how its limits weigh tokens or models. The weights above are price ratios, and the ratio is learned again from each new pair of exact readings.
+- Without a known reset time the service guesses when a window ended, so the first minutes of a new window can be off.
+
+The service also shows the limits of its last run as soon as it starts (they are read back from `state.json`), so the rings are not empty after a restart.
 
 ## Rules for writers
 
