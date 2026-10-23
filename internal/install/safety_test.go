@@ -60,6 +60,9 @@ func TestCheckRecipe(t *testing.T) {
 	at := func(file string) agents.Recipe {
 		return hookRecipe(func(hooks *agents.HookRecipe) { hooks.File = file })
 	}
+	copyTo := func(target string) agents.Recipe {
+		return agents.Recipe{Files: []agents.FileCopy{{From: "x", To: target}}}
+	}
 	handler := func(raw string) agents.Recipe {
 		return hookRecipe(func(hooks *agents.HookRecipe) { hooks.Handler = json.RawMessage(raw) })
 	}
@@ -92,6 +95,13 @@ func TestCheckRecipe(t *testing.T) {
 		{"event name with a shell character", hookRecipe(func(hooks *agents.HookRecipe) { hooks.Events = []string{"stop;rm"} }), "event name"},
 		{"new_file may not set hooks", hookRecipe(func(hooks *agents.HookRecipe) { hooks.NewFile = json.RawMessage(`{"hooks":{}}`) }), "new_file"},
 		{"no hooks and no files", agents.Recipe{}, "no hooks and no files"},
+		{"mixed-case data dir file", at("~/library/application support/AGENT-screensaver/extensions/evil/extension.json"), "data folder"},
+		{"~/.zlogin", copyTo("~/.zlogin"), "protected"},
+		{"~/.zlogout", copyTo("~/.zlogout"), "protected"},
+		{"~/.bash_login", copyTo("~/.bash_login"), "protected"},
+		{"~/.bash_logout", copyTo("~/.bash_logout"), "protected"},
+		{"long s folds to s: ~/.ſsh/config", copyTo("~/.\u017fsh/config"), "protected"},
+		{"Kelvin sign folds to k: ~/Library/\u212aeychains/x", copyTo("~/Library/\u212aeychains/x"), "protected"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -100,6 +110,20 @@ func TestCheckRecipe(t *testing.T) {
 				t.Errorf("error = %v, want %q", err, tt.wantErr)
 			}
 		})
+	}
+	for _, entry := range deniedPaths {
+		for _, form := range []string{strings.ToUpper(entry), mixedCase(entry)} {
+			target := "~/" + strings.TrimSuffix(form, "/")
+			if strings.HasSuffix(entry, "/") {
+				target += "/x.json"
+			}
+			t.Run("case form "+target, func(t *testing.T) {
+				err := CheckRecipe(home, dataDir, copyTo(target))
+				if err == nil || !strings.Contains(err.Error(), "protected") {
+					t.Errorf("error = %v, want protected", err)
+				}
+			})
+		}
 	}
 	for name, agent := range builtinAgents(t) {
 		t.Run(name+" built-in passes", func(t *testing.T) {
@@ -124,4 +148,17 @@ func TestFilesTargetThatIsNotOursIsRefusedAtApply(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(home, ".acme", "plugins", "agent-screensaver.js")); string(got) != "the user's own file" {
 		t.Errorf("the user's file was replaced: %q", got)
 	}
+}
+
+// mixedCase flips the case of every other letter.
+func mixedCase(text string) string {
+	runes := []rune(text)
+	for index, r := range runes {
+		if index%2 == 0 {
+			runes[index] = []rune(strings.ToUpper(string(r)))[0]
+		} else {
+			runes[index] = []rune(strings.ToLower(string(r)))[0]
+		}
+	}
+	return string(runes)
 }

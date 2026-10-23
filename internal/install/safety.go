@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/jsonedit"
@@ -19,8 +20,8 @@ import (
 // rules for recipes"). A trailing slash marks a whole folder.
 var deniedPaths = []string{
 	"Library/LaunchAgents/", "Library/Keychains/", ".ssh/", ".gnupg/", ".aws/", ".config/gh/",
-	".gitconfig", ".zshrc", ".zprofile", ".zshenv", ".bashrc", ".bash_profile", ".profile",
-	".config/fish/",
+	".gitconfig", ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout",
+	".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".profile", ".config/fish/",
 }
 
 // eventNamePattern keeps an event name safe to write unquoted after
@@ -169,16 +170,16 @@ func writablePath(home, dataDir, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	relative, ok := within(realHome, resolved)
+	relative, ok := foldedWithin(realHome, resolved)
 	if !ok {
 		return "", fmt.Errorf("path %q leads outside the home folder", path)
 	}
 	if realData, err := resolveExisting(dataDir); err == nil {
-		if _, inside := within(realData, resolved); inside {
+		if _, inside := foldedWithin(realData, resolved); inside {
 			return "", fmt.Errorf("path %q is inside the agent-screensaver data folder", path)
 		}
 	}
-	plain, _ := within(home, full)
+	plain, _ := foldedWithin(home, full)
 	for _, candidate := range []string{relative, plain} {
 		if denied(candidate) {
 			return "", fmt.Errorf("path %q is a protected place", path)
@@ -190,6 +191,7 @@ func writablePath(home, dataDir, path string) (string, error) {
 func denied(relative string) bool {
 	slashed := filepath.ToSlash(relative)
 	return slices.ContainsFunc(deniedPaths, func(entry string) bool {
+		entry = foldCase(entry)
 		if folder, isFolder := strings.CutSuffix(entry, "/"); isFolder {
 			return slashed == folder || strings.HasPrefix(slashed, entry)
 		}
@@ -217,6 +219,28 @@ func resolveExisting(path string) (string, error) {
 		missing = filepath.Join(filepath.Base(current), missing)
 		current = parent
 	}
+}
+
+// foldedWithin is within for a case-insensitive file system (APFS by
+// default): both sides are case-folded, so ~/library/launchagents is the
+// same place as ~/Library/LaunchAgents. The part below dir comes back
+// folded. Unicode normalization is not needed: every protected name is
+// ASCII, and no ASCII letter has a decomposed form.
+func foldedWithin(dir, path string) (string, bool) {
+	return within(foldCase(dir), foldCase(path))
+}
+
+// foldCase maps every rune to one member of its case-fold orbit (the
+// smallest), the way a case-insensitive file system compares names: s, S
+// and the long s ſ are one letter, as are k, K and the Kelvin sign.
+func foldCase(text string) string {
+	return strings.Map(func(r rune) rune {
+		smallest := r
+		for other := unicode.SimpleFold(r); other != r; other = unicode.SimpleFold(other) {
+			smallest = min(smallest, other)
+		}
+		return smallest
+	}, text)
 }
 
 // within reports whether path is inside dir, and the part below dir.
