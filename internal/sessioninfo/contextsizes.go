@@ -39,10 +39,12 @@ func LoadContextSizes(path string) (*ContextSizes, error) {
 	return sizes, nil
 }
 
-// Learn records the window size of a model and saves it when it changed.
+// Learn records the window size of a model and saves it when it grew. The
+// largest size seen is kept: a session that runs the same model with the
+// 200k window must not undo a 1M one, nor two sessions flip it.
 func (c *ContextSizes) Learn(modelID string, tokens int) error {
 	key := baseModel(modelID)
-	if key == "" || tokens <= 0 || c.sizes[key] == tokens {
+	if key == "" || tokens <= c.sizes[key] {
 		return nil
 	}
 	c.sizes[key] = tokens

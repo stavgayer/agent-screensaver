@@ -140,6 +140,16 @@ func TestContextSizesLearnAndPersist(t *testing.T) {
 	if _, ok := again.size(""); ok {
 		t.Error("an empty model was learned")
 	}
+	// A 200k session of the same model does not undo the 1M one seen.
+	if err := again.Learn("claude-opus-5-5", 200_000); err != nil {
+		t.Fatal(err)
+	}
+	if size, _ := again.size("claude-opus-5-5"); size != 1_000_000 {
+		t.Errorf("after a smaller session: %v, want the largest size seen", size)
+	}
+	if reloaded, _ := LoadContextSizes(path); reloaded.sizes["claude-opus-5-5"] != 1_000_000 {
+		t.Errorf("file holds %v, want 1,000,000", reloaded.sizes)
+	}
 	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
