@@ -5,7 +5,8 @@ import { displayName, formatResetDate } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
 import { orderLimits, ringCaption, ringCaptionLines, ringPercent } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha, numberOption } from "../src/builtins/matrix/logic.ts";
-import { taskCards, taskHeading, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
+import { SOURCE_MARK_STYLE } from "../src/builtins/task-row/marks.ts";
+import { CONTEXT_HIGH_PERCENT, taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
 
 const MINUTE_MS = 60_000;
 const NOW_MS = 10_000_000_000;
@@ -55,21 +56,64 @@ describe("taskStatus", () => {
   }
 });
 
-describe("taskHeading and taskWhere", () => {
-  const cases: Array<[string, Partial<Card>, string, { parts: string[]; background: string }]> = [
-    ["title, then project and agent", { title: "Fix flaky test", project: "web-app" }, "Fix flaky test", { parts: ["web-app", "Claude"], background: "" }],
-    ["background jobs are counted", { title: "Fix flaky test", project: "web-app", background: 2 }, "Fix flaky test", { parts: ["web-app", "Claude"], background: "2 in background" }],
-    ["one background job", { title: "Fix", project: "web-app", background: 1 }, "Fix", { parts: ["web-app", "Claude"], background: "1 in background" }],
-    ["zero jobs say nothing", { title: "Fix", project: "web-app", background: 0 }, "Fix", { parts: ["web-app", "Claude"], background: "" }],
-    ["privacy mode: the project is the heading", { project: "web-app", background: 3 }, "web-app", { parts: ["Claude"], background: "3 in background" }],
-    ["no title and no project: the agent is the heading", { source: "codex" }, "Codex", { parts: [], background: "" }],
-    ["no project", { title: "Fix" }, "Fix", { parts: ["Claude"], background: "" }],
+describe("taskHeading", () => {
+  const cases: Array<[string, Partial<Card>, string]> = [
+    ["the conversation name comes first", { name: "Login fix", title: "Fix the login bug", project: "web-app" }, "Login fix"],
+    ["then the prompt title", { title: "Fix the login bug", project: "web-app" }, "Fix the login bug"],
+    ["privacy mode: the project", { project: "web-app" }, "web-app"],
+    ["nothing else: the agent", { source: "codex" }, "Codex"],
   ];
-  for (const [name, overrides, heading, where] of cases) {
-    it(name, () => {
-      assert.equal(taskHeading(card(overrides)), heading);
-      assert.deepEqual(taskWhere(card(overrides)), where);
-    });
+  for (const [name, overrides, want] of cases) {
+    it(name, () => assert.equal(taskHeading(card(overrides)), want));
+  }
+});
+
+describe("taskWhere", () => {
+  type Where = ReturnType<typeof taskWhere>;
+  const cases: Array<[string, Partial<Card>, Where]> = [
+    ["project only", { title: "Fix", project: "web-app" }, { parts: [{ role: "project", text: "web-app" }], background: "" }],
+    [
+      "project, model and branch",
+      { title: "Fix", project: "web-app", model: "Opus 5.5", branch: "feat/v1" },
+      { parts: [{ role: "project", text: "web-app" }, { role: "model", text: "Opus 5.5" }, { role: "branch", text: "feat/v1" }], background: "" },
+    ],
+    ["background jobs are counted", { title: "Fix", project: "web-app", background: 2 }, { parts: [{ role: "project", text: "web-app" }], background: "2 in background" }],
+    ["one background job", { title: "Fix", project: "web-app", background: 1 }, { parts: [{ role: "project", text: "web-app" }], background: "1 in background" }],
+    ["zero jobs say nothing", { title: "Fix", project: "web-app", background: 0 }, { parts: [{ role: "project", text: "web-app" }], background: "" }],
+    ["the project is left out when it is the heading", { project: "web-app", model: "gpt-5.6", background: 3 }, { parts: [{ role: "model", text: "gpt-5.6" }], background: "3 in background" }],
+    ["nothing known", { source: "codex" }, { parts: [], background: "" }],
+    ["empty fields are left out", { title: "Fix", project: "", model: "", branch: "" }, { parts: [], background: "" }],
+  ];
+  for (const [name, overrides, want] of cases) {
+    it(name, () => assert.deepEqual(taskWhere(card(overrides)), want));
+  }
+});
+
+describe("taskContext", () => {
+  const cases: Array<[string, number | undefined, ReturnType<typeof taskContext>]> = [
+    ["unknown hides the bar", undefined, undefined],
+    ["empty", 0, { percent: 0, text: "0%", high: false }],
+    ["calm below the threshold", 79.4, { percent: 79, text: "79%", high: false }],
+    ["high from the threshold", CONTEXT_HIGH_PERCENT, { percent: 80, text: "80%", high: true }],
+    ["full", 100, { percent: 100, text: "100%", high: true }],
+    ["kept inside 0 to 100", 140, { percent: 100, text: "100%", high: true }],
+    ["never below 0", -5, { percent: 0, text: "0%", high: false }],
+    ["not a number hides the bar", Number.NaN, undefined],
+  ];
+  for (const [name, percent, want] of cases) {
+    it(name, () => assert.deepEqual(taskContext(card({ context_percent: percent })), want));
+  }
+});
+
+describe("taskSource", () => {
+  const cases: Array<[string, { mark: string; name: string }]> = [
+    ["claude", { mark: "claude", name: "Claude" }],
+    ["codex", { mark: "codex", name: "Codex" }],
+    ["cursor", { mark: "cursor", name: "Cursor" }],
+    ["aider", { mark: "other", name: "Aider" }],
+  ];
+  for (const [source, want] of cases) {
+    it(source, () => assert.deepEqual(taskSource(card({ source })), want));
   }
 });
 
@@ -234,4 +278,12 @@ describe("matrix logic", () => {
     assert.equal(advanceDrop(60, 50, 1, () => 0.99), 61);
     assert.equal(advanceDrop(60, 50, 1, () => 0), 0);
   });
+});
+
+describe("source marks", () => {
+  for (const id of ["claude", "codex", "cursor", "other"]) {
+    it(`${id} has a drawn mark a theme can replace with --mark-${id}`, () => {
+      assert.match(SOURCE_MARK_STYLE, new RegExp(`data-source="${id}"\\] \\.source-mark \\{ --mark: var\\(--mark-${id}, url\\("data:image/svg\\+xml,`));
+    });
+  }
 });

@@ -174,6 +174,14 @@ export interface Card {
   approval_since_ms?: number;
   /** How many background jobs (shells, subagents) the session still runs. Left out when none run or the agent does not say (Codex). */
   background?: number;
+  /** The conversation name the agent shows (Claude /rename or its own title, the Codex thread name). Left out when unknown or in privacy mode. */
+  name?: string;
+  /** Short model name, for example "Opus 5.5" or "gpt-5.6". */
+  model?: string;
+  /** Git branch checked out in the session's folder. Left out outside a repository and in privacy mode. */
+  branch?: string;
+  /** How full the context window is, 0 to 100. Left out when the agent does not say. */
+  context_percent?: number;
 }
 
 /** One usage limit. `resets_at` is in seconds, the other times are in milliseconds. */
@@ -231,6 +239,15 @@ The `entry` file is one classic script. It must not use `import` or `export`. If
 If the Mac asks for a password after the screen saver starts, macOS draws its lock screen (its clock and the login field) over the running saver when the user moves the mouse or presses a key. While it shows, the page fades out every component and the "service not running" line. The background keeps playing. When the lock screen goes away and the saver still runs, the components come back.
 
 Your extension does not need to do anything. A component stays mounted and keeps getting `update` calls while it is hidden. Nothing tells it that it is hidden.
+
+## The task row's agent marks
+
+Each card of `builtin.task-row` shows a small drawn mark and the name of its agent. The marks are our own shapes, not the products' logos. A theme can change them through its `style` values:
+
+| Style value | Meaning |
+|---|---|
+| `--source-color` | The color of every mark. The default is the card's muted white. |
+| `--mark-claude`, `--mark-codex`, `--mark-cursor`, `--mark-other` | A CSS image used as the mask of that mark, for example `url("data:image/svg+xml,...")`. Only its shape counts: it is painted in `--source-color`. `--mark-other` is used for any agent without its own mark. |
 
 ## The Apple aerials background
 

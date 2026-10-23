@@ -18,6 +18,14 @@ export interface Card {
   approval_since_ms?: number;
   /** How many background jobs (shells, subagents) the session still runs. Left out when none run or the agent does not say (Codex). */
   background?: number;
+  /** The conversation name the agent shows (Claude /rename or its own title, the Codex thread name). Left out when unknown or in privacy mode. */
+  name?: string;
+  /** Short model name, for example "Opus 5.5" or "gpt-5.6". */
+  model?: string;
+  /** Git branch checked out in the session's folder. Left out outside a repository and in privacy mode. */
+  branch?: string;
+  /** How full the context window is, 0 to 100. Left out when the agent does not say. */
+  context_percent?: number;
 }
 
 /** One usage limit. `resets_at` is in seconds, the other times are in milliseconds. */

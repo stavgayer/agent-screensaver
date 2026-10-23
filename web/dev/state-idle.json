@@ -11,7 +11,11 @@
       "project": "web-app",
       "title": "Refactor auth module",
       "started_at_ms": -1440000,
-      "updated_at_ms": 0
+      "updated_at_ms": 0,
+      "name": "Auth module refactor",
+      "model": "gpt-5.6",
+      "branch": "refactor/auth",
+      "context_percent": 34
     },
     {
       "source": "claude",
@@ -20,7 +24,10 @@
       "project": "api-server",
       "title": "Integration tests",
       "started_at_ms": -4320000,
-      "updated_at_ms": 0
+      "updated_at_ms": 0,
+      "model": "Opus 5.5",
+      "branch": "main",
+      "context_percent": 86
     },
     {
       "source": "claude",
@@ -30,7 +37,10 @@
       "title": "Fix flaky test",
       "started_at_ms": -1800000,
       "updated_at_ms": -480000,
-      "background": 2
+      "background": 2,
+      "name": "Flaky test in CI",
+      "model": "Sonnet 4.5",
+      "branch": "fix/flaky-test"
     }
   ],
   "limits": [
