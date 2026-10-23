@@ -582,8 +582,8 @@ func TestDetails(t *testing.T) {
 		{
 			name:    "set details fills context and branch",
 			events:  []event.Event{started},
-			file:    &Details{ContextPercent: percent(77), Branch: "main"},
-			want:    details{ContextPercent: percent(77), Branch: "main", Kind: KindRunning, UpdatedAtMs: 1000},
+			file:    &Details{ContextPercent: percent(77), Branch: "main", Model: "Opus 5.5"},
+			want:    details{ContextPercent: percent(77), Branch: "main", Model: "Opus 5.5", Kind: KindRunning, UpdatedAtMs: 1000},
 			changed: true,
 		},
 		{

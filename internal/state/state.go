@@ -78,6 +78,7 @@ func (n names) best() string {
 // fields mean "not found" and keep what the card has.
 type Details struct {
 	Name           string
+	Model          string
 	ContextPercent *float64
 	Branch         string
 }
@@ -163,7 +164,10 @@ func (s *State) SetDetails(source, session string, found Details) bool {
 	if found.Branch != "" {
 		card.Branch = found.Branch
 	}
-	return card.Name != before.Name || card.Branch != before.Branch ||
+	if found.Model != "" {
+		card.Model = found.Model
+	}
+	return card.Name != before.Name || card.Branch != before.Branch || card.Model != before.Model ||
 		!equalFloat64(card.ContextPercent, before.ContextPercent)
 }
 

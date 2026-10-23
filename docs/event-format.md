@@ -68,7 +68,7 @@ A card can show a conversation name, the model, how full the context window is a
 | Detail | Claude Code | Codex |
 |---|---|---|
 | Name | 1. `session_name` in the status line input (set with `/rename`). 2. The last `custom-title` entry in the transcript, else the last `ai-title` entry, of the same session. 3. `session_title` in a hook payload. | The last `thread_name` of the thread in `~/.codex/session_index.jsonl` (`$CODEX_HOME` when set). Codex writes it about 5 seconds into the first turn. |
-| Model | `model.display_name` in the status line input, made short (`Opus 5.5 (1M context)` becomes `Opus 5.5`); `model` in a hook payload. | `model` in the hook payload. |
+| Model | `model.display_name` in the status line input, made short (`Opus 5.5 (1M context)` becomes `Opus 5.5`); `message.model` of the last answer in the transcript (the desktop app runs no status line); `model` in a hook payload. | `model` in the hook payload. |
 | Context | `context_window.used_percentage` in the status line input. The transcript does not have the window size. | The last `token_count` event in the rollout file: `last_token_usage.total_tokens` divided by `model_context_window`. The running total (`total_token_usage`) counts every call of the thread, so it is not used. No window size means no bar. |
 | Branch | `.git/HEAD` in the session's folder or a folder above it (a worktree's `.git` file is followed). A detached head shows the short commit. | Same. |
 

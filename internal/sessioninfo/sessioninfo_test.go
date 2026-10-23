@@ -40,6 +40,25 @@ func TestClaudeName(t *testing.T) {
 	}
 }
 
+func TestClaudeModel(t *testing.T) {
+	tests := []struct {
+		name       string
+		transcript string
+		want       string
+	}{
+		{"model of the last answer", fixture("claude_transcript.jsonl"), "Opus 5.5"},
+		{"an answer that quotes other entries", fixture("claude_transcript_untitled.jsonl"), "Opus 5.5"},
+		{"missing file", fixture("missing.jsonl"), ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClaudeModel(tt.transcript); got != tt.want {
+				t.Errorf("ClaudeModel = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCodexName(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -152,7 +171,7 @@ func TestReaderPicksBySource(t *testing.T) {
 	}{
 		{"claude: name from the transcript, context from the status line only",
 			state.Card{Source: "claude", Session: claudeSession, Cwd: cwd, Transcript: fixture("claude_transcript.jsonl")},
-			state.Details{Name: "Fix the login session expiry", Branch: "main"}},
+			state.Details{Name: "Fix the login session expiry", Model: "Opus 5.5", Branch: "main"}},
 		{"codex: name from the index, context from the rollout",
 			state.Card{Source: "codex", Session: codexSession, Cwd: cwd, Transcript: fixture("codex_rollout.jsonl")},
 			state.Details{Name: "Parser refactor, part two", ContextPercent: percent(77), Branch: "main"}},
@@ -164,7 +183,7 @@ func TestReaderPicksBySource(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := reader.Read(tt.card)
-			if got.Name != tt.want.Name || got.Branch != tt.want.Branch || !equalPercent(got.ContextPercent, tt.want.ContextPercent) {
+			if got.Name != tt.want.Name || got.Model != tt.want.Model || got.Branch != tt.want.Branch || !equalPercent(got.ContextPercent, tt.want.ContextPercent) {
 				t.Errorf("Read = %+v (context %v), want %+v (context %v)", got, show(got.ContextPercent), tt.want, show(tt.want.ContextPercent))
 			}
 		})

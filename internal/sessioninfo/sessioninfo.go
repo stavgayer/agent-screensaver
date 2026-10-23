@@ -42,6 +42,9 @@ func (r Reader) Read(card state.Card) state.Details {
 		// The context fullness of Claude comes from the status line: the
 		// transcript does not have the window size.
 		details.Name = ClaudeName(card.Transcript, card.Session)
+		// The desktop app runs no status line, and most hooks carry no
+		// model, so the transcript is the one place that always has it.
+		details.Model = ClaudeModel(card.Transcript)
 	case "codex":
 		details.Name = CodexName(r.CodexSessionIndex, card.Session)
 		details.ContextPercent = CodexContext(card.Transcript)
@@ -81,6 +84,29 @@ func ClaudeName(transcript, session string) string {
 		return text.ShortTitle(custom)
 	}
 	return text.ShortTitle(generated)
+}
+
+// ClaudeModel returns the short name of the model that wrote the last
+// answer in a Claude transcript.
+func ClaudeModel(transcript string) string {
+	var model string
+	eachLastLine(transcript, func(line []byte) bool {
+		if !bytes.Contains(line, []byte(`"assistant"`)) {
+			return true
+		}
+		var entry struct {
+			Type    string `json:"type"`
+			Message struct {
+				Model string `json:"model"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(line, &entry) != nil || entry.Type != "assistant" || entry.Message.Model == "" {
+			return true
+		}
+		model = entry.Message.Model
+		return false
+	})
+	return text.ShortModel(model)
 }
 
 // CodexName returns the last name Codex wrote for a thread in its session
