@@ -1,0 +1,85 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' statusline",
+    "type": "command"
+  }
+}

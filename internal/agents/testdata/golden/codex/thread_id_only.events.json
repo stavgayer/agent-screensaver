@@ -1,0 +1,13 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "codex",
+      "session": "th9",
+      "kind": "finished",
+      "at_ms": 1760000000000,
+      "project": "codex-app",
+      "cwd": "/work/codex-app"
+    }
+  ]
+}

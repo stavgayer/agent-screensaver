@@ -1,0 +1,35 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "claude",
+      "session": "abc123",
+      "kind": "limits",
+      "at_ms": 1760000000000,
+      "project": "my-project",
+      "limits": [
+        {
+          "window": "5h",
+          "used_percent": 62,
+          "resets_at": 1738425600
+        },
+        {
+          "window": "week",
+          "used_percent": 38,
+          "resets_at": 1738857600
+        }
+      ]
+    },
+    {
+      "v": 1,
+      "source": "claude",
+      "session": "abc123",
+      "kind": "info",
+      "at_ms": 1760000000000,
+      "project": "my-project",
+      "model": "Opus 5.5",
+      "model_id": "claude-opus-5-5[1m]",
+      "cwd": "/Users/dev/work/my-project"
+    }
+  ]
+}

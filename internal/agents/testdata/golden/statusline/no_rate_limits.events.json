@@ -1,0 +1,15 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "claude",
+      "session": "abc123",
+      "kind": "info",
+      "at_ms": 1760000000000,
+      "project": "my-project",
+      "model": "Opus",
+      "model_id": "claude-opus-5-5",
+      "cwd": "/Users/dev/work/my-project"
+    }
+  ]
+}

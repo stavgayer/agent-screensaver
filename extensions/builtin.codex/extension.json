@@ -1,0 +1,59 @@
+{
+  "id": "builtin.codex",
+  "name": "Codex",
+  "version": "1.0.0",
+  "type": "agent",
+  "api": 1,
+  "agent": {
+    "source": "codex",
+    "mark": "mark.svg",
+    "hooks": {
+      "event": "hook_event_name",
+      "session": { "path": ["session_id", "thread_id", "conversation_id"] },
+      "common": {
+        "project": { "path": "cwd", "as": "basename" },
+        "cwd": "cwd",
+        "transcript": "transcript_path",
+        "model": { "path": "model", "as": "model_name" },
+        "name": { "path": "session_title", "as": "short_title" }
+      },
+      "rules": [
+        { "if": { "path": "transcript_path", "equals": null }, "kind": "ignore" },
+        { "on": "UserPromptSubmit", "kind": "started",
+          "set": { "title": { "path": "prompt", "as": "prompt_title" } } },
+        { "on": "PreToolUse", "kind": "tool_intent",
+          "set": { "title": { "tool": "tool_name", "input": "tool_input" } } },
+        { "on": "PermissionRequest", "kind": "approval",
+          "set": { "title": { "tool": "tool_name", "input": "tool_input" } } },
+        { "on": "PostToolUse", "kind": "resumed" },
+        { "on": "Stop", "kind": "finished" },
+        { "on": "SessionEnd", "kind": "ended" }
+      ]
+    },
+    "install": {
+      "detect": "~/.codex",
+      "hooks": {
+        "file": "~/.codex/hooks.json",
+        "format": "json",
+        "shape": "grouped",
+        "events": ["UserPromptSubmit", "PreToolUse", "PermissionRequest",
+                   "PostToolUse", "Stop", "SessionEnd"]
+      },
+      "notes": ["In Codex, run /hooks and approve the new agent-screensaver hooks."]
+    },
+    "details": {
+      "read_on": ["started", "tool_intent", "resumed", "finished", "ended"],
+      "name": [
+        { "jsonl": "~/.codex/session_index.jsonl",
+          "last": { "path": "id", "equals": "{session}" },
+          "value": { "path": "thread_name", "as": "short_title" } }
+      ],
+      "context_percent": [
+        { "jsonl": "{transcript}",
+          "last": [{ "path": "payload.type", "equals": "token_count" }, { "path": "payload.info", "present": true }],
+          "value": { "ratio": ["payload.info.last_token_usage.total_tokens", "payload.info.model_context_window"] } }
+      ]
+    },
+    "limits": { "provider": "codex-app-server" }
+  }
+}

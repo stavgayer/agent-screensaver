@@ -12,6 +12,8 @@ import (
 
 // Paths holds the absolute location of each file and folder.
 type Paths struct {
+	// Home is the user's home folder the other paths were built from.
+	Home          string
 	DataDir       string
 	SpoolDir      string
 	StateFile     string
@@ -38,6 +40,7 @@ func ForHome(home string) Paths {
 	dataDir := filepath.Join(home, "Library", "Application Support", "agent-screensaver")
 	mediaDir := filepath.Join(dataDir, "media")
 	return Paths{
+		Home:             home,
 		DataDir:          dataDir,
 		SpoolDir:         filepath.Join(dataDir, "spool"),
 		StateFile:        filepath.Join(dataDir, "state.json"),

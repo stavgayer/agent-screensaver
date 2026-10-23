@@ -20,6 +20,11 @@ func TestLoad(t *testing.T) {
 			cfg.IgnoredProjects = []string{}
 			return cfg
 		}()},
+		{"agents that are off", ptr(`{"agents_off":["acme.opencode"]}`), func() Config {
+			cfg := Default()
+			cfg.AgentsOff = []string{"acme.opencode"}
+			return cfg
+		}()},
 		{"missing fields keep defaults", ptr(`{"privacy":true}`), func() Config {
 			cfg := Default()
 			cfg.Privacy = true
@@ -149,5 +154,12 @@ func TestProjectName(t *testing.T) {
 				t.Errorf("ProjectName(%q) = %q, want %q", tt.entry, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAgentOff(t *testing.T) {
+	cfg := Config{AgentsOff: []string{"acme.opencode"}}
+	if !cfg.AgentOff("acme.opencode") || cfg.AgentOff("builtin.claude") {
+		t.Errorf("AgentOff does not follow agents_off %v", cfg.AgentsOff)
 	}
 }

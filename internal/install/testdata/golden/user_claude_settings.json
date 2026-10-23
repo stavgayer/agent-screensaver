@@ -1,0 +1,114 @@
+{
+  "model": "opus",
+  "env": {
+    "FOO": "a && b <c>"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$SUPERSET_HOME_DIR/hooks/notify.sh\" ] && \"$SUPERSET_HOME_DIR/hooks/notify.sh\" || true"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/fake/start.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool claude"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' statusline",
+    "padding": 0
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "codex",
+      "session": "thr_1",
+      "kind": "approval",
+      "at_ms": 1760000000000,
+      "project": "codex-app",
+      "title": "apply_patch: src/parser.go",
+      "model": "gpt-5",
+      "cwd": "/work/codex-app"
+    }
+  ]
+}

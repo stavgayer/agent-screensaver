@@ -73,10 +73,33 @@ func spoolFiles(t *testing.T, home string) []string {
 	return files
 }
 
+// homeWithAgents is a temp home whose extensions folder holds the built-in
+// agent extensions, as an installed Mac has them.
+func homeWithAgents(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	for _, id := range []string{"builtin.claude", "builtin.codex"} {
+		for _, name := range []string{"extension.json", "mark.svg"} {
+			data, err := os.ReadFile(filepath.Join("..", "..", "extensions", id, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(paths.ForHome(home).ExtensionsDir, id, name)
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(target, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return home
+}
+
 const stopPayload = `{"session_id":"s1","hook_event_name":"Stop","cwd":"/work/demo"}`
 
 func TestHookWritesEventFile(t *testing.T) {
-	home := t.TempDir()
+	home := homeWithAgents(t)
 
 	got := runBinary(t, home, stopPayload, "hook", "--tool", "claude")
 
@@ -111,7 +134,7 @@ func TestHookGarbageStdinExitsZeroFast(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := runBinary(t, t.TempDir(), tt.stdin, "hook", "--tool", "claude")
+			got := runBinary(t, homeWithAgents(t), tt.stdin, "hook", "--tool", "claude")
 
 			if got.exitCode != 0 || got.stdout != "" {
 				t.Errorf("exit %d, stdout %q; want 0 and empty", got.exitCode, got.stdout)
@@ -138,7 +161,7 @@ func TestHookUnknownToolExitsZeroAndLogs(t *testing.T) {
 }
 
 func TestHookCreatesDataDir(t *testing.T) {
-	home := t.TempDir()
+	home := homeWithAgents(t)
 
 	runBinary(t, home, stopPayload, "hook", "--tool", "claude")
 
@@ -148,7 +171,7 @@ func TestHookCreatesDataDir(t *testing.T) {
 }
 
 func TestHookRecordsPayloadsWhenAsked(t *testing.T) {
-	home := t.TempDir()
+	home := homeWithAgents(t)
 	t.Setenv("AGS_RECORD_PAYLOADS", "1")
 
 	runBinary(t, home, stopPayload, "hook", "--tool", "claude")
@@ -171,7 +194,7 @@ func saveConfig(t *testing.T, home, previous string) {
 }
 
 func TestStatuslinePassesThroughPrevious(t *testing.T) {
-	home := t.TempDir()
+	home := homeWithAgents(t)
 	saveConfig(t, home, "echo hi")
 
 	got := runBinary(t, home, limitsPayload, "statusline")
@@ -184,8 +207,18 @@ func TestStatuslinePassesThroughPrevious(t *testing.T) {
 	}
 }
 
+func TestStatuslineWithToolWritesLimits(t *testing.T) {
+	home := homeWithAgents(t)
+
+	got := runBinary(t, home, limitsPayload, "statusline", "--tool", "claude")
+
+	if got.exitCode != 0 || len(spoolFiles(t, home)) != 1 {
+		t.Errorf("exit %d, spool files %d; want 0 and 1", got.exitCode, len(spoolFiles(t, home)))
+	}
+}
+
 func TestStatuslineTimesOutSlowPrevious(t *testing.T) {
-	home := t.TempDir()
+	home := homeWithAgents(t)
 	saveConfig(t, home, "sleep 2")
 
 	got := runBinary(t, home, limitsPayload, "statusline")
@@ -199,7 +232,7 @@ func TestStatuslineTimesOutSlowPrevious(t *testing.T) {
 }
 
 func TestStatuslineDoesNotCallItself(t *testing.T) {
-	home := t.TempDir()
+	home := homeWithAgents(t)
 	saveConfig(t, home, binaryPath+" statusline")
 
 	got := runBinary(t, home, limitsPayload, "statusline")
@@ -213,7 +246,7 @@ func TestStatuslineDoesNotCallItself(t *testing.T) {
 }
 
 func TestStatuslineStopsWhenAlreadyInsideStatusline(t *testing.T) {
-	home := t.TempDir()
+	home := homeWithAgents(t)
 	saveConfig(t, home, "echo hi")
 	t.Setenv("AGS_IN_STATUSLINE", "1")
 

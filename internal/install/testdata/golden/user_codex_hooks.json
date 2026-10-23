@@ -1,0 +1,100 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool codex"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^request_user_input$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool codex"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool codex"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool codex"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool codex"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver' hook --tool codex"
+          }
+        ]
+      }
+    ]
+  }
+}

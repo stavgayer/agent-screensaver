@@ -1,0 +1,99 @@
+{
+  "id": "builtin.claude",
+  "name": "Claude Code",
+  "version": "1.0.0",
+  "type": "agent",
+  "api": 1,
+  "agent": {
+    "source": "claude",
+    "mark": "mark.svg",
+    "hooks": {
+      "event": "hook_event_name",
+      "session": { "path": ["session_id", "thread_id", "conversation_id"] },
+      "common": {
+        "project": { "path": "cwd", "as": "basename" },
+        "cwd": "cwd",
+        "transcript": "transcript_path",
+        "model": { "path": "model", "as": "model_name" },
+        "name": { "path": "session_title", "as": "short_title" }
+      },
+      "rules": [
+        { "on": "UserPromptSubmit", "kind": "started",
+          "set": { "title": { "path": "prompt", "as": "prompt_title" },
+                   "background": { "path": "background_tasks", "as": "count" } } },
+        { "on": "PreToolUse", "kind": "tool_intent",
+          "set": { "title": { "tool": "tool_name", "input": "tool_input" },
+                   "background": { "path": "background_tasks", "as": "count" } } },
+        { "on": "PermissionRequest", "kind": "approval",
+          "set": { "title": { "tool": "tool_name", "input": "tool_input" },
+                   "background": { "path": "background_tasks", "as": "count" } } },
+        { "on": "PostToolUse", "kind": "resumed",
+          "set": { "background": { "path": "background_tasks", "as": "count" } } },
+        { "on": "Stop", "kind": "finished",
+          "set": { "background": { "path": "background_tasks", "as": "count" } } },
+        { "on": "SessionEnd", "kind": "ended",
+          "set": { "background": { "path": "background_tasks", "as": "count" } } },
+        { "on": "Notification", "if": { "path": "notification_type", "equals": "permission_prompt" }, "kind": "approval" },
+        { "on": "Notification", "if": [{ "path": "notification_type", "equals": "" }, { "path": "message", "contains": "permission" }], "kind": "approval" },
+        { "on": "Notification", "if": { "path": "notification_type", "present": true }, "kind": "ignore" },
+        { "on": "Notification", "if": { "path": "message", "contains": "permission" }, "kind": "approval" }
+      ]
+    },
+    "statusline": {
+      "session": "session_id",
+      "common": {
+        "project": { "path": ["workspace.current_dir", "cwd"], "as": "basename" }
+      },
+      "rules": [
+        { "kind": "limits",
+          "set": { "limits": [
+            { "window": "5h",
+              "used_percent": { "path": "rate_limits.five_hour.used_percentage", "as": "percent" },
+              "resets_at": "rate_limits.five_hour.resets_at" },
+            { "window": "week",
+              "used_percent": { "path": "rate_limits.seven_day.used_percentage", "as": "percent" },
+              "resets_at": "rate_limits.seven_day.resets_at" }
+          ] } },
+        { "kind": "info",
+          "set": { "name": { "path": "session_name", "as": "short_title" },
+                   "model": { "path": ["model.display_name", "model.id"], "as": "model_name" },
+                   "model_id": "model.id",
+                   "context_percent": { "path": "context_window.used_percentage", "as": "percent" },
+                   "context_window": "context_window.context_window_size",
+                   "cwd": { "path": ["workspace.current_dir", "cwd"] },
+                   "transcript": "transcript_path" } }
+      ]
+    },
+    "install": {
+      "detect": "~/.claude",
+      "hooks": {
+        "file": "~/.claude/settings.json",
+        "format": "json",
+        "shape": "grouped",
+        "group": { "matcher": "" },
+        "events": ["UserPromptSubmit", "PreToolUse", "Notification", "PermissionRequest",
+                   "PostToolUse", "Stop", "SessionEnd"]
+      },
+      "statusline": { "key": "statusLine" }
+    },
+    "details": {
+      "name": [
+        { "jsonl": "{transcript}",
+          "last": [{ "path": "type", "equals": "custom-title" }, { "path": "sessionId", "equals": "{session}" }],
+          "value": { "path": "customTitle", "as": "short_title" } },
+        { "jsonl": "{transcript}",
+          "last": [{ "path": "type", "equals": "ai-title" }, { "path": "sessionId", "equals": "{session}" }],
+          "value": { "path": "aiTitle", "as": "short_title" } }
+      ],
+      "model": [
+        { "jsonl": "{transcript}",
+          "last": [{ "path": "type", "equals": "assistant" }, { "path": "message.model", "present": true }],
+          "value": { "path": "message.model", "as": "model_name" } }
+      ],
+      "context_percent": [
+        { "provider": "claude-transcript-context" }
+      ]
+    },
+    "limits": { "provider": "claude-usage-estimate" }
+  }
+}

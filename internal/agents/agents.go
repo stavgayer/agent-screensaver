@@ -5,7 +5,6 @@ package agents
 import (
 	"encoding/json"
 	"path/filepath"
-	"strings"
 
 	"agent-screensaver/internal/event"
 	"agent-screensaver/internal/jsonedit"
@@ -44,12 +43,6 @@ const (
 	hookPostToolUse      = "PostToolUse"
 	hookStop             = "Stop"
 	hookSessionEnd       = "SessionEnd"
-)
-
-// The tool name lists live here so both adapters share them.
-var (
-	shellTools = map[string]bool{"bash": true, "shell": true, "local_shell": true, "exec_command": true}
-	editTools  = map[string]bool{"edit": true, "multiedit": true, "write": true, "notebookedit": true, "apply_patch": true}
 )
 
 // fields holds what every adapter reads from a hook payload.
@@ -159,43 +152,6 @@ func newEvent(source string, hook fields, kind event.Kind, title string, nowMs i
 		Model:      text.ShortModel(hook.model),
 		Name:       text.ShortTitle(hook.sessionTitle),
 	}
-}
-
-// DescribeTool names a tool call for the screen: the tool name plus the
-// command or file it works on, masked and shortened.
-func DescribeTool(name string, input map[string]any) string {
-	detail := toolDetail(strings.ToLower(name), input)
-	if detail == "" {
-		return text.ShortTitle(name)
-	}
-	return text.ShortTitle(name + ": " + detail)
-}
-
-func toolDetail(lowerName string, input map[string]any) string {
-	switch {
-	case shellTools[lowerName]:
-		return commandText(input["command"])
-	case editTools[lowerName]:
-		return firstString(input, "file_path", "path")
-	}
-	return ""
-}
-
-// commandText accepts a string or, as Codex sends it, a list of strings.
-func commandText(value any) string {
-	switch command := value.(type) {
-	case string:
-		return command
-	case []any:
-		parts := make([]string, 0, len(command))
-		for _, part := range command {
-			if word, ok := part.(string); ok {
-				parts = append(parts, word)
-			}
-		}
-		return strings.Join(parts, " ")
-	}
-	return ""
 }
 
 func stringField(values map[string]any, key string) string {

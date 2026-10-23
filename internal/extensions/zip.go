@@ -25,6 +25,13 @@ const (
 // extDir first (same filesystem, so the final rename is cheap), validated,
 // and only then moved to extDir/<id>.
 func InstallFrom(src, extDir string) (Manifest, error) {
+	return InstallChecked(src, extDir, nil)
+}
+
+// InstallChecked is InstallFrom with one more check, run on the staged
+// folder before it replaces anything. Callers use it for the rules that
+// live in other packages, such as an agent's install recipe. check may be nil.
+func InstallChecked(src, extDir string, check func(m Manifest, dir string) error) (Manifest, error) {
 	info, err := os.Stat(src)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("install: %w", err)
@@ -53,6 +60,14 @@ func InstallFrom(src, extDir string) (Manifest, error) {
 	}
 	if strings.HasPrefix(manifest.ID, builtinPrefix) {
 		return Manifest{}, fmt.Errorf("install %q: %w", manifest.ID, ErrBuiltin)
+	}
+	if err := checkUniqueSource(manifest, extDir); err != nil {
+		return Manifest{}, fmt.Errorf("install %q: %w", manifest.ID, err)
+	}
+	if check != nil {
+		if err := check(manifest, content); err != nil {
+			return Manifest{}, fmt.Errorf("install %q: %w", manifest.ID, err)
+		}
 	}
 	if err := replaceFolder(content, filepath.Join(extDir, manifest.ID), staging); err != nil {
 		return Manifest{}, fmt.Errorf("install: %w", err)

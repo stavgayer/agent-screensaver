@@ -1,0 +1,15 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "claude",
+      "session": "s1",
+      "kind": "approval",
+      "at_ms": 1760000000000,
+      "project": "my-project",
+      "title": "Edit: /home/user/my-project/main.go",
+      "cwd": "/home/user/my-project",
+      "transcript": "/t.jsonl"
+    }
+  ]
+}

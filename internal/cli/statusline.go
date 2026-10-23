@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -13,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/spool"
-	"agent-screensaver/internal/statusline"
 )
 
 const (
@@ -29,30 +30,33 @@ const (
 	inStatuslineEnv = "AGS_IN_STATUSLINE"
 )
 
-// RunStatusline writes the limits and info events, then runs the status line command
-// the user had before and prints its output. It always returns 0.
-func RunStatusline(stdin io.Reader, stdout io.Writer, p paths.Paths, now func() int64) (code int) {
+// RunStatusline runs `agent-screensaver statusline [--tool <source>]`. It
+// writes the events the agent's status line mapping gives, then runs the
+// status line command the user had before and prints its output. It always
+// returns 0.
+func RunStatusline(args []string, stdin io.Reader, stdout io.Writer, p paths.Paths, now func() int64) (code int) {
 	defer recoverToZero(p, now, &code)
+	defer drain(stdin)
 	if os.Getenv(inStatuslineEnv) == "1" {
 		return 0 // we were started by our own status line: stop the loop
+	}
+	flags := flag.NewFlagSet("statusline", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	tool := flags.String("tool", "", "agent source")
+	if err := flags.Parse(args); err != nil {
+		logError(p, now, fmt.Errorf("statusline flags: %w", err))
+		return 0
 	}
 	input, err := io.ReadAll(io.LimitReader(stdin, maxHookInputBytes))
 	if err != nil {
 		logError(p, now, fmt.Errorf("read statusline input: %w", err))
 	}
 	drain(stdin)
-	atMs := now()
-	if limits, ok := statusline.LimitsEvent(input, atMs); ok {
-		if err := spool.Write(p.SpoolDir, limits); err != nil {
-			logError(p, now, fmt.Errorf("write limits event: %w", err))
-		}
+	cfg := config.Load(p.ConfigFile)
+	if agent, ok := statuslineAgent(p, now, *tool); ok && !cfg.AgentOff(agent.ID) {
+		writeStatuslineEvents(agent, input, p, now)
 	}
-	if info, ok := statusline.InfoEvent(input, atMs); ok {
-		if err := spool.Write(p.SpoolDir, info); err != nil {
-			logError(p, now, fmt.Errorf("write info event: %w", err))
-		}
-	}
-	previous := strings.TrimSpace(config.Load(p.ConfigFile).PreviousStatusline)
+	previous := strings.TrimSpace(cfg.PreviousStatusline)
 	if previous == "" || isOwnStatusline(previous) {
 		return 0
 	}
@@ -60,6 +64,40 @@ func RunStatusline(stdin io.Reader, stdout io.Writer, p paths.Paths, now func() 
 		_, _ = io.WriteString(stdout, output)
 	}
 	return 0
+}
+
+// statuslineAgent finds the agent whose status line this is. The command
+// written before agent extensions had no --tool; it means the one agent
+// that has a status line mapping.
+func statuslineAgent(p paths.Paths, now func() int64, source string) (agents.Agent, bool) {
+	loaded, err := agents.Load(p.ExtensionsDir)
+	var withStatusline []agents.Agent
+	for _, agent := range loaded {
+		if agent.Statusline != nil && (source == "" || agent.Source == source) {
+			withStatusline = append(withStatusline, agent)
+		}
+	}
+	if len(withStatusline) != 1 {
+		if err != nil {
+			logError(p, now, err)
+		}
+		logError(p, now, fmt.Errorf("no agent with a status line for tool %q", source))
+		return agents.Agent{}, false
+	}
+	return withStatusline[0], true
+}
+
+func writeStatuslineEvents(agent agents.Agent, input []byte, p paths.Paths, now func() int64) {
+	env := agents.ConverterEnv(p.Home, os.Getenv("PATH"), agent.Source, "")
+	events, err := agent.Statusline.Events(context.Background(), input, "", env, now())
+	if err != nil {
+		logError(p, now, fmt.Errorf("%s status line: %w", agent.ID, err))
+	}
+	for _, mapped := range events {
+		if err := spool.Write(p.SpoolDir, mapped); err != nil {
+			logError(p, now, fmt.Errorf("write %s event: %w", mapped.Kind, err))
+		}
+	}
 }
 
 // isOwnStatusline reports whether the command is our own statusline command,

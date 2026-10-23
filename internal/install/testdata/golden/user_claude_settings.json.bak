@@ -1,0 +1,18 @@
+{
+  "model": "opus",
+  "env": {"FOO": "a && b <c>"},
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {"type": "command", "command": "[ -x \"$SUPERSET_HOME_DIR/hooks/notify.sh\" ] && \"$SUPERSET_HOME_DIR/hooks/notify.sh\" || true"}
+        ]
+      }
+    ],
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": "/opt/fake/start.sh"}]}
+    ]
+  },
+  "statusLine": {"type": "command", "command": "~/.claude/fake-statusline.sh", "padding": 0},
+  "permissions": {"allow": ["Bash(ls:*)"]}
+}

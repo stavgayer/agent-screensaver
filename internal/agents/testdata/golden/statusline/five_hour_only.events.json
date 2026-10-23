@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "claude",
+      "session": "abc123",
+      "kind": "limits",
+      "at_ms": 1760000000000,
+      "project": "my-project",
+      "limits": [
+        {
+          "window": "5h",
+          "used_percent": 23.5,
+          "resets_at": 1738425600
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "claude",
+      "session": "s1",
+      "kind": "approval",
+      "at_ms": 1760000000000,
+      "project": "my-project",
+      "cwd": "/home/user/my-project",
+      "transcript": "/t.jsonl"
+    }
+  ]
+}

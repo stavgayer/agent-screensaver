@@ -1,0 +1,15 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "codex",
+      "session": "thr_1",
+      "kind": "tool_intent",
+      "at_ms": 1760000000000,
+      "project": "codex-app",
+      "title": "shell: git status",
+      "model": "gpt-5",
+      "cwd": "/work/codex-app"
+    }
+  ]
+}

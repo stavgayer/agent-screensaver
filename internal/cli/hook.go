@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"agent-screensaver/internal/agents"
+	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/spool"
 )
@@ -25,45 +27,69 @@ const (
 	recordPayloadsEnv = "AGS_RECORD_PAYLOADS"
 )
 
-// Hook runs `agent-screensaver hook --tool <name>`. It always returns 0.
-func Hook(args []string, stdin io.Reader, p paths.Paths, now func() int64) (code int) {
+// Hook runs `agent-screensaver hook --tool <source> [--event <name>]`. It
+// prints the agent's reply first, so the tool gets a valid answer whatever
+// happens next, then maps the payload and writes the events. It always
+// returns 0.
+func Hook(args []string, stdin io.Reader, stdout io.Writer, p paths.Paths, now func() int64) (code int) {
 	defer recoverToZero(p, now, &code)
+	defer drain(stdin) // never leave the writer blocked on a full pipe
 	flags := flag.NewFlagSet("hook", flag.ContinueOnError)
 	flags.SetOutput(io.Discard) // stdout and stderr must stay silent
-	tool := flags.String("tool", "", "tool name")
+	tool := flags.String("tool", "", "agent source")
+	eventArg := flags.String("event", "", "event name, for tools that do not send it")
 	if err := flags.Parse(args); err != nil {
 		logError(p, now, fmt.Errorf("hook flags: %w", err))
-		drain(stdin)
 		return 0
 	}
-	adapter, ok := agents.ByName(*tool)
+	agent, ok := findAgent(p, now, *tool)
 	if !ok {
-		logError(p, now, fmt.Errorf("unknown tool %q", *tool))
-		drain(stdin)
 		return 0
 	}
-	return RunHook(adapter, stdin, p, now)
+	_, _ = io.WriteString(stdout, agent.Hooks.Reply.Text(*eventArg))
+	if config.Load(p.ConfigFile).AgentOff(agent.ID) {
+		return 0
+	}
+	return RunHook(agent, *eventArg, stdin, p, now)
 }
 
-// RunHook maps one hook payload to an event and writes it to the spool. It
+// findAgent loads the agent extensions and picks the one for source. The
+// manifests are read on every call: a hook is a short process, and reading
+// fifty small files stays well inside the time budget.
+func findAgent(p paths.Paths, now func() int64, source string) (agents.Agent, bool) {
+	loaded, err := agents.Load(p.ExtensionsDir)
+	agent, ok := agents.BySource(loaded, source)
+	if !ok {
+		if err != nil {
+			logError(p, now, err)
+		}
+		logError(p, now, fmt.Errorf("unknown tool %q", source))
+	}
+	return agent, ok
+}
+
+// RunHook maps one hook payload to events and writes them to the spool. It
 // always returns 0 and prints nothing.
-func RunHook(adapter agents.Adapter, stdin io.Reader, p paths.Paths, now func() int64) (code int) {
+func RunHook(agent agents.Agent, eventArg string, stdin io.Reader, p paths.Paths, now func() int64) (code int) {
 	defer recoverToZero(p, now, &code)
 	input, err := io.ReadAll(io.LimitReader(stdin, maxHookInputBytes))
 	if err != nil {
 		logError(p, now, fmt.Errorf("read hook input: %w", err))
 	}
-	drain(stdin) // never leave the writer blocked on a full pipe
+	drain(stdin)
 	atMs := now()
 	if os.Getenv(recordPayloadsEnv) == "1" {
-		recordPayload(p, now, adapter.Name(), hookEventName(input), atMs, input)
+		recordPayload(p, now, agent.Source, payloadName(input, eventArg), atMs, input)
 	}
-	mapped, ok := adapter.Map(input, atMs)
-	if !ok {
-		return 0 // an ignored event is normal, not an error
+	env := agents.ConverterEnv(p.Home, os.Getenv("PATH"), agent.Source, eventArg)
+	events, err := agent.Hooks.Events(context.Background(), input, eventArg, env, atMs)
+	if err != nil {
+		logError(p, now, fmt.Errorf("%s hook: %w", agent.ID, err))
 	}
-	if err := spool.Write(p.SpoolDir, mapped); err != nil {
-		logError(p, now, fmt.Errorf("write event: %w", err))
+	for _, mapped := range events {
+		if err := spool.Write(p.SpoolDir, mapped); err != nil {
+			logError(p, now, fmt.Errorf("write event: %w", err))
+		}
 	}
 	return 0
 }
@@ -72,15 +98,22 @@ func drain(reader io.Reader) {
 	_, _ = io.Copy(io.Discard, reader)
 }
 
-// hookEventName reads the event name for the payload file name.
-func hookEventName(input []byte) string {
-	var named struct {
-		Name string `json:"hook_event_name"`
+// payloadName names a recorded payload file: the --event value, else the
+// hook_event_name most tools send.
+func payloadName(input []byte, eventArg string) string {
+	name := eventArg
+	if name == "" {
+		var named struct {
+			Name string `json:"hook_event_name"`
+		}
+		if json.Unmarshal(input, &named) == nil {
+			name = named.Name
+		}
 	}
-	if json.Unmarshal(input, &named) != nil || named.Name == "" {
+	if name == "" {
 		return "unknown"
 	}
-	return filepath.Base(named.Name) // keep it a single file name part
+	return filepath.Base(name) // keep it a single file name part
 }
 
 // recordPayload saves the raw input so real tool payloads can be captured

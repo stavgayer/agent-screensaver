@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "claude",
+      "session": "abc123",
+      "kind": "info",
+      "at_ms": 1760000000000,
+      "project": "my-project",
+      "name": "Login fix",
+      "model": "Opus 5.5",
+      "context_percent": 42,
+      "model_id": "claude-opus-5-5[1m]",
+      "context_window": 1000000,
+      "cwd": "/Users/dev/work/my-project",
+      "transcript": "/Users/dev/.claude/projects/-Users-dev-work-my-project/abc123.jsonl"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "codex",
+      "session": "33333333-3333-4333-8333-333333333333",
+      "kind": "approval",
+      "at_ms": 1760000000000,
+      "project": "workspace",
+      "title": "Bash: touch /tmp/hello3.txt",
+      "model": "gpt-example",
+      "cwd": "/Users/example/workspace",
+      "transcript": "/Users/example/.codex/sessions/2026/10/22/rollout-2026-10-22T18-09-57-33333333-3333-4333-8333-333333333333.jsonl"
+    }
+  ]
+}

@@ -36,6 +36,10 @@ const (
 	TypeComponent  Type = "component"
 	TypeLayout     Type = "layout"
 	TypeTheme      Type = "theme"
+	// TypeAgent teaches the service one coding agent (docs/agents.md). Its
+	// body is checked here only for the parts every agent shares: the
+	// source name and the mark. Package agents checks the rest.
+	TypeAgent Type = "agent"
 )
 
 // OptionKind is the kind of value an option holds.
@@ -85,6 +89,7 @@ type Manifest struct {
 	Options map[string]OptionSpec `json:"options,omitempty"`
 	Layout  json.RawMessage       `json:"layout,omitempty"`
 	Theme   *ThemeSpec            `json:"theme,omitempty"`
+	Agent   json.RawMessage       `json:"agent,omitempty"`
 }
 
 // Installed is a valid extension found on disk.
@@ -133,6 +138,8 @@ func validateBody(m Manifest, dir string) error {
 		return validateLayout(m.Layout)
 	case TypeTheme:
 		return validateTheme(m.Theme)
+	case TypeAgent:
+		return validateAgent(m, dir)
 	default:
 		return fmt.Errorf("unknown type %q", m.Type)
 	}
@@ -316,23 +323,37 @@ func readManifest(dir string) (Manifest, error) {
 // Invalid or unreadable ones are skipped so one bad folder cannot stop the
 // saver from starting.
 func Scan(extDir string) []Installed {
+	found, _ := ScanWithProblems(extDir)
+	return found
+}
+
+// ScanWithProblems is Scan, and it also says why each skipped folder was
+// skipped, for a log.
+func ScanWithProblems(extDir string) ([]Installed, error) {
 	entries, err := os.ReadDir(extDir)
 	if err != nil {
-		return nil
+		return nil, nil // no folder yet: nothing is installed
 	}
 	var found []Installed
+	var problems []error
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), stagingPrefix) {
 			continue
 		}
 		dir := filepath.Join(extDir, entry.Name())
-		// The folder name must equal the id: Remove looks up extDir/<id>,
-		// and folder names are unique, so ids stay unique too.
-		if manifest, err := readManifest(dir); err == nil && manifest.ID == entry.Name() {
+		manifest, err := readManifest(dir)
+		switch {
+		case err != nil:
+			problems = append(problems, fmt.Errorf("extension %s: %w", entry.Name(), err))
+		case manifest.ID != entry.Name():
+			// The folder name must equal the id: Remove looks up extDir/<id>,
+			// and folder names are unique, so ids stay unique too.
+			problems = append(problems, fmt.Errorf("extension %s: folder holds id %q", entry.Name(), manifest.ID))
+		default:
 			found = append(found, Installed{Manifest: manifest, Dir: dir})
 		}
 	}
-	return found
+	return found, errors.Join(problems...)
 }
 
 // Remove deletes an installed extension. Built-in ids are refused.

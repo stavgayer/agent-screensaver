@@ -108,13 +108,14 @@ func Parse(data []byte) (Event, error) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return Event{}, fmt.Errorf("decode event: %w", err)
 	}
-	if err := parsed.validate(); err != nil {
+	if err := parsed.Validate(); err != nil {
 		return Event{}, err
 	}
 	return parsed, nil
 }
 
-func (e Event) validate() error {
+// Validate checks the rules every event must keep.
+func (e Event) Validate() error {
 	if e.V != Version {
 		return fmt.Errorf("unsupported event version %d, want %d", e.V, Version)
 	}
@@ -130,13 +131,15 @@ func (e Event) validate() error {
 	if e.ContextPercent != nil && (*e.ContextPercent < 0 || *e.ContextPercent > 100) {
 		return fmt.Errorf("context_percent is %v, must be 0 to 100", *e.ContextPercent)
 	}
-	if err := validateIdentifier("source", e.Source); err != nil {
+	if err := ValidateIdentifier("source", e.Source); err != nil {
 		return err
 	}
-	return validateIdentifier("session", e.Session)
+	return ValidateIdentifier("session", e.Session)
 }
 
-func validateIdentifier(field, value string) error {
+// ValidateIdentifier checks a source or session: not empty and at most
+// MaxIdentifierLength characters. field names it in the error.
+func ValidateIdentifier(field, value string) error {
 	if value == "" {
 		return fmt.Errorf("%s must not be empty", field)
 	}

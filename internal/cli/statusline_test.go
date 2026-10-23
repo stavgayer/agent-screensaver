@@ -15,19 +15,25 @@ import (
 func TestRunStatuslineWritesLimitsAndInfo(t *testing.T) {
 	tests := []struct {
 		name  string
+		args  []string
 		input string
 		want  []event.Kind
 	}{
-		{"limits and details", `{"session_id":"s1","session_name":"Login fix","rate_limits":{"five_hour":{"used_percentage":20}}}`,
+		{"limits and details", []string{"--tool", "claude"},
+			`{"session_id":"s1","session_name":"Login fix","rate_limits":{"five_hour":{"used_percentage":20}}}`,
 			[]event.Kind{event.KindLimits, event.KindInfo}},
-		{"details only", `{"session_id":"s1","context_window":{"used_percentage":42}}`, []event.Kind{event.KindInfo}},
-		{"nothing to say", `{"session_id":"s1"}`, nil},
+		{"details only", []string{"--tool", "claude"}, `{"session_id":"s1","context_window":{"used_percentage":42}}`, []event.Kind{event.KindInfo}},
+		{"nothing to say", []string{"--tool", "claude"}, `{"session_id":"s1"}`, nil},
+		{"the command of before Task 6.4 has no --tool", nil, `{"session_id":"s1","session_name":"Login fix"}`, []event.Kind{event.KindInfo}},
+		{"an agent without a status line", []string{"--tool", "codex"}, `{"session_id":"s1","session_name":"Login fix"}`, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := paths.ForHome(t.TempDir())
+			copyBuiltinAgent(t, p, "builtin.claude")
+			copyBuiltinAgent(t, p, "builtin.codex")
 			now := func() int64 { return 1_000 }
-			if code := RunStatusline(strings.NewReader(tt.input), io.Discard, p, now); code != 0 {
+			if code := RunStatusline(tt.args, strings.NewReader(tt.input), io.Discard, p, now); code != 0 {
 				t.Fatalf("code = %d", code)
 			}
 			var kinds []event.Kind
@@ -51,6 +57,7 @@ func TestIsOwnStatusline(t *testing.T) {
 		want    bool
 	}{
 		{"plain", "agent-screensaver statusline", true},
+		{"with the tool", "/opt/bin/agent-screensaver statusline --tool claude", true},
 		{"full path", "/usr/local/bin/agent-screensaver statusline", true},
 		{"with args", "/opt/bin/agent-screensaver statusline --x", true},
 		{"other binary name", "foo/agent-screensaver-x statusline", false},

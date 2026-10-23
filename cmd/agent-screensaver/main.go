@@ -102,9 +102,9 @@ func runTool(name string, args []string, stdin io.Reader, stdout io.Writer) int 
 	p := paths.ForHome(home)
 	now := func() int64 { return time.Now().UnixMilli() }
 	if name == "hook" {
-		return cli.Hook(args, stdin, p, now)
+		return cli.Hook(args, stdin, stdout, p, now)
 	}
-	return cli.RunStatusline(stdin, stdout, p, now)
+	return cli.RunStatusline(args, stdin, stdout, p, now)
 }
 
 // runSettings runs a settings command against the real home.

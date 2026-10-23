@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {"hooks": [{"type": "command", "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"}]}
+    ],
+    "PreToolUse": [
+      {"matcher": "^request_user_input$", "hooks": [{"type": "command", "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"}]}
+    ],
+    "PostToolUse": [
+      {"matcher": "*", "hooks": [{"type": "command", "command": "[ -x \"$FAKE_HOME/hooks/notify.sh\" ] && FAKE_HARNESS=codex \"$FAKE_HOME/hooks/notify.sh\" || true"}]}
+    ]
+  }
+}

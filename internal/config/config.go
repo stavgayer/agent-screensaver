@@ -24,6 +24,14 @@ type Config struct {
 	MaxFPS             int                       `json:"max_fps"`          // 0 = display refresh rate; else 1..240
 	IgnoredProjects    []string                  `json:"ignored_projects"` // folder names whose sessions never get a card
 	PreviousStatusline string                    `json:"previous_statusline,omitempty"`
+	// AgentsOff lists agent extension ids that are off: their hooks stay
+	// but print only their reply, and the daemon drops their events.
+	AgentsOff []string `json:"agents_off,omitempty"`
+}
+
+// AgentOff reports whether the agent extension with this id is off.
+func (c Config) AgentOff(id string) bool {
+	return slices.Contains(c.AgentsOff, id)
 }
 
 // Default returns the settings used when no file exists.
