@@ -40,6 +40,9 @@ func (w TokenWeights) weigh(usage tokenUsage) float64 {
 // Tally sums the tokens of every model call in the Claude Code transcripts
 // (~/.claude/projects/**/*.jsonl, subagent files included). It remembers
 // how far it read each file, so a poll reads only the lines added since.
+// It assumes Claude Code only appends to a transcript: a file replaced by
+// a longer one is not noticed (there is no inode check), only a shorter
+// one is read again from the start.
 // It is not safe for use by more than one goroutine.
 type Tally struct {
 	FS      fs.FS
@@ -99,10 +102,15 @@ func (t *Tally) Scan(sinceMs, budget int64) (bool, error) {
 			return nil
 		}
 		info, err := entry.Info()
-		if err != nil || info.ModTime().UnixMilli() <= sinceMs {
+		if err != nil {
 			return nil
 		}
+		// A quiet file keeps its offset (one map entry), so writing to it
+		// again does not read it from the start.
 		seen[name] = true
+		if info.ModTime().UnixMilli() <= sinceMs {
+			return nil
+		}
 		offset := t.files[name]
 		if info.Size() < offset {
 			offset = 0 // the file was rewritten

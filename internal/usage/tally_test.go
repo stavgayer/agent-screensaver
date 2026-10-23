@@ -285,3 +285,31 @@ func TestTallyDedupeSetStaysBounded(t *testing.T) {
 		}
 	}
 }
+
+// A file left alone longer than the horizon keeps its offset: when it is
+// written again, only the new lines are read.
+func TestTallyKeepsOffsetsOfQuietFiles(t *testing.T) {
+	root := t.TempDir()
+	transcript := filepath.Join(root, "projects", "p", "s.jsonl")
+	first := assistantLine("a", time.UnixMilli(at10), 1)
+	appendTo(t, transcript, first)
+	tally := &Tally{FS: os.DirFS(root), Root: "projects", Weights: DefaultWeights}
+	if _, err := tally.Scan(at10-dayMs, bigBudget); err != nil {
+		t.Fatal(err)
+	}
+	quiet := time.Now().Add(-30 * 24 * time.Hour)
+	if err := os.Chtimes(transcript, quiet, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tally.Scan(time.Now().Add(-8*24*time.Hour).UnixMilli(), bigBudget); err != nil {
+		t.Fatal(err)
+	}
+	second := assistantLine("b", time.Now(), 2)
+	appendTo(t, transcript, second)
+	if _, err := tally.Scan(time.Now().Add(-8*24*time.Hour).UnixMilli(), bigBudget); err != nil {
+		t.Fatal(err)
+	}
+	if want := int64(len(first) + len(second)); tally.readBytes != want {
+		t.Errorf("read %d bytes, want %d (the old line not again)", tally.readBytes, want)
+	}
+}
