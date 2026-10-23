@@ -55,24 +55,38 @@ func (d *Daemon) detailsOf(source string) *agents.Details {
 	return agent.Details
 }
 
-// readDueDetails reads the marked cards whose last read is at least
-// detailsEveryMs old, and reports whether a shown card changed. The others
-// stay marked for a later step.
+// maxDetailReads bounds the reads that run at once, off the step: a details
+// converter may take up to 2 s, which must never hold up the events.
+const maxDetailReads = 4
+
+// detailsResult is one finished read, merged into the state on the loop.
+type detailsResult struct {
+	key     cardKey
+	details state.Details
+}
+
+// readDueDetails merges the reads that finished, then starts reads for the
+// marked cards whose last read is at least detailsEveryMs old, one at a time
+// per card and at most maxDetailReads at once. The others stay marked for a
+// later step. It reports whether a shown card changed.
 func (d *Daemon) readDueDetails(nowMs int64) bool {
-	changed := false
 	for key := range d.detailsDue {
 		card, ok := d.state.Card(key.source, key.session)
 		if !ok {
 			delete(d.detailsDue, key)
 			continue
 		}
-		if lastMs, readBefore := d.detailsReadMs[key]; readBefore && nowMs-lastMs < detailsEveryMs {
+		lastMs, readBefore := d.detailsReadMs[key]
+		if d.detailsInFlight[key] || len(d.detailsInFlight) >= maxDetailReads || readBefore && nowMs-lastMs < detailsEveryMs {
 			continue
 		}
 		delete(d.detailsDue, key)
 		d.detailsReadMs[key] = nowMs
-		changed = d.state.SetDetails(key.source, key.session, d.Details.Read(d.detailsOf(key.source), card)) || changed
+		d.detailsInFlight[key] = true
+		reader, details := d.Details, d.detailsOf(key.source)
+		d.DetailsRunner(func() { d.detailsResults <- detailsResult{key, reader.Read(details, card)} })
 	}
+	changed := d.mergeDetails()
 	// Forget the sessions whose cards are gone.
 	for key := range d.detailsReadMs {
 		if _, ok := d.state.Card(key.source, key.session); !ok {
@@ -80,4 +94,18 @@ func (d *Daemon) readDueDetails(nowMs int64) bool {
 		}
 	}
 	return changed
+}
+
+// mergeDetails folds the finished reads into the state. It never waits.
+func (d *Daemon) mergeDetails() bool {
+	changed := false
+	for {
+		select {
+		case result := <-d.detailsResults:
+			delete(d.detailsInFlight, result.key)
+			changed = d.state.SetDetails(result.key.source, result.key.session, result.details) || changed
+		default:
+			return changed
+		}
+	}
 }

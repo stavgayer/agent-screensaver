@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/event"
@@ -179,4 +180,46 @@ func TestStatusLineWindowSizesAreLearned(t *testing.T) {
 	if want := map[string]int{"claude-opus-5-5[1m]": 1_000_000}; !reflect.DeepEqual(learner.learned, want) {
 		t.Errorf("learned %v, want %v", learner.learned, want)
 	}
+}
+
+// slowDetails blocks every read until release is closed, like a details
+// converter near its 2 s limit.
+type slowDetails struct {
+	release chan struct{}
+	answer  state.Details
+}
+
+func (s *slowDetails) Read(*agents.Details, state.Card) state.Details {
+	<-s.release
+	return s.answer
+}
+
+func TestASlowDetailsReadDoesNotDelayEvents(t *testing.T) {
+	d, p := newTestDaemon(t)
+	d.DetailsRunner = func(read func()) { go read() }
+	reader := &slowDetails{release: make(chan struct{}), answer: state.Details{Name: "Read late"}}
+	d.Details = reader
+	spoolEvent(t, p, "claude", "s1", event.KindStarted, 1_000)
+	d.Step(1_000, false) // starts the read, which now blocks
+
+	spoolEvent(t, p, "claude", "s1", event.KindApproval, 2_000)
+	started := time.Now()
+	d.Step(2_000, false)
+
+	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+		t.Errorf("a step took %v while a read was blocked", elapsed)
+	}
+	if cards := readStateFile(t, p).Cards; len(cards) != 1 || cards[0].Kind != state.KindApproval {
+		t.Fatalf("cards = %+v, want the approval at once", cards)
+	}
+	close(reader.release)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		d.Step(3_000, false)
+		if cards := readStateFile(t, p).Cards; cards[0].Name == "Read late" {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Error("the finished read never reached the card")
 }

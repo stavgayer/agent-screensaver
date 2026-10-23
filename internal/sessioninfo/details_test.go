@@ -159,23 +159,28 @@ func TestDetailsConverter(t *testing.T) {
 		name     string
 		script   string
 		timeout  int
+		warm     bool
 		want     state.Details
 		maxTaken time.Duration
 	}{
 		{"output used", "#!/bin/sh\ncat >/dev/null\necho '{\"name\":\"From the program\",\"context_percent\":12,\"model\":\"claude-opus-5-5\"}'\n",
-			2000, state.Details{Name: "From the program", Model: "Opus 5.5", ContextPercent: percent(12)}, 2500 * time.Millisecond},
+			2000, true, state.Details{Name: "From the program", Model: "Opus 5.5", ContextPercent: percent(12)}, 2500 * time.Millisecond},
 		{"stdin holds the card", "#!/bin/sh\nname=$(cat | tr -d '\"{}:, ')\necho \"{\\\"name\\\":\\\"$name\\\"}\"\n",
-			2000, state.Details{Name: "sessions1cwdtranscript"}, 2500 * time.Millisecond},
-		{"timeout respected", "#!/bin/sh\nsleep 2\necho '{\"name\":\"late\"}'\n", 100, state.Details{}, 500 * time.Millisecond},
+			2000, true, state.Details{Name: "sessions1cwdtranscript"}, 2500 * time.Millisecond},
+		{"timeout respected", "#!/bin/sh\nsleep 2\necho '{\"name\":\"late\"}'\n", 100, false, state.Details{}, 500 * time.Millisecond},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			details := testDetails(t, fmt.Sprintf(`{"name":[{"converter":{"run":"bin/details","timeout_ms":%d}}],
 				"context_percent":[{"converter":{"run":"bin/details","timeout_ms":%d}}],
 				"model":[{"converter":{"run":"bin/details","timeout_ms":%d}}]}`, tt.timeout, tt.timeout, tt.timeout), tt.script)
+			reader, card := Reader{Home: home}, state.Card{Source: "acme", Session: "s1"}
+			if tt.warm {
+				reader.Read(details, card) // macOS checks a new program on its first start
+			}
 			started := time.Now()
 
-			got := Reader{Home: home}.Read(details, state.Card{Source: "acme", Session: "s1"})
+			got := reader.Read(details, card)
 
 			if elapsed := time.Since(started); elapsed > tt.maxTaken {
 				t.Errorf("took %v, want under %v", elapsed, tt.maxTaken)

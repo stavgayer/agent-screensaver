@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"strings"
+	"sync"
 
 	"agent-screensaver/internal/atomicfile"
 )
@@ -15,8 +16,10 @@ import (
 // from the Claude Code status line (context_window.context_window_size).
 // The desktop app's transcripts do not say the size, so its sessions use
 // what was learned for the same model. It is kept in a small JSON file and
-// is not safe for use by more than one goroutine.
+// is safe to use from more than one goroutine: the daemon learns on its
+// loop while details are read off it.
 type ContextSizes struct {
+	mutex sync.Mutex
 	path  string
 	sizes map[string]int // by model id without its "[1m]" style marker
 }
@@ -43,6 +46,8 @@ func LoadContextSizes(path string) (*ContextSizes, error) {
 // largest size seen is kept: a session that runs the same model with the
 // 200k window must not undo a 1M one, nor two sessions flip it.
 func (c *ContextSizes) Learn(modelID string, tokens int) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	key := baseModel(modelID)
 	if key == "" || tokens <= c.sizes[key] {
 		return nil
@@ -62,6 +67,8 @@ func (c *ContextSizes) size(model string) (int, bool) {
 	if c == nil {
 		return 0, false
 	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	size, ok := c.sizes[baseModel(model)]
 	return size, ok && size > 0
 }

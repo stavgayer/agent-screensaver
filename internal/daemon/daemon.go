@@ -73,6 +73,9 @@ type Daemon struct {
 	// Details reads card details from the sessions' files. Without one,
 	// cards show only what the events carry.
 	Details DetailsReader
+	// DetailsRunner runs one details read away from the step. It defaults
+	// to a new goroutine; tests pass one that runs it at once.
+	DetailsRunner func(read func())
 	// ContextSizes learns context window sizes from the status line.
 	ContextSizes ContextLearner
 	// Estimator keeps one source's limits live between exact readings.
@@ -104,6 +107,11 @@ type Daemon struct {
 
 	detailsDue    map[cardKey]bool  // cards to read after this drain
 	detailsReadMs map[cardKey]int64 // when each card was last read
+	// detailsInFlight are the cards whose read runs now; detailsResults
+	// brings each read back to the loop. It holds maxDetailReads, so a read
+	// never waits to deliver.
+	detailsInFlight map[cardKey]bool
+	detailsResults  chan detailsResult
 
 	restored       bool // the limits of the last run were read back
 	estimatedOnce  bool
@@ -123,6 +131,10 @@ func New(p paths.Paths) *Daemon {
 
 		detailsDue:    map[cardKey]bool{},
 		detailsReadMs: map[cardKey]int64{},
+
+		DetailsRunner:   func(read func()) { go read() },
+		detailsInFlight: map[cardKey]bool{},
+		detailsResults:  make(chan detailsResult, maxDetailReads),
 	}
 }
 

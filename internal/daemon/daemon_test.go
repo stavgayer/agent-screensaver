@@ -26,6 +26,7 @@ func newTestDaemon(t *testing.T) (*Daemon, paths.Paths) {
 	p := paths.ForHome(t.TempDir())
 	d := New(p)
 	d.Logf = t.Logf
+	d.DetailsRunner = func(read func()) { read() } // reads finish inside the step
 	return d, p
 }
 
