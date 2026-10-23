@@ -32,6 +32,7 @@ rm -rf "$STAGE" "$ZIP"
 mkdir -p "$STAGE"
 cp build/agent-screensaver "$STAGE/"
 cp -R build/AgentScreensaver.saver build/runtime build/extensions "$STAGE/"
-# ditto keeps the bundle layout and the saver's signature intact.
-ditto -c -k --keepParent "$STAGE" "$ZIP"
+# ditto keeps the bundle layout and the saver's signature intact. Extended
+# attributes and resource forks stay out, so the zip holds no ._* files.
+COPYFILE_DISABLE=1 ditto -c -k --norsrc --noextattr --noacl --keepParent "$STAGE" "$ZIP"
 echo "$ZIP"
