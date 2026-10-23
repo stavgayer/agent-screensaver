@@ -506,3 +506,118 @@ func TestTickKeepsDoneCardWhileJobsRun(t *testing.T) {
 		})
 	}
 }
+
+func percent(value float64) *float64 { return &value }
+
+// details is what TestDetails checks on the one card.
+type details struct {
+	Name, Model, Branch, Cwd, Transcript string
+	ContextPercent                       *float64
+	Kind                                 CardKind
+	UpdatedAtMs                          int64
+}
+
+func detailsOf(card Card) details {
+	return details{Name: card.Name, Model: card.Model, Branch: card.Branch, Cwd: card.Cwd,
+		Transcript: card.Transcript, ContextPercent: card.ContextPercent, Kind: card.Kind, UpdatedAtMs: card.UpdatedAtMs}
+}
+
+func infoEvent(session string, atMs int64, name, model string, context *float64) event.Event {
+	return event.Event{V: 1, Source: "claude", Session: session, Kind: event.KindInfo, AtMs: atMs,
+		Name: name, Model: model, ContextPercent: context}
+}
+
+func TestDetails(t *testing.T) {
+	started := claudeEvent("s1", event.KindStarted, 1000, "api", "Fix bug")
+	withPlaces := started
+	withPlaces.Cwd, withPlaces.Transcript, withPlaces.Model = "/w/api", "/w/t.jsonl", "gpt-5.6"
+	hookNamed := started
+	hookNamed.Name = "From the hook"
+	tests := []struct {
+		name    string
+		events  []event.Event
+		file    *Details // applied with SetDetails after the events
+		want    details
+		changed bool // what SetDetails reports: whether the shown card changed
+	}{
+		{
+			name:   "a hook event carries places and model",
+			events: []event.Event{withPlaces},
+			want:   details{Cwd: "/w/api", Transcript: "/w/t.jsonl", Model: "gpt-5.6", Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+		{
+			name:   "info fills name, model and context without touching state or time",
+			events: []event.Event{started, infoEvent("s1", 5000, "Login fix", "Opus 5.5", percent(42))},
+			want:   details{Name: "Login fix", Model: "Opus 5.5", ContextPercent: percent(42), Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+		{
+			name:   "info for an unknown session makes no card",
+			events: []event.Event{infoEvent("s9", 5000, "Login fix", "", nil), started},
+			want:   details{Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+		{
+			name: "info without a field keeps the last value",
+			events: []event.Event{started, infoEvent("s1", 2000, "Login fix", "Opus 5.5", percent(42)),
+				infoEvent("s1", 3000, "", "", nil)},
+			want: details{Name: "Login fix", Model: "Opus 5.5", ContextPercent: percent(42), Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+		{
+			name:   "a hook name is used when nothing better is known",
+			events: []event.Event{hookNamed},
+			want:   details{Name: "From the hook", Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+		{
+			name:    "a file name beats a hook name",
+			events:  []event.Event{hookNamed},
+			file:    &Details{Name: "From the transcript"},
+			want:    details{Name: "From the transcript", Kind: KindRunning, UpdatedAtMs: 1000},
+			changed: true,
+		},
+		{
+			name:   "the status line name beats a file name",
+			events: []event.Event{hookNamed, infoEvent("s1", 2000, "Renamed", "", nil)},
+			file:   &Details{Name: "From the transcript"},
+			want:   details{Name: "Renamed", Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+		{
+			name:    "set details fills context and branch",
+			events:  []event.Event{started},
+			file:    &Details{ContextPercent: percent(77), Branch: "main"},
+			want:    details{ContextPercent: percent(77), Branch: "main", Kind: KindRunning, UpdatedAtMs: 1000},
+			changed: true,
+		},
+		{
+			name:   "set details with nothing new reports no change",
+			events: []event.Event{started},
+			file:   &Details{},
+			want:   details{Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var current State
+			for _, incoming := range tt.events {
+				current.Apply(incoming)
+			}
+			if tt.file != nil {
+				changed := current.SetDetails("claude", "s1", *tt.file)
+				if changed != tt.changed {
+					t.Errorf("changed = %v, want %v", changed, tt.changed)
+				}
+			}
+			if len(current.Cards) != 1 {
+				t.Fatalf("cards = %d, want 1", len(current.Cards))
+			}
+			if got := detailsOf(current.Cards[0]); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("details:\n got  %+v\n want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetDetailsUnknownCard(t *testing.T) {
+	var current State
+	if current.SetDetails("claude", "nope", Details{Name: "x"}) {
+		t.Error("SetDetails on a missing card reported a change")
+	}
+}

@@ -1,7 +1,7 @@
 {
   "cwd": "/Users/dev/work/my-project",
   "session_id": "abc123",
-  "model": {"id": "claude-opus-5-5", "display_name": "Opus"},
+  "model": {"id": "claude-opus-5-5[1m]", "display_name": "Opus 5.5 (1M context)"},
   "workspace": {
     "current_dir": "/Users/dev/work/my-project",
     "project_dir": "/Users/dev/work/my-project"

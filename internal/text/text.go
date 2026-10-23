@@ -214,3 +214,49 @@ func lastSpace(runes []rune) int {
 	}
 	return -1
 }
+
+// ModelMax caps a model name on a card, in characters.
+const ModelMax = 24
+
+// ShortModel makes a model name short enough for a card. A Claude model id
+// such as "claude-opus-5-5[1m]" or "claude-sonnet-4-5-20250929" becomes
+// "Opus 5.5"; a note such as " (1M context)" or "[1m]" is dropped. Other
+// names, such as "gpt-5.6", stay as they are.
+func ShortModel(model string) string {
+	name := strings.TrimSpace(model)
+	if cut := strings.IndexAny(name, "(["); cut >= 0 {
+		name = strings.TrimSpace(name[:cut])
+	}
+	if rest, ok := strings.CutPrefix(strings.ToLower(name), "claude-"); ok {
+		name = claudeModelName(rest)
+	}
+	// Every Claude card already says Claude.
+	name = strings.TrimPrefix(name, "Claude ")
+	return truncateAtWord([]rune(name), ModelMax)
+}
+
+// claudeModelName turns "opus-5-5" or "3-5-haiku-20241022" into "Opus 5.5"
+// or "Haiku 3.5": the family word, then the version numbers joined by dots.
+// A date (eight digits) is not part of the version.
+func claudeModelName(id string) string {
+	var family string
+	var version []string
+	for _, part := range strings.Split(id, "-") {
+		switch {
+		case part == "" || isDate(part):
+		case isDigits(part):
+			version = append(version, part)
+		case family == "":
+			family = strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return strings.TrimSpace(family + " " + strings.Join(version, "."))
+}
+
+func isDigits(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
+}
+
+func isDate(s string) bool {
+	return len(s) == 8 && isDigits(s)
+}

@@ -150,3 +150,67 @@ func TestLimitsEvent(t *testing.T) {
 		})
 	}
 }
+
+func float64Pointer(value float64) *float64 { return &value }
+
+func TestInfoEvent(t *testing.T) {
+	const nowMs = int64(1_738_400_000_000)
+	const transcript = "/Users/dev/.claude/projects/-Users-dev-work-my-project/abc123.jsonl"
+	tests := []struct {
+		name   string
+		input  []byte
+		want   event.Event
+		wantOK bool
+	}{
+		{
+			name:  "name, model and context",
+			input: readFixture(t, "session.json"),
+			want: event.Event{V: event.Version, Source: "claude", Session: "abc123", Kind: event.KindInfo, AtMs: nowMs,
+				Project: "my-project", Name: "Login fix", Model: "Opus 5.5", ContextPercent: float64Pointer(42),
+				Cwd: "/Users/dev/work/my-project", Transcript: transcript},
+			wantOK: true,
+		},
+		{
+			name:  "context unknown before the first message",
+			input: []byte(`{"session_id":"s1","model":{"id":"claude-opus-5-5","display_name":"Opus 5.5"},"context_window":{"used_percentage":null}}`),
+			want: event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: event.KindInfo, AtMs: nowMs,
+				Model: "Opus 5.5"},
+			wantOK: true,
+		},
+		{
+			name:  "model id when there is no display name",
+			input: []byte(`{"session_id":"s1","model":{"id":"claude-sonnet-4-5-20250929"}}`),
+			want: event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: event.KindInfo, AtMs: nowMs,
+				Model: "Sonnet 4.5"},
+			wantOK: true,
+		},
+		{
+			name:  "context kept inside 0 to 100",
+			input: []byte(`{"session_id":"s1","context_window":{"used_percentage":104}}`),
+			want: event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: event.KindInfo, AtMs: nowMs,
+				ContextPercent: float64Pointer(100)},
+			wantOK: true,
+		},
+		{
+			name:  "name is masked and shortened",
+			input: []byte(`{"session_id":"s1","session_name":"` + strings.Repeat("word ", 20) + `"}`),
+			want: event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: event.KindInfo, AtMs: nowMs,
+				Name: strings.TrimSpace(strings.Repeat("word ", 7)) + " word…"},
+			wantOK: true,
+		},
+		{name: "no session id", input: []byte(`{"session_name":"x","model":{"id":"m"}}`)},
+		{name: "no details", input: []byte(`{"session_id":"s1","cwd":"/a"}`)},
+		{name: "not json", input: []byte(`nope`)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := InfoEvent(tt.input, nowMs)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v (event %+v)", ok, tt.wantOK, got)
+			}
+			if ok && !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("event:\n got  %+v\n want %+v", got, tt.want)
+			}
+		})
+	}
+}

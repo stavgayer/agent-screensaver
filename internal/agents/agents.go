@@ -54,9 +54,14 @@ var (
 
 // fields holds what every adapter reads from a hook payload.
 type fields struct {
-	hookEvent        string
-	session          string
-	project          string
+	hookEvent  string
+	session    string
+	project    string
+	cwd        string
+	transcript string
+	model      string
+	// sessionTitle is the conversation name some payloads carry.
+	sessionTitle     string
 	prompt           string
 	toolName         string
 	toolInput        map[string]any
@@ -81,8 +86,9 @@ func hookFields(input []byte) (fields, bool) {
 		return fields{}, false
 	}
 	toolInput, _ := raw["tool_input"].(map[string]any)
+	cwd := stringField(raw, "cwd")
 	project := ""
-	if cwd := stringField(raw, "cwd"); cwd != "" {
+	if cwd != "" {
 		project = filepath.Base(cwd)
 	}
 	transcript, hasTranscript := raw["transcript_path"]
@@ -90,6 +96,10 @@ func hookFields(input []byte) (fields, bool) {
 		hookEvent:        stringField(raw, "hook_event_name"),
 		session:          session,
 		project:          project,
+		cwd:              cwd,
+		transcript:       stringField(raw, "transcript_path"),
+		model:            stringField(raw, "model"),
+		sessionTitle:     stringField(raw, "session_title"),
 		prompt:           stringField(raw, "prompt"),
 		toolName:         stringField(raw, "tool_name"),
 		toolInput:        toolInput,
@@ -142,6 +152,12 @@ func newEvent(source string, hook fields, kind event.Kind, title string, nowMs i
 		AtMs:    nowMs,
 		Project: hook.project,
 		Title:   title,
+		// The service reads the branch and the conversation name from
+		// these places later; the hook itself must stay fast.
+		Cwd:        hook.cwd,
+		Transcript: hook.transcript,
+		Model:      text.ShortModel(hook.model),
+		Name:       text.ShortTitle(hook.sessionTitle),
 	}
 }
 

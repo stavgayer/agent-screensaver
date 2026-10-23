@@ -203,3 +203,32 @@ func TestPromptTitleIsFastOnOneHugeLine(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestShortModel(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+		want  string
+	}{
+		{"claude id", "claude-opus-5-5", "Opus 5.5"},
+		{"claude id with a window tag", "claude-opus-5-5[1m]", "Opus 5.5"},
+		{"claude id with a date", "claude-sonnet-4-5-20250929", "Sonnet 4.5"},
+		{"older claude id order", "claude-3-5-haiku-20241022", "Haiku 3.5"},
+		{"display name with a note", "Opus 5.5 (1M context)", "Opus 5.5"},
+		{"display name", "Sonnet 4.5", "Sonnet 4.5"},
+		{"display name with the brand", "Claude 3.5 Sonnet", "3.5 Sonnet"},
+		{"codex model stays as it is", "gpt-5.6", "gpt-5.6"},
+		{"codex model with a suffix", "gpt-5.6-codex", "gpt-5.6-codex"},
+		{"spaces trimmed", "  gpt-5  ", "gpt-5"},
+		{"empty", "", ""},
+		{"only a note", "(1M context)", ""},
+		{"long name cut", strings.Repeat("m", 40), strings.Repeat("m", 23) + "…"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ShortModel(tt.model); got != tt.want {
+				t.Errorf("ShortModel(%q) = %q, want %q", tt.model, got, tt.want)
+			}
+		})
+	}
+}

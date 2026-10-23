@@ -207,3 +207,46 @@ func TestBackgroundCount(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionDetails(t *testing.T) {
+	const claudeTranscript = "/Users/example/.claude/projects/-Users-example-workspace/11111111-1111-4111-8111-111111111111.jsonl"
+	const codexRollout = "/Users/example/.codex/sessions/2026/10/22/rollout-2026-10-22T18-09-57-33333333-3333-4333-8333-333333333333.jsonl"
+	tests := []struct {
+		name    string
+		adapter string
+		input   string // a fixture file name, or inline JSON when it starts with {
+		want    event.Event
+	}{
+		{"claude prompt carries places", "claude", "user_prompt_submit.json",
+			event.Event{Cwd: "/Users/example/workspace", Transcript: claudeTranscript}},
+		{"claude session title is the name", "claude",
+			`{"session_id":"s1","hook_event_name":"UserPromptSubmit","prompt":"hi","session_title":"Login   fix"}`,
+			event.Event{Name: "Login fix"}},
+		{"claude model is shortened", "claude",
+			`{"session_id":"s1","hook_event_name":"Stop","model":"claude-opus-5-5[1m]"}`,
+			event.Event{Model: "Opus 5.5"}},
+		{"codex prompt carries places and model", "codex", "user_prompt_submit.json",
+			event.Event{Cwd: "/Users/example/workspace", Transcript: codexRollout, Model: "gpt-example"}},
+		{"codex stop carries the model", "codex", "stop.json",
+			event.Event{Cwd: "/Users/example/workspace", Transcript: codexRollout, Model: "gpt-example"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter, _ := ByName(tt.adapter)
+			input := []byte(tt.input)
+			if !strings.HasPrefix(tt.input, "{") {
+				var err error
+				if input, err = os.ReadFile(filepath.Join("testdata", tt.adapter, tt.input)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, ok := adapter.Map(input, testNowMs)
+			if !ok {
+				t.Fatal("event was ignored")
+			}
+			if got.Name != tt.want.Name || got.Model != tt.want.Model || got.Cwd != tt.want.Cwd || got.Transcript != tt.want.Transcript {
+				t.Errorf("got name %q model %q cwd %q transcript %q, want %+v", got.Name, got.Model, got.Cwd, got.Transcript, tt.want)
+			}
+		})
+	}
+}

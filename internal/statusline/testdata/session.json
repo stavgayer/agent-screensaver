@@ -1,0 +1,24 @@
+{
+  "session_id": "abc123",
+  "transcript_path": "/Users/dev/.claude/projects/-Users-dev-work-my-project/abc123.jsonl",
+  "cwd": "/Users/dev/work/my-project",
+  "scratchpad_dir": "/private/tmp/claude-501/-Users-dev-work-my-project/abc123/scratchpad",
+  "effort": {"level": "medium"},
+  "session_name": "Login fix",
+  "model": {"id": "claude-opus-5-5[1m]", "display_name": "Opus 5.5 (1M context)"},
+  "workspace": {"current_dir": "/Users/dev/work/my-project", "project_dir": "/Users/dev/work/my-project", "added_dirs": []},
+  "version": "2.1.308",
+  "output_style": {"name": "default"},
+  "cost": {"total_cost_usd": 12.5, "total_duration_ms": 3600000, "total_api_duration_ms": 900000, "total_lines_added": 120, "total_lines_removed": 30},
+  "context_window": {
+    "total_input_tokens": 420000,
+    "total_output_tokens": 700,
+    "context_window_size": 1000000,
+    "current_usage": {"input_tokens": 2, "output_tokens": 700, "cache_creation_input_tokens": 1200, "cache_read_input_tokens": 418798},
+    "used_percentage": 42,
+    "remaining_percentage": 58
+  },
+  "exceeds_200k_tokens": true,
+  "fast_mode": false,
+  "thinking": {"enabled": true}
+}

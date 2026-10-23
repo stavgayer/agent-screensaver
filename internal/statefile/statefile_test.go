@@ -13,7 +13,8 @@ import (
 
 func sampleState() state.State {
 	return state.State{Cards: []state.Card{
-		{Source: "claude", Session: "s1", Kind: state.KindRunning, Title: "Fix login", Request: "run rm", Project: "app"},
+		{Source: "claude", Session: "s1", Kind: state.KindRunning, Title: "Fix login", Request: "run rm", Project: "app",
+			Name: "Login fix", Branch: "fix/login", Model: "Opus 5.5"},
 	}}
 }
 
@@ -37,11 +38,13 @@ func TestBuildPrivacyStripsTitles(t *testing.T) {
 			if got.Cards[0].Title != tt.wantTitle {
 				t.Fatalf("Title = %q, want %q", got.Cards[0].Title, tt.wantTitle)
 			}
-			if tt.privacy && got.Cards[0].Request != "" {
-				t.Fatalf("Request = %q, want empty", got.Cards[0].Request)
+			// The conversation name and the branch name say what the work
+			// is, as the title does.
+			if card := got.Cards[0]; tt.privacy && (card.Request != "" || card.Name != "" || card.Branch != "") {
+				t.Fatalf("request, name and branch = %q, %q, %q, want empty", card.Request, card.Name, card.Branch)
 			}
-			if got.Cards[0].Project != "app" {
-				t.Fatalf("Project = %q, want kept", got.Cards[0].Project)
+			if got.Cards[0].Project != "app" || got.Cards[0].Model != "Opus 5.5" {
+				t.Fatalf("project and model = %q, %q, want kept", got.Cards[0].Project, got.Cards[0].Model)
 			}
 			if input.Cards[0].Title != "Fix login" || input.Cards[0].Request != "run rm" {
 				t.Fatalf("caller state was mutated: %+v", input.Cards[0])

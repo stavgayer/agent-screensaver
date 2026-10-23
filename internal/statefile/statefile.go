@@ -29,7 +29,8 @@ type StateFile struct {
 }
 
 // Build combines state and view into a file. With privacy on it clears each
-// card's title and request. It copies the cards, so the caller's state is
+// card's title, request, conversation name and branch: each says what the
+// work is. It copies the cards, so the caller's state is
 // untouched, and it never leaves a nil list (which would encode as null).
 func Build(st state.State, v view.View, nowMs int64) StateFile {
 	cards := make([]state.Card, len(st.Cards))
@@ -38,6 +39,8 @@ func Build(st state.State, v view.View, nowMs int64) StateFile {
 		for i := range cards {
 			cards[i].Title = ""
 			cards[i].Request = ""
+			cards[i].Name = ""
+			cards[i].Branch = ""
 		}
 	}
 	limits := make([]state.Limit, len(st.Limits))

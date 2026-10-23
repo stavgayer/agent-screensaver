@@ -1,5 +1,5 @@
 // Package statusline turns the JSON that Claude Code pipes to its status
-// line command into a limits event.
+// line command into a limits event and an info event.
 package statusline
 
 import (
@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/text"
 )
 
 const sourceClaude = "claude"
@@ -24,11 +25,21 @@ type window struct {
 }
 
 type input struct {
-	Cwd       string `json:"cwd"`
-	SessionID string `json:"session_id"`
+	Cwd            string `json:"cwd"`
+	SessionID      string `json:"session_id"`
+	SessionName    string `json:"session_name"`
+	TranscriptPath string `json:"transcript_path"`
+	Model          struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"display_name"`
+	} `json:"model"`
 	Workspace struct {
 		CurrentDir string `json:"current_dir"`
 	} `json:"workspace"`
+	ContextWindow struct {
+		// UsedPercentage is null before the first message.
+		UsedPercentage *float64 `json:"used_percentage"`
+	} `json:"context_window"`
 	RateLimits struct {
 		FiveHour *window `json:"five_hour"`
 		SevenDay *window `json:"seven_day"`
@@ -62,6 +73,40 @@ func LimitsEvent(data []byte, nowMs int64) (event.Event, bool) {
 	}, true
 }
 
+// InfoEvent builds an info event with the session's name, model and context
+// fullness. It reports false when the input is not valid JSON, has no
+// session id, or carries none of those details.
+func InfoEvent(data []byte, nowMs int64) (event.Event, bool) {
+	var parsed input
+	if err := json.Unmarshal(data, &parsed); err != nil || sessionName(parsed.SessionID) == FallbackSession {
+		return event.Event{}, false
+	}
+	model := parsed.Model.DisplayName
+	if model == "" {
+		model = parsed.Model.ID
+	}
+	info := event.Event{
+		V:          event.Version,
+		Source:     sourceClaude,
+		Session:    parsed.SessionID,
+		Kind:       event.KindInfo,
+		AtMs:       nowMs,
+		Project:    projectName(parsed),
+		Name:       text.ShortTitle(parsed.SessionName),
+		Model:      text.ShortModel(model),
+		Cwd:        currentDir(parsed),
+		Transcript: parsed.TranscriptPath,
+	}
+	if used := parsed.ContextWindow.UsedPercentage; used != nil {
+		clamped := min(max(*used, 0), 100)
+		info.ContextPercent = &clamped
+	}
+	if info.Name == "" && info.Model == "" && info.ContextPercent == nil {
+		return event.Event{}, false
+	}
+	return info, true
+}
+
 func appendReading(readings []event.LimitReading, name event.Window, found *window) []event.LimitReading {
 	if found == nil || found.UsedPercentage == nil {
 		return readings
@@ -76,14 +121,17 @@ func appendReading(readings []event.LimitReading, name event.Window, found *wind
 // projectName prefers workspace.current_dir, which the docs recommend, and
 // falls back to cwd, which holds the same value.
 func projectName(parsed input) string {
-	dir := parsed.Workspace.CurrentDir
-	if dir == "" {
-		dir = parsed.Cwd
+	if dir := currentDir(parsed); dir != "" {
+		return filepath.Base(dir)
 	}
-	if dir == "" {
-		return ""
+	return ""
+}
+
+func currentDir(parsed input) string {
+	if parsed.Workspace.CurrentDir != "" {
+		return parsed.Workspace.CurrentDir
 	}
-	return filepath.Base(dir)
+	return parsed.Cwd
 }
 
 // sessionName keeps the event valid: event.Parse rejects empty or oversized

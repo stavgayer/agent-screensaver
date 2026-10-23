@@ -47,6 +47,9 @@ const (
 	KindFinished   Kind = "finished"
 	KindEnded      Kind = "ended"
 	KindLimits     Kind = "limits"
+	// KindInfo carries details of a session (name, model, context) and
+	// nothing else: it never makes a card and never changes its state.
+	KindInfo Kind = "info"
 )
 
 var knownKinds = map[Kind]bool{
@@ -57,6 +60,7 @@ var knownKinds = map[Kind]bool{
 	KindFinished:   true,
 	KindEnded:      true,
 	KindLimits:     true,
+	KindInfo:       true,
 }
 
 // Event is one message from a source to the service.
@@ -72,6 +76,18 @@ type Event struct {
 	// Background is how many background jobs (shells, subagents) the session
 	// still runs. nil means the source did not say; 0 means none are left.
 	Background *int `json:"background,omitempty"`
+	// Name is the conversation name the tool shows, for example one set
+	// with /rename. It is preferred to the title made from the prompt.
+	Name string `json:"name,omitempty"`
+	// Model is the short model name, for example "Opus 5.5".
+	Model string `json:"model,omitempty"`
+	// ContextPercent is how full the context window is, 0 to 100. nil
+	// means the source did not say.
+	ContextPercent *float64 `json:"context_percent,omitempty"`
+	// Cwd and Transcript tell the service where to look for more details
+	// (the git branch, the conversation name). They are never shown.
+	Cwd        string `json:"cwd,omitempty"`
+	Transcript string `json:"transcript,omitempty"`
 }
 
 // Parse decodes and validates one event. It checks the size first so that
@@ -99,6 +115,9 @@ func (e Event) validate() error {
 	}
 	if e.Background != nil && *e.Background < 0 {
 		return fmt.Errorf("background is %d, must not be negative", *e.Background)
+	}
+	if e.ContextPercent != nil && (*e.ContextPercent < 0 || *e.ContextPercent > 100) {
+		return fmt.Errorf("context_percent is %v, must be 0 to 100", *e.ContextPercent)
 	}
 	if err := validateIdentifier("source", e.Source); err != nil {
 		return err

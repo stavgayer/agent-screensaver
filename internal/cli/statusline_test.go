@@ -1,9 +1,48 @@
 package cli
 
 import (
+	"io"
+	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/paths"
+	"agent-screensaver/internal/spool"
 )
+
+func TestRunStatuslineWritesLimitsAndInfo(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []event.Kind
+	}{
+		{"limits and details", `{"session_id":"s1","session_name":"Login fix","rate_limits":{"five_hour":{"used_percentage":20}}}`,
+			[]event.Kind{event.KindLimits, event.KindInfo}},
+		{"details only", `{"session_id":"s1","context_window":{"used_percentage":42}}`, []event.Kind{event.KindInfo}},
+		{"nothing to say", `{"session_id":"s1"}`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := paths.ForHome(t.TempDir())
+			now := func() int64 { return 1_000 }
+			if code := RunStatusline(strings.NewReader(tt.input), io.Discard, p, now); code != 0 {
+				t.Fatalf("code = %d", code)
+			}
+			var kinds []event.Kind
+			for _, written := range spool.Drain(p.SpoolDir) {
+				kinds = append(kinds, written.Kind)
+			}
+			slices.Sort(kinds)
+			want := slices.Clone(tt.want)
+			slices.Sort(want)
+			if !slices.Equal(kinds, want) {
+				t.Errorf("kinds = %v, want %v", kinds, want)
+			}
+		})
+	}
+}
 
 func TestIsOwnStatusline(t *testing.T) {
 	tests := []struct {

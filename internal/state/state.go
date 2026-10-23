@@ -42,6 +42,44 @@ type Card struct {
 	// Background is how many background jobs the session still runs. A
 	// finished card with jobs left stays until they are done.
 	Background int `json:"background,omitempty"`
+	// Name is the conversation name; see names for where it comes from.
+	Name string `json:"name,omitempty"`
+	// Model is the short model name, for example "Opus 5.5".
+	Model string `json:"model,omitempty"`
+	// Branch is the git branch checked out in the session's folder.
+	Branch string `json:"branch,omitempty"`
+	// ContextPercent is how full the context window is, 0 to 100.
+	ContextPercent *float64 `json:"context_percent,omitempty"`
+	// Cwd and Transcript tell the service where to read more details. They
+	// stay out of state.json.
+	Cwd        string `json:"-"`
+	Transcript string `json:"-"`
+
+	names names
+}
+
+// names holds the conversation name from each place it can come from. The
+// status line is the freshest (it shows a /rename at once), the files the
+// service reads come next, and a name in a hook payload is the last resort.
+type names struct {
+	status, file, hook string
+}
+
+func (n names) best() string {
+	for _, name := range []string{n.status, n.file, n.hook} {
+		if name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+// Details are what the service reads from the session's own files. Empty
+// fields mean "not found" and keep what the card has.
+type Details struct {
+	Name           string
+	ContextPercent *float64
+	Branch         string
 }
 
 // Limit is the latest usage reading of one source and window.
@@ -67,6 +105,14 @@ func (s *State) Apply(incoming event.Event) {
 		return
 	}
 	index := s.findCard(incoming.Source, incoming.Session)
+	if incoming.Kind == event.KindInfo {
+		// Details never make a card: the status line also runs for
+		// sessions no hook has told us about.
+		if index >= 0 {
+			applyDetails(&s.Cards[index], incoming, &s.Cards[index].names.status)
+		}
+		return
+	}
 	if incoming.Kind == event.KindEnded {
 		s.applyEnded(index)
 		return
@@ -81,11 +127,65 @@ func (s *State) Apply(incoming event.Event) {
 	late := incoming.AtMs < card.UpdatedAtMs
 	if !late {
 		applyToCard(card, incoming)
+		applyDetails(card, incoming, &card.names.hook)
 	}
 	if incoming.Project != "" && (!late || card.Project == "") {
 		card.Project = incoming.Project
 	}
 	card.UpdatedAtMs = max(card.UpdatedAtMs, incoming.AtMs)
+}
+
+// Card returns a copy of the card of one session.
+func (s *State) Card(source, session string) (Card, bool) {
+	index := s.findCard(source, session)
+	if index < 0 {
+		return Card{}, false
+	}
+	return s.Cards[index], true
+}
+
+// SetDetails folds in what the service read from the session's files. It
+// reports whether the card as shown changed.
+func (s *State) SetDetails(source, session string, found Details) bool {
+	index := s.findCard(source, session)
+	if index < 0 {
+		return false
+	}
+	card := &s.Cards[index]
+	before := *card
+	if found.Name != "" {
+		card.names.file = found.Name
+		card.Name = card.names.best()
+	}
+	if found.ContextPercent != nil {
+		card.ContextPercent = copyFloat64(found.ContextPercent)
+	}
+	if found.Branch != "" {
+		card.Branch = found.Branch
+	}
+	return card.Name != before.Name || card.Branch != before.Branch ||
+		!equalFloat64(card.ContextPercent, before.ContextPercent)
+}
+
+// applyDetails copies the optional details of an event. A missing field
+// keeps what the card has. nameSlot says which source the name came from.
+func applyDetails(card *Card, incoming event.Event, nameSlot *string) {
+	if incoming.Name != "" {
+		*nameSlot = incoming.Name
+		card.Name = card.names.best()
+	}
+	if incoming.Model != "" {
+		card.Model = incoming.Model
+	}
+	if incoming.ContextPercent != nil {
+		card.ContextPercent = copyFloat64(incoming.ContextPercent)
+	}
+	if incoming.Cwd != "" {
+		card.Cwd = incoming.Cwd
+	}
+	if incoming.Transcript != "" {
+		card.Transcript = incoming.Transcript
+	}
 }
 
 // applyEnded drops a card, except a finished one: it stays so its result
@@ -218,4 +318,16 @@ func copyInt64(value *int64) *int64 {
 	}
 	copied := *value
 	return &copied
+}
+
+func copyFloat64(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
+}
+
+func equalFloat64(a, b *float64) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }

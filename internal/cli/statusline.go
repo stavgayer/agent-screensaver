@@ -29,7 +29,7 @@ const (
 	inStatuslineEnv = "AGS_IN_STATUSLINE"
 )
 
-// RunStatusline writes the limits event, then runs the status line command
+// RunStatusline writes the limits and info events, then runs the status line command
 // the user had before and prints its output. It always returns 0.
 func RunStatusline(stdin io.Reader, stdout io.Writer, p paths.Paths, now func() int64) (code int) {
 	defer recoverToZero(p, now, &code)
@@ -41,9 +41,15 @@ func RunStatusline(stdin io.Reader, stdout io.Writer, p paths.Paths, now func() 
 		logError(p, now, fmt.Errorf("read statusline input: %w", err))
 	}
 	drain(stdin)
-	if limits, ok := statusline.LimitsEvent(input, now()); ok {
+	atMs := now()
+	if limits, ok := statusline.LimitsEvent(input, atMs); ok {
 		if err := spool.Write(p.SpoolDir, limits); err != nil {
 			logError(p, now, fmt.Errorf("write limits event: %w", err))
+		}
+	}
+	if info, ok := statusline.InfoEvent(input, atMs); ok {
+		if err := spool.Write(p.SpoolDir, info); err != nil {
+			logError(p, now, fmt.Errorf("write info event: %w", err))
 		}
 	}
 	previous := strings.TrimSpace(config.Load(p.ConfigFile).PreviousStatusline)

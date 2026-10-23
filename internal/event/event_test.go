@@ -89,6 +89,31 @@ func TestParse(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:     "info event with details",
+			input:    `{"v":1,"source":"claude","session":"s1","kind":"info","at_ms":1,"name":"Fix login","model":"Opus 5.5","context_percent":62.5}`,
+			wantKind: KindInfo,
+		},
+		{
+			name:     "started with cwd and transcript",
+			input:    `{"v":1,"source":"codex","session":"s1","kind":"started","at_ms":1,"cwd":"/w/app","transcript":"/w/r.jsonl"}`,
+			wantKind: KindStarted,
+		},
+		{
+			name:     "context at 0 and 100 are valid",
+			input:    `{"v":1,"source":"claude","session":"s1","kind":"info","at_ms":1,"context_percent":100}`,
+			wantKind: KindInfo,
+		},
+		{
+			name:    "context over 100",
+			input:   `{"v":1,"source":"claude","session":"s1","kind":"info","at_ms":1,"context_percent":100.5}`,
+			wantErr: true,
+		},
+		{
+			name:    "negative context",
+			input:   `{"v":1,"source":"claude","session":"s1","kind":"info","at_ms":1,"context_percent":-1}`,
+			wantErr: true,
+		},
+		{
 			name:    "not json",
 			input:   `nope`,
 			wantErr: true,
