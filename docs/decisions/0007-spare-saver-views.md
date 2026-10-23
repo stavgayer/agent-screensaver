@@ -19,14 +19,21 @@ After a screen saver run stopped, one legacyScreenSaver process stayed alive wit
 
 ## Decision
 
-The saver view runs its page only when all of these are true:
-- it is animating
-- it is in a window
-- it is the System Settings preview, or ScreenSaverEngine is running, or the host is not legacyScreenSaver (the test harness)
+The saver view runs its page only when it is in a window and one of these is true:
+- it is the System Settings thumbnail (`isPreview`), or the host is not legacyScreenSaver (the test harness)
+- it is animating, and ScreenSaverEngine is running or this process got `com.apple.screensaver.didstart`
 
 In every other case the web view is hidden, so the page is hidden: the runtime stops its frames and videos, and WebKit suspends the web process. The 1 s state timer stops too. The view checks again on `startAnimation`, `stopAnimation`, `viewDidMoveToWindow`, `didstart`, and when ScreenSaverEngine starts or exits (NSWorkspace launch and terminate notifications).
 
 The spare process itself stays. WallpaperAgent starts it on purpose for the next run. If it quit, WallpaperAgent would only start another one. Paused, it uses no CPU.
+
+## Correction (2026-10-23): the System Settings hosts
+
+The first version of this rule (commit d92f039) also required `isAnimating`, and it required ScreenSaverEngine for every full-size view. After that change, the System Settings preview stayed black. The full run still worked. The diagnostic log from the same owner session shows two causes:
+- The thumbnail view (`isPreview`, 111 x 16 window) got `viewDidMoveToWindow` but never `startAnimation`. It got only a `stopAnimation` when Preview was clicked. So it never counted as animating.
+- The Preview button does not start ScreenSaverEngine: the log has no ScreenSaverEngine process between 15:11:30 and 15:13:30. Instead, the spare WallpaperAgent process gets `didstart`, makes a new full-size view (`isPreview` false) and animates it, and it gets `willstop` when the Preview ends.
+
+So a preview view now runs whenever it has a window. A full-size view also counts as shown after its process got `didstart`. The process quits at `willstop`, so this state never outlives the run. Spare views stay paused, because they exist before any `didstart` and no engine runs.
 
 ## Alternatives
 

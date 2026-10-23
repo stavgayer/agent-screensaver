@@ -95,8 +95,9 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     private static let engineBundleID = "com.apple.ScreenSaver.Engine"
 
     /// WallpaperAgent starts a spare legacyScreenSaver after each run and animates its views
-    /// although nothing shows them (decision 0007). A full-screen view is on screen only while
-    /// ScreenSaverEngine runs; the System Settings preview has no engine.
+    /// although nothing shows them (decision 0007). A full-screen view is on screen while
+    /// ScreenSaverEngine runs, or after didstart (the System Settings Preview button runs the
+    /// saver in the spare process without the engine). The process quits at willstop.
     private static var engineRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: engineBundleID).isEmpty
     }
@@ -104,8 +105,13 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     /// Only legacyScreenSaver makes spare views; any other host (the test harness) shows its view.
     private static let hostMakesSpares = Bundle.main.bundleIdentifier == "com.apple.ScreenSaver.Engine.legacyScreenSaver"
 
+    private static var runStarted = false
+
+    /// The System Settings thumbnail never gets startAnimation, so a preview runs while it has a window.
     private var shouldRun: Bool {
-        isAnimating && window != nil && (isPreview || !Self.hostMakesSpares || Self.engineRunning)
+        guard window != nil else { return false }
+        if isPreview || !Self.hostMakesSpares { return true }
+        return isAnimating && (Self.runStarted || Self.engineRunning)
     }
 
     /// Pauses the page when nothing shows it: a hidden view makes the page hidden, so the
@@ -140,7 +146,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         let center = DistributedNotificationCenter.default()
         let handlers: [(String, (AgentSaverView) -> Void)] = [
             ("com.apple.screensaver.willstop", { $0.shutDown() }),
-            ("com.apple.screensaver.didstart", { $0.updateRunning() }),
+            ("com.apple.screensaver.didstart", { Self.runStarted = true; $0.updateRunning() }),
             ("com.apple.screenLockUIIsShown", { $0.setLockUI(true) }),
             ("com.apple.screenLockUIIsHidden", { $0.setLockUI(false) }),
         ]
