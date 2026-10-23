@@ -92,7 +92,7 @@ func TestEstimate(t *testing.T) {
 			uses:    []use{{at10 + 10*minuteMs, 1000}},
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10)},
 			nowMs:   at10 + 30*minuteMs,
-			want:    []Reading{exact(event.FiveHour, 10, 0, at10)},
+			want:    []Reading{exact(event.FiveHour, 10, at10+5*hourMs+10*minuteMs, at10)},
 		},
 		{
 			// 10 points over 1,000 weighted tokens is 0.01 per token; 500
@@ -101,14 +101,14 @@ func TestEstimate(t *testing.T) {
 			uses:    []use{{at10 + 10*minuteMs, 1000}, {at11 + 10*minuteMs, 500}},
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10), anchor(event.FiveHour, 20, at11)},
 			nowMs:   at11 + 30*minuteMs,
-			want:    []Reading{estimated(event.FiveHour, 25, 0, at11+30*minuteMs)},
+			want:    []Reading{estimated(event.FiveHour, 25, at10+5*hourMs+10*minuteMs, at11+30*minuteMs)},
 		},
 		{
 			name:    "no tokens since the latest anchor: the anchor stays exact",
 			uses:    []use{{at10 + 10*minuteMs, 1000}},
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10), anchor(event.FiveHour, 20, at11)},
 			nowMs:   at11 + 30*minuteMs,
-			want:    []Reading{exact(event.FiveHour, 20, 0, at11)},
+			want:    []Reading{exact(event.FiveHour, 20, at10+5*hourMs+10*minuteMs, at11)},
 		},
 		{
 			// 10 -> 11 is too small to trust; 10 -> 20 over all 1,000
@@ -118,14 +118,14 @@ func TestEstimate(t *testing.T) {
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10), anchor(event.FiveHour, 11, at10+30*minuteMs),
 				anchor(event.FiveHour, 20, at11)},
 			nowMs: at11 + 30*minuteMs,
-			want:  []Reading{estimated(event.FiveHour, 25, 0, at11+30*minuteMs)},
+			want:  []Reading{estimated(event.FiveHour, 25, at10+5*hourMs+10*minuteMs, at11+30*minuteMs)},
 		},
 		{
 			name:    "the estimate stops at 100",
 			uses:    []use{{at10 + 10*minuteMs, 1000}, {at11 + 10*minuteMs, 100_000}},
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10), anchor(event.FiveHour, 20, at11)},
 			nowMs:   at11 + 30*minuteMs,
-			want:    []Reading{estimated(event.FiveHour, 100, 0, at11+30*minuteMs)},
+			want:    []Reading{estimated(event.FiveHour, 100, at10+5*hourMs+10*minuteMs, at11+30*minuteMs)},
 		},
 		{
 			// The window of the 11:00 reading ends at 12:00; only the 300
@@ -135,7 +135,7 @@ func TestEstimate(t *testing.T) {
 			anchors: []Anchor{withReset(anchor(event.FiveHour, 10, at10), at12),
 				withReset(anchor(event.FiveHour, 20, at11), at12)},
 			nowMs: at12 + 30*minuteMs,
-			want:  []Reading{estimated(event.FiveHour, 3, 0, at12+30*minuteMs)},
+			want:  []Reading{estimated(event.FiveHour, 3, at12+5*hourMs+10*minuteMs, at12+30*minuteMs)},
 		},
 		{
 			// The 10:00 window closed by 15:00 at the latest. A window opened
@@ -146,7 +146,7 @@ func TestEstimate(t *testing.T) {
 				{at10 + 8*hourMs, 5000}, {at10 + 12*hourMs, 200}},
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10), anchor(event.FiveHour, 20, at10+15*minuteMs)},
 			nowMs:   at10 + 13*hourMs,
-			want:    []Reading{estimated(event.FiveHour, 2, 0, at10+13*hourMs)},
+			want:    []Reading{estimated(event.FiveHour, 2, at10+17*hourMs, at10+13*hourMs)},
 		},
 		{
 			// The window surely closed by 15:15: the old reading is given
@@ -172,7 +172,7 @@ func TestEstimate(t *testing.T) {
 			anchors: []Anchor{anchor(event.FiveHour, 0, at10), anchor(event.FiveHour, 10, at10+30*minuteMs),
 				anchor(event.FiveHour, 30, at11)},
 			nowMs: at11 + 30*minuteMs,
-			want:  []Reading{estimated(event.FiveHour, 32, 0, at11+30*minuteMs)},
+			want:  []Reading{estimated(event.FiveHour, 32, at10+5*hourMs+10*minuteMs, at11+30*minuteMs)},
 		},
 		{
 			name:    "after a reset with no ratio the old anchor stays, so the ring says Reset",
@@ -203,21 +203,21 @@ func TestEstimate(t *testing.T) {
 			anchors: []Anchor{anchor(event.FiveHour, 80, at10), anchor(event.FiveHour, 5, at11),
 				anchor(event.FiveHour, 15, at12)},
 			nowMs: at12 + 30*minuteMs,
-			want:  []Reading{estimated(event.FiveHour, 16, 0, at12+30*minuteMs)},
+			want:  []Reading{estimated(event.FiveHour, 16, at10+5*hourMs+10*minuteMs, at12+30*minuteMs)},
 		},
 		{
 			name:    "anchors far apart with no known end teach nothing",
 			uses:    []use{{at10 + 10*minuteMs, 1000}, {at13 + 10*minuteMs, 500}},
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10), anchor(event.FiveHour, 20, at13)},
 			nowMs:   at13 + 30*minuteMs,
-			want:    []Reading{exact(event.FiveHour, 20, 0, at13)},
+			want:    []Reading{exact(event.FiveHour, 20, at10+5*hourMs+10*minuteMs, at13)},
 		},
 		{
 			name:    "windows are calibrated apart; the newest anchor of each wins",
 			uses:    []use{{at10 + 10*minuteMs, 1000}, {at11 + 10*minuteMs, 500}},
 			anchors: []Anchor{anchor(event.Week, 40, at10), anchor(event.FiveHour, 7, at11), anchor(event.Week, 44, at11)},
 			nowMs:   at11 + 30*minuteMs,
-			want:    []Reading{exact(event.FiveHour, 7, 0, at11), estimated(event.Week, 46, 0, at11+30*minuteMs)},
+			want:    []Reading{exact(event.FiveHour, 7, at10+5*hourMs+10*minuteMs, at11), estimated(event.Week, 46, 0, at11+30*minuteMs)},
 		},
 	}
 	for _, tt := range tests {
@@ -280,7 +280,7 @@ func TestEstimateWhileCatchingUp(t *testing.T) {
 		}
 	}
 	// 20 points over 2,000 tokens; 1,000 tokens since add 10.
-	want := []Reading{estimated(event.FiveHour, 40, 0, nowMs)}
+	want := []Reading{estimated(event.FiveHour, 40, at10+5*hourMs+10*minuteMs, nowMs)}
 	if last.CatchingUp || !reflect.DeepEqual(last.Readings, want) {
 		t.Errorf("after catching up = %+v, want %s", last, show(want))
 	}
@@ -304,7 +304,7 @@ func TestCalibrationSurvivesARestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Reading{estimated(event.FiveHour, 25, 0, at11+30*minuteMs)}
+	want := []Reading{estimated(event.FiveHour, 25, at10+5*hourMs+10*minuteMs, at11+30*minuteMs)}
 	if !reflect.DeepEqual(result.Readings, want) {
 		t.Errorf("after restart =\n %s\nwant\n %s", show(result.Readings), show(want))
 	}
@@ -418,4 +418,90 @@ func show(readings []Reading) string {
 			time.UnixMilli(reading.AtMs).UTC().Format("15:04"))
 	}
 	return text
+}
+
+// The reset time is always known when it can be: an exact end wins, else
+// the 5h window is read from the calls and the week rolls forward.
+func TestEstimateResetTime(t *testing.T) {
+	const dayMs = 24 * hourMs
+	tests := []struct {
+		name    string
+		uses    []use
+		anchors []Anchor
+		nowMs   int64
+		window  event.Window
+		want    Reading
+	}{
+		{
+			name:    "the first call after a known end opens the next window",
+			uses:    []use{{at10 + 2*hourMs, 100}, {at12 + 40*minuteMs, 100}},
+			anchors: []Anchor{withReset(anchor(event.FiveHour, 30, at10), at12)},
+			nowMs:   at13,
+			window:  event.FiveHour,
+			want:    exact(event.FiveHour, 30, at12, at10),
+		},
+		{
+			name:    "a call more than five hours after the last opens a new window",
+			uses:    []use{{at10 + 10*minuteMs, 100}, {at10 + 5*hourMs + 30*minuteMs, 100}},
+			anchors: []Anchor{anchor(event.FiveHour, 0, at10+5*hourMs+40*minuteMs)},
+			nowMs:   at10 + 6*hourMs,
+			window:  event.FiveHour,
+			want:    exact(event.FiveHour, 0, at10+10*hourMs+30*minuteMs, at10+5*hourMs+40*minuteMs),
+		},
+		{
+			name:    "an exact end wins over the one the calls give",
+			uses:    []use{{at10 + 10*minuteMs, 100}},
+			anchors: []Anchor{withReset(anchor(event.FiveHour, 10, at10), at13)},
+			nowMs:   at11,
+			window:  event.FiveHour,
+			want:    exact(event.FiveHour, 10, at13, at10),
+		},
+		{
+			name:    "a week past its end says the end it had, so the ring says Reset",
+			anchors: []Anchor{withReset(anchor(event.Week, 60, at10-4*dayMs), at10-2*dayMs)},
+			nowMs:   at10,
+			window:  event.Week,
+			want:    exact(event.Week, 60, at10-2*dayMs, at10-4*dayMs),
+		},
+		{
+			name:    "the week keeps the exact end while it is ahead",
+			anchors: []Anchor{withReset(anchor(event.Week, 60, at10), at10+3*dayMs)},
+			nowMs:   at11,
+			window:  event.Week,
+			want:    exact(event.Week, 60, at10+3*dayMs, at10),
+		},
+		{
+			name:    "a week reading after the old end gets the end rolled forward by a whole week",
+			anchors: []Anchor{withReset(anchor(event.Week, 60, at10-4*dayMs), at10-2*dayMs), anchor(event.Week, 5, at10-dayMs)},
+			nowMs:   at10,
+			window:  event.Week,
+			want:    exact(event.Week, 5, at10+5*dayMs, at10-dayMs),
+		},
+		{
+			name:    "a week end never seen stays unknown",
+			anchors: []Anchor{anchor(event.Week, 60, at10)},
+			nowMs:   at11,
+			window:  event.Week,
+			want:    exact(event.Week, 60, 0, at10),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setup := newEstimator(t, tt.uses...)
+			setup.source.anchors = tt.anchors
+			result, err := setup.estimator.Estimate(tt.nowMs)
+			if err != nil || result.CatchingUp {
+				t.Fatalf("Estimate error %v, catching up %v", err, result.CatchingUp)
+			}
+			for _, got := range result.Readings {
+				if got.Window == tt.window {
+					if !reflect.DeepEqual(got, tt.want) {
+						t.Errorf("reading = %s, want %s", show([]Reading{got}), show([]Reading{tt.want}))
+					}
+					return
+				}
+			}
+			t.Errorf("no %s reading in %s", tt.window, show(result.Readings))
+		})
+	}
 }

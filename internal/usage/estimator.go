@@ -205,8 +205,55 @@ func boundedRatio(next, previous float64) float64 {
 	return min(max(next, previous/maxRatioChange), previous*maxRatioChange)
 }
 
+// period is the window open now: when it began (ms) and when it ends (Unix
+// seconds).
+type period struct {
+	startMs int64
+	endS    int64
+}
+
+// openPeriod finds the window open at nowMs, so its reset time is always
+// known when it can be. An exact end (status line, /usage cache) wins. The
+// week then rolls forward from the last exact end by whole weeks. The 5h
+// window opens at the first call after the previous one closed (the last
+// known end, or the start of the history) and ends one length later; a gap
+// of that length with no calls starts a new window by itself. It reports
+// false when there is no way to tell: no exact week end was ever seen, or
+// no call opened a 5h window.
+func (e *Estimator) openPeriod(window limitWindow, knownEndS *int64, nowMs int64) (period, bool) {
+	if window.name == event.Week {
+		if knownEndS == nil {
+			return period{}, false
+		}
+		lengthS := window.lengthMs / 1000
+		endS := *knownEndS
+		if endMs := endS * 1000; endMs <= nowMs {
+			endS += ((nowMs-endMs)/window.lengthMs + 1) * lengthS
+		}
+		return period{startMs: endS*1000 - window.lengthMs, endS: endS}, true
+	}
+	if knownEndS != nil && *knownEndS*1000 > nowMs {
+		return period{startMs: *knownEndS*1000 - window.lengthMs, endS: *knownEndS}, true
+	}
+	closedAtMs := nowMs - horizonMs
+	if knownEndS != nil {
+		closedAtMs = max(closedAtMs, *knownEndS*1000)
+	}
+	start, open := e.Tally.windowStart(closedAtMs, window.lengthMs, nowMs)
+	if !open {
+		return period{}, false
+	}
+	return period{startMs: start, endS: (start + window.lengthMs) / 1000}, true
+}
+
 // reading gives the window's current reading: the estimate when a ratio is
 // known and tokens were used after the latest anchor, else that anchor.
+// The reading always carries the window's reset time when it can be known
+// (see openPeriod). An anchor read a whole window length before the open
+// window began no longer says anything about it: it is given with the end
+// it had, so the ring says Reset, and the window open now counts from zero.
+// Calls are the only evidence of when a window opened, so an anchor read
+// less than a length before the first call is taken to be in that window.
 func (e *Estimator) reading(window limitWindow, nowMs int64) (Reading, bool) {
 	calibration := e.calibration(window.name)
 	latest := calibration.Latest
@@ -217,34 +264,55 @@ func (e *Estimator) reading(window limitWindow, nowMs int64) (Reading, bool) {
 		LimitReading: event.LimitReading{Window: window.name, UsedPercent: latest.Percent, ResetsAt: copyInt64(latest.ResetsAt)},
 		AtMs:         latest.AtMs,
 	}
-	from, basePercent, resetsAt := latest.AtMs, latest.Percent, copyInt64(latest.ResetsAt)
-	closedAtMs, closed := int64(0), false
+	current, found := e.openPeriod(window, calibration.ResetsAt, nowMs)
+	if !found {
+		return e.readingWithoutPeriod(window, calibration, exact, nowMs), true
+	}
+	from, basePercent := latest.AtMs, latest.Percent
+	// The window of the anchor surely closed at its own end, or one length
+	// after it.
+	anchorClosedMs := latest.AtMs + window.lengthMs
+	if latest.ResetsAt != nil {
+		anchorClosedMs = *latest.ResetsAt * 1000
+	}
+	if anchorClosedMs <= current.startMs {
+		from, basePercent = current.startMs-1, 0
+		exact.ResetsAt = int64Pointer(anchorClosedMs / 1000)
+	} else {
+		exact.ResetsAt = int64Pointer(current.endS)
+	}
+	if reading, ok := e.estimate(window, calibration, from, basePercent, int64Pointer(current.endS), nowMs); ok {
+		return reading, true
+	}
+	return exact, true
+}
+
+// readingWithoutPeriod is the reading when the open window cannot be told.
+// The window of an anchor with no end surely closed one length after it.
+func (e *Estimator) readingWithoutPeriod(window limitWindow, calibration *Calibration, exact Reading, nowMs int64) Reading {
+	latest := calibration.Latest
 	switch {
-	case resetsAt != nil && nowMs >= *resetsAt*1000:
-		closedAtMs, closed = *resetsAt*1000, true
-	case resetsAt == nil && nowMs >= latest.AtMs+window.lengthMs:
-		// The window of the reading closed one length after it at the
-		// latest; calls before that point may count a little too much.
-		closedAtMs, closed = latest.AtMs+window.lengthMs, true
-		// The old reading is given with the end it surely had, so the ring
-		// says Reset instead of showing it as current.
-		exact.ResetsAt = int64Pointer(closedAtMs / 1000)
+	case latest.ResetsAt != nil && nowMs >= *latest.ResetsAt*1000:
+		return exact
+	case latest.ResetsAt == nil && nowMs >= latest.AtMs+window.lengthMs:
+		exact.ResetsAt = int64Pointer((latest.AtMs + window.lengthMs) / 1000)
+		return exact
 	}
+	if reading, ok := e.estimate(window, calibration, latest.AtMs, latest.Percent, copyInt64(latest.ResetsAt), nowMs); ok {
+		return reading
+	}
+	return exact
+}
+
+// estimate adds the weighted tokens used after fromMs to basePercent. It
+// reports false when no ratio is known or no token was used.
+func (e *Estimator) estimate(window limitWindow, calibration *Calibration, fromMs int64, basePercent float64, resetsAt *int64, nowMs int64) (Reading, bool) {
 	if calibration.PercentPerToken <= 0 {
-		return exact, true
+		return Reading{}, false
 	}
-	if closed {
-		// Count from zero in the window open now. Its end is not known
-		// until the next exact reading.
-		start, open := e.Tally.windowStart(closedAtMs, window.lengthMs, nowMs)
-		if !open {
-			return exact, true
-		}
-		from, basePercent, resetsAt = start-1, 0, nil
-	}
-	tokens := e.Tally.Between(from, nowMs)
+	tokens := e.Tally.Between(fromMs, nowMs)
 	if tokens == 0 {
-		return exact, true
+		return Reading{}, false
 	}
 	return Reading{
 		LimitReading: event.LimitReading{
