@@ -409,12 +409,19 @@ function connectionRow(row: ConnectionRow): HTMLElement {
       { class: "row-text" },
       h("span", { class: "row-label" }, row.name),
       h("p", { class: "row-description" }, `${capitalized(row.badge)} · ${row.lastEvent}`),
-      row.changed === null ? null : h("p", { class: "row-warning" }, `${row.changed}.`),
+      row.changed === null ? null : h("p", { class: "row-warning" }, ...keepWhole(`${row.changed}.`, "agent-screensaver")),
       errorLine(hookId),
       errorLine(powerId),
     ),
     h("div", { class: "row-control connection-controls" }, state, hook, power),
   );
+}
+
+/** Text with one word kept on one line, so "agent-screensaver" never breaks at its hyphen. */
+function keepWhole(text: string, word: string): Child[] {
+  const at = text.indexOf(word);
+  if (at < 0) return [text];
+  return [text.slice(0, at), h("span", { class: "nowrap" }, word), text.slice(at + word.length)];
 }
 
 const capitalized = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);

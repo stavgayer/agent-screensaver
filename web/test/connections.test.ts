@@ -94,7 +94,7 @@ describe("planDialog", () => {
   it("plan dialog shows warnings and the trust button for an outside converter", () => {
     const dialog = planDialog("Acme", "add", converter);
     assert.equal(dialog.lines.length, 3);
-    assert.deepEqual(dialog.lines.map((line) => line.warning), [true, false, true]);
+    assert.deepEqual(dialog.lines.map((line) => line.warning), [false, false, true]);
     assert.equal(dialog.confirmLabel, "I trust Acme, add hooks");
     assert.match(dialog.trustNote ?? "", /not built in/);
   });

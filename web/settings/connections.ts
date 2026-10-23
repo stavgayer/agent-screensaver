@@ -110,7 +110,7 @@ export interface Plan {
 
 export interface PlanDialog {
   title: string;
-  /** Every plan line; warning lines are marked to stand out. */
+  /** Every plan line; the trust warning lines are marked to stand out. */
   lines: { text: string; warning: boolean }[];
   /** Shown above the lines when the agent brings code of its own. */
   trustNote: string | null;
@@ -125,7 +125,9 @@ export function planDialog(name: string, action: HookAction, plan: Plan): PlanDi
   const trusting = action === "add" && plan.warnings.length > 0;
   return {
     title: action === "add" ? `Add hooks for ${name}?` : `Remove hooks for ${name}?`,
-    lines: plan.steps.map((step) => ({ text: step.text, warning: step.warning })),
+    // Only the lines that ask for trust stand out; the first line of an
+    // outside agent is a warning in Go's plan too, but the note above says it.
+    lines: plan.steps.map((step) => ({ text: step.text, warning: step.warning && plan.warnings.includes(step.text) })),
     trustNote: trusting
       ? `${name} is not built in. It runs code of its own on your Mac, outside the screen saver. Add its hooks only if you trust where it came from.`
       : null,
