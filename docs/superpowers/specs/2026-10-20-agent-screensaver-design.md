@@ -349,7 +349,7 @@ The manifest has the common fields of §7a (`id`, `name`, `version`, `type`, `ap
 | `install` | yes | Where the hooks go, which events, and the file shape. |
 | `statusline` | no | A status line payload mapping, for a tool that has a status line command (Claude Code). |
 | `details` | no | Where the service reads extra details: conversation name, context use, model. |
-| `limits` | no | The id of a built-in Go limits provider (only `codex-app-server` in version 1). |
+| `limits` | no | The id of a built-in Go limits provider (`codex-app-server` and `claude-usage-estimate` in version 1). |
 
 ### Manifest fields
 
@@ -361,7 +361,7 @@ The manifest has the common fields of §7a (`id`, `name`, `version`, `type`, `ap
 | `agent.install` | object | See "The install recipe". |
 | `agent.statusline` | object | Optional. A mapping with the same language as `hooks`, plus `install.statusline`. |
 | `agent.details` | object | Optional. See "Details". |
-| `agent.limits` | object | Optional. `{ "provider": "codex-app-server" }`. An unknown id is refused. |
+| `agent.limits` | object | Optional. `{ "provider": "codex-app-server" }` or `{ "provider": "claude-usage-estimate" }`. An unknown id is refused. |
 
 An agent manifest has no `entry` and no `options` in version 1.
 
@@ -548,7 +548,7 @@ A converter is code. The mapping is the normal way; a converter is for the rare 
 | `files` | Optional. Files copied from the folder to the user's home, for tools whose hooks are plugin files (opencode, pi): `[{ "from": "plugin/agent-screensaver.js", "to": "~/.config/opencode/plugins/agent-screensaver.js" }]`. |
 | `notes` | Optional. Short lines shown after install, for example "In Codex, approve the new hooks once with /hooks." |
 
-The command is never in the manifest. The engine always writes exactly `'<bin>' hook --tool <source>` (plus ` --event <name>` when the mapping uses `{ "arg": "event" }`), and for the status line `'<bin>' statusline --tool <source>`. Our handler is `{ "type": "command", "command": <ours>, <handler keys> }`.
+The command is never in the manifest. The engine always writes exactly `'<bin>' hook --tool <source>` (plus ` --event <name>` when the mapping uses `{ "arg": "event" }` or the event has its own reply, and ` --reply <reply>` when the event's reply is not `none`, so the hook still answers when the manifest cannot be read), and for the status line `'<bin>' statusline --tool <source>`. Our handler is `{ "type": "command", "command": <ours>, <handler keys> }`.
 
 Rules the engine keeps for every agent (they are the rules of §5 and the plan's Global Constraints, now in one engine):
 
@@ -576,7 +576,7 @@ What a manifest may not do:
 
 1. Choose the command. It is always our binary.
 2. Write outside the user's home. Every path starts with `~/`, has no `..`, and stays under home after symlinks are resolved.
-3. Write to these places: our data directory, `~/Library/LaunchAgents`, `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.gitconfig`, and shell start files (`~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.bashrc`, `~/.bash_profile`, `~/.profile`, `~/.config/fish/`).
+3. Write to these places: our data directory, `~/Library/LaunchAgents`, `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.gitconfig`, and shell start files (`~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.zlogin`, `~/.zlogout`, `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.bash_logout`, `~/.profile`, `~/.config/fish/`). The check compares paths case-insensitively, as APFS does.
 4. Use a hook file that does not end in `.json` (version 1).
 5. Set handler or group keys other than `matcher` (string) and `timeout` (number, 1 to 30). `command`, `type` and keys such as Cursor's `failClosed` are refused, so our hook can never block the tool.
 6. Make our hook decide for the user. Our hook prints only what `reply` allows: nothing, `{}`, or `{"permission": "ask"}`. It never prints allow or deny. It prints the reply first, before it maps anything, and also when the payload is invalid, the agent is off or a converter fails, so the tool always gets a valid answer at once. When an event has its own reply, the engine adds `--event <name>` to that event's command, so the reply never depends on reading the payload.
@@ -610,7 +610,8 @@ Before any write, install shows the plan: each file, each event, each command, e
 | `json` | A JSON file of at most 1 MiB, read whole. |
 | `last` | A condition, the same as a rule's `if`. |
 | `value` | A value, the same as in a rule, plus `{ "ratio": [a, b] }`: a divided by b, as a percent. |
-| `converter` | The escape hatch: `{ "run": "bin/details", "timeout_ms": 1000 }` (at most 2000). Standard input `{"session", "cwd", "transcript"}`; standard output one object with any of `name`, `context_percent`, `model`. |
+| `converter` | The escape hatch: `{ "run": "bin/details", "timeout_ms": 1000 }` (at most 2000). Standard input `{"session", "cwd", "transcript"}`; standard output one object with any of `name`, `context_percent`, `model`. The daemon runs details reads off its main loop, so a slow converter never holds up events. |
+| `provider` | A Go details reader named by id. Version 1 has one: `claude-transcript-context` (Claude's context use from its transcript and the window sizes learned from the status line, which data cannot express). |
 
 Placeholders in file paths: `~/`, `{transcript}` and `{cwd}` (from the card's last event). In conditions: `{session}`. Every file must be a regular file under the user's home after symlinks are resolved. The daemon only reads. A value that arrived in an event wins over a value read here (for example the Claude status line `session_name` wins over the transcript title).
 
@@ -618,7 +619,7 @@ The git branch is not declared. The daemon reads it the same way for every agent
 
 Claude's `custom-title` and `ai-title` transcript lines and Codex's `session_index.jsonl` and rollout `token_count` lines fit this schema (research file, sections 1 and 3). Cursor has no declared details in version 1: its name lives in an undocumented SQLite file, and its context use comes only with `preCompact`.
 
-**Limits stay Go for version 1.** Codex limits come over JSON-RPC from `codex app-server`. Declaring a JSON-RPC session as data would need a small protocol language; that is too much for one user. So `limits.Provider` stays a Go interface, and `builtin.codex` names it with `"limits": { "provider": "codex-app-server" }`. Any agent can send limits another way: through its status line mapping, a converter, or any program that writes `limits` events (`docs/event-format.md`).
+**Limits stay Go for version 1.** Codex limits come over JSON-RPC from `codex app-server`. Declaring a JSON-RPC session as data would need a small protocol language; that is too much for one user. So `limits.Provider` stays a Go interface, and `builtin.codex` names it with `"limits": { "provider": "codex-app-server" }`. The live Claude estimate (Task 6.3b: exact readings from local files plus a transcript token count) is Go for the same reason; `builtin.claude` names it with `"limits": { "provider": "claude-usage-estimate" }`. Any agent can send limits another way: through its status line mapping, a converter, or any program that writes `limits` events (`docs/event-format.md`).
 
 ### The mark
 

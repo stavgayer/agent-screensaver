@@ -124,7 +124,7 @@ A converter is the escape hatch for a payload the mapping cannot describe:
 "hooks": { "event": { "arg": "event" }, "converter": { "run": "bin/convert", "timeout_ms": 200 } }
 ```
 
-- `run` is a regular file with the execute bit, inside the folder. It runs directly, with no shell and no arguments.
+- `run` is a regular file (not a symlink) with the execute bit, inside the folder. It runs directly, with no shell and no arguments.
 - Standard input: the raw payload, at most 1 MiB.
 - Environment: only `HOME`, `PATH`, `AGS_SOURCE` (the manifest's source) and `AGS_EVENT` (the `--event` value, or empty).
 - Standard output: zero to 4 events, one JSON object per line, in the format of [event-format.md](event-format.md), at most 64 KiB. Empty output means "ignore". Lines after the fourth are dropped. More than 64 KiB drops everything.
@@ -152,7 +152,7 @@ A converter is code that you ask the user to trust. Adding its hooks shows a war
 | `files` | Files copied from the folder to the home folder, for tools whose hooks are plugin files: `[{ "from": "plugin/x.js", "to": "~/.config/tool/plugins/x.js" }]`. |
 | `notes` | Short lines shown after install. |
 
-The command is never in the manifest. The service always writes `'<bin>' hook --tool <source>` (plus `--event <name>` when needed) and `'<bin>' statusline --tool <source>`. Our handler is `{ "type": "command", "command": <ours>, <handler keys> }`.
+The command is never in the manifest. The service always writes `'<bin>' hook --tool <source>` (plus `--event <name>` when needed, and `--reply <reply>` when the event's reply is not `none`) and `'<bin>' statusline --tool <source>`. When the manifest cannot be read, our hook prints the reply named by `--reply`, so the tool still gets a valid answer. Uninstall removes only commands of exactly these forms, whatever the record says. Our handler is `{ "type": "command", "command": <ours>, <handler keys> }`.
 
 Rules the service keeps for every agent:
 
@@ -169,7 +169,7 @@ Rules the service keeps for every agent:
 The service checks every recipe when the extension is installed and before every change. Built-in agents go through the same checks.
 
 - Every path starts with `~/`, has no `..`, and stays in the home folder after symlinks are resolved.
-- No path may be in our data folder, `~/Library/LaunchAgents`, `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.gitconfig`, or a shell start file (`~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.bashrc`, `~/.bash_profile`, `~/.profile`, `~/.config/fish/`).
+- No path may be in our data folder, `~/Library/LaunchAgents`, `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.gitconfig`, or a shell start file (`~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.zlogin`, `~/.zlogout`, `~/.bashrc`, `~/.bash_profile`, `~/.bash_login`, `~/.bash_logout`, `~/.profile`, `~/.config/fish/`). Paths are compared without regard to case, as the Mac's file system does.
 - Group and handler keys may only be `matcher` (a string) and `timeout` (a number from 1 to 30). `command`, `type` and keys such as `failClosed` are refused, so our hook can never block the tool.
 - A copied file may replace only our own earlier copy.
 
@@ -177,7 +177,7 @@ Before any change, the service shows the plan: each file, each event, each comma
 
 ## Details
 
-`agent.details` says where the service reads extra details for a card: the conversation name, the context use and the model. The hook never reads them. The service reads them after the event kinds in `read_on` (default `started`, `finished`, `ended`), at most once per card every 5 seconds. A value that came in an event (for example the Claude status line) wins over a value read here. The git branch is read for every card from `.git/HEAD` and is not declared.
+`agent.details` says where the service reads extra details for a card: the conversation name, the context use and the model. The hook never reads them. The service reads them after the event kinds in `read_on` (default `started`, `finished`, `ended`), at most once per card every 5 seconds, away from the service's main loop. A value that came in an event (for example the Claude status line) wins over a value read here. The git branch is read for every card from `.git/HEAD` and is not declared.
 
 ```json
 "details": {
@@ -208,13 +208,19 @@ Before any change, the service shows the plan: each file, each event, each comma
 
 ## The mark
 
-The card shows the agent's mark and name. The mark is a small SVG file of at most 8 KiB with an `<svg>` root. It may not hold `<script>`, `<foreignObject>`, `on...=` attributes, an `href` that does not start with `#`, a `url(` that does not start with `url(#`, or `@import`. The runtime shows it with `<img>`, so a mark can run no code and load nothing.
+The card shows the agent's mark and name. The mark is a small SVG file (not a symlink) of at most 8 KiB with an `<svg>` root. It may not hold, also after character references such as `&#40;` are decoded, `<script>`, `<foreignObject>`, `on...=` attributes, an `href` that does not start with `#`, a `url(` that does not start with `url(#`, or `@import`. The runtime shows it with `<img>`, so a mark can run no code and load nothing.
 
 The project ships no company logos. The built-in marks are plain letter tiles of our own: "C" for Claude Code and "X" for Codex.
 
 You can use your own icon for any agent without editing its extension: put an SVG file named `<source>.svg` in the `marks` folder of the data folder, for example `~/Library/Application Support/agent-screensaver/marks/codex.svg`. It must pass the same checks. A file that fails them is ignored and the extension's mark is shown.
 
 A card whose source has no agent extension (any program that writes events) shows a neutral dot and the source name.
+
+## Known limits
+
+- Paths in `details` are fixed. A tool that moves its folder with an environment variable is not followed: Codex's `$CODEX_HOME` is not read, so `builtin.codex` reads `~/.codex/session_index.jsonl`.
+- A new agent's `limits` provider is used after the service starts again.
+- macOS checks a new program on its first start, which can take up to a second. A converter can time out on its first run.
 
 ## Turning an agent off
 
