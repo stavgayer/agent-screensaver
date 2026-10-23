@@ -548,6 +548,30 @@ func TestAgentInstall(t *testing.T) {
 					t.Errorf("after uninstall:\n%s\nwant:\n%s", got, indented.String())
 				}
 			}},
+		{name: "cursor keeps a file without a final newline", user: bytes.TrimRight(userFile, "\n"),
+			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
+				if data := mustRead(t, cursorPath(home)); bytes.HasSuffix(data, []byte("\n")) {
+					t.Error("install added a final newline")
+				}
+				if err := RemoveAgentHooks(home, agent, rec); err != nil {
+					t.Fatal(err)
+				}
+				if got, want := mustRead(t, cursorPath(home)), bytes.TrimRight(userFile, "\n"); !bytes.Equal(got, want) {
+					t.Errorf("after uninstall:\n%q\nwant byte for byte:\n%q", got, want)
+				}
+			}},
+		{name: "cursor keeps the final newline of a file that has one", user: userFile,
+			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
+				if data := mustRead(t, cursorPath(home)); !bytes.HasSuffix(data, []byte("}\n")) {
+					t.Error("install dropped the final newline")
+				}
+				if err := RemoveAgentHooks(home, agent, rec); err != nil {
+					t.Fatal(err)
+				}
+				if got := mustRead(t, cursorPath(home)); !bytes.Equal(got, userFile) {
+					t.Errorf("after uninstall:\n%s\nwant byte for byte:\n%s", got, userFile)
+				}
+			}},
 		{name: "cursor uninstall of a file we created removes the file",
 			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
 				if err := RemoveAgentHooks(home, agent, rec); err != nil {

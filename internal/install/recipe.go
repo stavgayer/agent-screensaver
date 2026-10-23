@@ -145,6 +145,7 @@ func (w *workspace) edits() ([]configEdit, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}
+		updated = finalNewlineLike(state.original, updated)
 		if bytes.Equal(updated, state.original) {
 			continue
 		}
@@ -152,6 +153,16 @@ func (w *workspace) edits() ([]configEdit, error) {
 			backup: state.original != nil && !holdsAny(state.original, state.ours)})
 	}
 	return edits, nil
+}
+
+// finalNewlineLike gives updated the final newline state of the user's
+// file, so install and uninstall do not add or drop one. A file we create
+// (no original) keeps the newline the format writes.
+func finalNewlineLike(original, updated []byte) []byte {
+	if original == nil || bytes.HasSuffix(original, []byte("\n")) {
+		return updated
+	}
+	return bytes.TrimRight(updated, "\n")
 }
 
 func holdsAny(data []byte, commands []string) bool {
