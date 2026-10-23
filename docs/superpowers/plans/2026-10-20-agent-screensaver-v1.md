@@ -720,3 +720,164 @@ Only if Task 0.2 showed the saver can read the aerials folder. If not, skip this
   - Settings window: theme change shows in the preview and in the real screen saver.
   - `uninstall` leaves `~/.claude/settings.json` and `~/.codex/hooks.json` as they were, and removes both LaunchAgents.
 - [ ] **Step 4:** Commit `docs/e2e-checklist.md` and any fixture or mapping fixes (explicit paths): `test: add end-to-end checklist and real payload fixtures`.
+
+---
+
+## Phase 6b: Agent extensions (owner decision 22/10/2026; gate: every task gate below, then Task 6.7 passes)
+
+Spec §7d and `docs/decisions/0006-agent-extensions.md`. Tasks 6.2 (background count) and 6.3 (richer cards) are briefed in `.superpowers/sdd/2026-10-20-agent-screensaver-v1/task-6.2-brief.md` and `task-6.3-brief.md`. Task 6.4 starts only after Task 6.3 is merged and reviewed: it moves the 6.3 readers (status line `session_name`, context and model; transcript titles; Codex session index and rollout context) into manifests, and 6.3 changes the same packages (`agents`, `event`, `state`, `statusline`, `cli`). The order is strict: 6.4 → 6.5 → 6.6 → 6.7 (shared files, no parallel writers).
+
+Rules for every task in this phase:
+
+- The hook stays under 100 ms and always exits 0 (Review Focus 2 holds for every agent, with and without a converter).
+- Install and uninstall keep the Global Constraints: only add, remove exactly what was added, key order kept, `internal/jsonedit` only, backups, nothing written when one file is invalid (Review Focus 3).
+- Built-in agent manifests go through the same validation and safety checker as outside ones. No `if id == "builtin.claude"` anywhere in Go.
+- The mapping language is exactly spec §7d. A case it cannot express uses a converter; the language does not grow in these tasks.
+
+### Task 6.4: Agent extension engine, and move Claude Code and Codex into it
+
+**Files:**
+- Modify: `internal/extensions/extensions.go`, `internal/extensions/extensions_test.go` (type `agent`, manifest validation, mark check, unique source).
+- Create: `internal/agents/manifest.go` (the `agent` manifest types), `internal/agents/mapping.go` (rules, conditions, values), `internal/agents/transforms.go`, `internal/agents/converter.go`, `internal/agents/load.go` (find agents in the extensions folder); rewrite `internal/agents/agents.go`; tests `internal/agents/mapping_test.go`, `internal/agents/converter_test.go`, `internal/agents/equivalence_test.go`, `internal/agents/testdata/converter/*`.
+- Create: `internal/install/recipe.go` (plan and apply for one agent), `internal/install/safety.go`, `internal/install/shape.go` (`grouped`, `flat`; moved from `internal/agents/hookconfig.go`), `internal/install/format.go` (`json`), `internal/install/record.go` (record v2 and v1 upgrade); tests `internal/install/recipe_test.go`, `internal/install/safety_test.go`, `internal/install/record_test.go`; modify `internal/install/install.go`, `internal/install/install_test.go`.
+- Create: `extensions/builtin.claude/{extension.json,mark.svg}`, `extensions/builtin.codex/{extension.json,mark.svg}`.
+- Modify: `internal/cli/hook.go`, `internal/cli/statusline.go`, their tests; `internal/daemon/daemon.go` (details reader, `agents_off`, last event per source); `internal/state/state.go` (`sources` map with `last_event_ms`, read back on start); `internal/config/config.go` (`agents_off`); `internal/view/view.go` (agent names and marks in `state.json`); `web/src/api.ts` and the card component (mark from state, neutral dot fallback).
+- Delete (last step, after the equivalence gate): `internal/agents/claude.go`, `codex.go`, `install_claude.go`, `install_codex.go`, `hookconfig.go`, and the 6.3 source-specific readers that moved into manifests.
+- Docs: create `docs/agents.md` (author guide: manifest, mapping language, converter contract, recipe, safety rules, details, a full opencode-shaped example marked "not tested"); modify `docs/extensions.md` (sixth type `agent`, link), `docs/event-format.md` (the kinds table names the built-in manifests instead of Go).
+
+**Interfaces:**
+- Consumes: `extensions.Manifest`, `event.Event` (with the 6.3 fields `name`, `model`, `context_percent`, `cwd`, `transcript`, kind `info`), `text.PromptTitle`, `text.ShortTitle`, `text.MaskSecrets`, `agents.DescribeTool`, `jsonedit.Object`, `paths.Paths`.
+- Produces:
+  ```go
+  // package agents
+  type Agent struct {
+      ID, Name, Source, Dir, Mark string
+      Hooks      Mapping
+      Statusline *Mapping
+      Install    Recipe
+      Details    *Details
+      Limits     string // provider id, "" for none
+      Builtin    bool
+  }
+  func Load(extensionsDir string) ([]Agent, error)       // every valid agent manifest; invalid ones skipped and logged
+  func BySource(agents []Agent, source string) (Agent, bool)
+  func (m Mapping) Map(payload []byte, eventArg string, nowMs int64) ([]event.Event, bool) // rules path; false = ignore
+  type Converter struct { Run string; Timeout time.Duration }
+  func RunConverter(ctx context.Context, c Converter, payload []byte, env []string) ([]event.Event, error) // output parsed, source forced by the caller
+  func Normalize(e event.Event, source string, nowMs int64) (event.Event, error) // force source, fill v/at_ms, mask, cut, validate
+  ```
+  ```go
+  // package install
+  type Recipe struct { Detect string; Hooks *HookRecipe; Statusline *StatuslineRecipe; Files []FileCopy; Notes []string }
+  func CheckRecipe(home, dataDir string, r agents.Recipe) error // the safety rules of spec §7d; used at ext install and before every apply
+  func PlanAgent(home, bin string, a agents.Agent, rec Record) ([]PlannedStep, error)
+  func AddAgentHooks(home, bin string, a agents.Agent, rec *Record) error
+  func RemoveAgentHooks(home string, a agents.Agent, rec *Record) error
+  type AgentRecord struct {
+      ID, Source, File string
+      Events, Commands []string
+      CreatedFile     bool
+      StatuslineKey   string `json:",omitempty"`
+      PreviousCommand string `json:",omitempty"`
+      Files           []CopiedFile // path + sha256
+  }
+  // Record gains Version int and Agents []AgentRecord; LoadRecord upgrades version 1.
+  ```
+  Hook shape and config format are small unexported interfaces in `internal/install` (spec §7b table), one implementation each in version 1 except shapes (`grouped`, `flat`).
+
+**Part A: manifest and mapping engine.**
+- [ ] **Step 1: Tests** (`TestValidateAgentManifest`, table): `valid claude manifest`; `missing mark` → error; `mark over 8 KiB` → error; `mark with script` / `with foreignObject` / `with onload` / `with external href` / `with url(http` → error each; `source with uppercase` → error; `unknown kind in rule` → error; `rule with converter and rules` → error; `unknown transform` → error; `two operators in one condition` → error; `unknown limits provider` → error; `install of second agent with same source` → error.
+- [ ] **Step 2: Tests** (`TestMapping`, table over inline payloads): `path`, `array index path`, `first non-empty of paths`, `const`, each transform (`basename`, `prompt_title` skips a `<system-reminder>` block, `short_title`, `model_name`, `count` of `background_tasks`, `percent` clamps 130 to 100, `text` joins a list); `tool value gives "Bash: npm run migrate"`; conditions `equals`, `equals null only when key is null` (missing key → false), `in`, `contains ignores case`, `present true and false`; `first matching rule wins`; `no rule matches → ignore`; `missing session → ignore`; `rule without on matches every event`; `event from --event arg`; `secret in title is masked even without a transform`; `statusline mapping emits limits and info from one payload`; `limits reading without used_percent dropped`. `TestReply` (table): `reply none prints nothing`; `empty_object prints {}`; `per-event ask prints {"permission":"ask"} for that event and the default for others`; `reply comes from --event even when the payload is invalid JSON`; `reply printed when the agent is off`; `reply printed when the converter times out`. `TestValidateAgentManifest` gains: `reply allow` / `deny` / any other value → error.
+- [ ] **Step 3: Tests** (`TestConverter`, with tiny shell scripts in `testdata/converter/`, executable): `prints one event`; `prints two lines → two events`; `empty output → ignore`; `five lines → only 4 kept`; `output over 64 KiB → dropped`; `sleeps 2 s → killed at timeout, nothing sent, under 600 ms`; `source in output is replaced by the manifest source`; `invalid event dropped`; `non-executable file refused at validation`; `env holds only HOME, PATH, AGS_SOURCE, AGS_EVENT`.
+- [ ] **Step 4:** Implement Part A. Write `builtin.claude` and `builtin.codex` manifests from the Go adapters (hooks, status line mapping, the 6.3 details). Draw the two marks (simple shapes, own colors; spec §7d "The mark").
+- [ ] **Step 5: Equivalence gate** (`TestBuiltinManifestsMatchGoAdapters`): for every file in `internal/agents/testdata/{claude,codex}/` and `internal/statusline/testdata/`, the old Go path and the manifest give the same events (compare `event.Event` values). Run it while the old adapters still exist. It must pass before Step 6.
+- [ ] **Step 6:** Switch `cli.Hook` and `cli.Statusline` to `agents.Load` + `BySource`. `hook --tool <source>` reads `config.json` (`agents_off`); for an agent that is off it prints the manifest reply and exits at once. Delete the old adapters; turn the equivalence test into a golden test (fixture → expected event JSON in `testdata/golden/`). Add `TestHookFastWithManyExtensions` (50 extension folders, 10 of them agents, one payload → under 100 ms, exit 0) and `TestHookConverterTimeoutStillFast` (converter sleeps → hook returns under 600 ms, exit 0).
+- [ ] **Step 7:** Commit (explicit paths): `feat(agents): map hook payloads with agent extension manifests`.
+
+**Part B: install recipe engine.**
+- [ ] **Step 8: Tests** (`TestCheckRecipe`, table): `claude, codex and cursor built-ins pass`; `path without ~/` → error; `path with ..` → error; `symlink to outside home` → error (temp home with a symlink); each deny-list entry → error (`~/.zshrc`, `~/.ssh/config`, `~/Library/LaunchAgents/x.plist`, data dir file, `~/.config/fish/config.fish`); `hook file .toml` → error ("toml is not supported yet"); `handler key command` / `type` / `failClosed` → error; `timeout 0 and 31` → error; `matcher not a string` → error; `files target exists and is not ours` → error at apply; `no hooks and no files` → error.
+- [ ] **Step 9: Tests** (`TestAgentInstall`, table, temp home): every existing case of `install_test.go` runs unchanged against the built-in manifests, and the written Claude and Codex files are byte for byte the files written before this task (keep copies of today's outputs as `testdata/golden/*.json` before changing code); `TestUpgradeFromRecordV1` (a v1 record and files written by the old code → one install → hook entries unchanged, status line command becomes `statusline --tool claude`, saved previous command kept, record v2, each file written once); `TestUninstallUsesRecordOnly` (manifest edited after install to list another event → uninstall removes only the recorded entries); `TestUninstallAgentWhoseExtensionIsGone` (record path is re-checked by `CheckRecipe`, only our exact commands removed); `TestCopiedFileRemovedOnlyIfHashMatches`; `TestCreatedFileRemovedWhenOnlyNewFileKeysLeft`; `TestPlanNamesOutsideAgentAndConverter` (plan lines say "from acme.x 1.0.0" and "runs its own program", and the plan carries a warning flag the CLI and the settings dialog must show); `TestEventWithReplyGetsEventArg` (an event with its own reply gets `--event <name>` in its command; the record stores that exact command).
+- [ ] **Step 10:** Implement Part B. `Apply` loops over `agents.Load` and adds hooks for each built-in agent whose `detect` path exists (`~/.claude`, `~/.codex`, `~/.cursor`). Today install adds Claude and Codex hooks even when the tool is missing; this changes that (owner decision 23/10). Test: `TestInstallSkipsAgentWhoseDetectIsMissing`. `Uninstall` loops over the record. `ext remove <id>` of an agent removes its hooks first and refuses when that fails. `ext install` of an agent runs `CheckRecipe` and the manifest checks, copies the folder, and adds no hooks.
+- [ ] **Step 11:** Commit (explicit paths): `feat(install): add and remove hooks from agent install recipes`.
+
+**Part C: details and marks.**
+- [ ] **Step 12: Tests** (`TestDetails`, table, temp home, real-shape redacted fixtures from 6.3): `codex name from session_index last matching line`; `codex context from rollout tail ratio`; `claude name from custom-title, then ai-title`; `event name wins over details name`; `file over tail_kb reads only the tail` (10 MiB file, reads at most 256 KiB, under 50 ms); `jsonl first partial line dropped`; `path outside home refused`; `{transcript} placeholder from the card's event`; `details converter output used, timeout respected`; `read at most once per card per 5 s`. `TestStateCarriesAgentMarks` (state.json lists name and mark path per source); `TestLastEventPerSource` (each valid event sets `sources.<source>.last_event_ms`; an ignored-project event counts; an invalid file does not; the map survives a daemon restart). Web: `card shows the agent mark from state`, `card without agent shows a neutral dot and the source name`.
+- [ ] **Step 13:** Implement Part C; move the 6.3 readers behind the manifest schema.
+- [ ] **Step 14:** Commit (explicit paths): `feat(daemon): read card details declared by agent extensions`.
+- [ ] **Step 15:** Write `docs/agents.md` and update `docs/extensions.md` and `docs/event-format.md`. Commit: `docs: describe agent extensions`.
+
+**Gate:** `go vet ./...`, `go test -race ./...` (with integration tests), `npm test`, `npm run typecheck`, build. Review against spec §7b and §7d: no Go code names a built-in agent; the old adapters are gone; the install golden files are unchanged.
+
+### Task 6.5: Cursor as a built-in agent extension
+
+**Files:** Create `extensions/builtin.cursor/{extension.json,mark.svg}`, `internal/agents/testdata/cursor/*.json` (real redacted payloads), `internal/agents/testdata/golden/cursor/*.json`, `internal/install/testdata/cursor_hooks.json` (shaped like the owner's file: `version: 1` and entries of four other tools, all values fake); Modify `internal/agents/mapping_test.go`, `internal/install/recipe_test.go`, `docs/agents.md`, `docs/e2e-checklist.md` (the Cursor behavior table of Step 2), `README.md` (Cursor in the supported list).
+
+**Interfaces:**
+- Consumes: everything from Task 6.4. No Go changes are expected. If one is needed, it is a gap in the engine: stop and report it, do not add a Cursor case to Go.
+- Produces: the manifest of spec §7d "Example: the built-in Cursor extension" (permission events `beforeShellExecution` and `beforeMCPExecution` with reply `ask`), corrected by real payloads, or the fallback manifest without permission events (Step 3).
+
+- [ ] **Step 1: Payloads.** Install the manifest on the owner's Mac (after the owner agrees), run `agent hooks add builtin.cursor`, record payloads (`AGS_RECORD_PAYLOADS=1` for the Cursor app, or the hook's own recorder), and run one short Cursor agent task with one shell command and one MCP call. Record one payload of each subscribed event. Check: the field names; `workspace_roots`; whether `conversation_id` is stable across a session; whether the non-permission events need `{}` (try default `none` first on a throwaway test; if Cursor shows a hook error or changes behavior, use `empty_object`). Redact, save as fixtures, delete the recordings.
+- [ ] **Step 2: Live behavior test (owner decision 23/10: Cursor must ask exactly as before).** On the owner's Mac, run each case twice, first with our hooks removed, then with our hooks added, and write both results in a table in `docs/e2e-checklist.md`:
+  - a shell command Cursor asks for (not on its allow list): Cursor shows its approval prompt once in both runs; with our hooks, the saver shows the approval card while Cursor waits, and the card clears after the command runs (`afterShellExecution`);
+  - the same command, denied in Cursor: denied in both runs, no command runs; the card clears or turns "unknown" by the 10-minute rule;
+  - a shell command Cursor runs without asking (allow-listed, or auto-run mode if the owner uses it): it runs without a prompt in both runs;
+  - an MCP tool call that asks, and one that does not ask: same in both runs;
+  - Cursor's hooks output panel shows no error from our hook in any case.
+- [ ] **Step 3: Fallback.** If any case in Step 2 differs between the two runs, remove `beforeShellExecution`, `afterShellExecution`, `beforeMCPExecution` and `afterMCPExecution` from the recipe events, the rules and `reply.events`, re-add hooks, and re-run Step 2 to show that Cursor now behaves exactly as without our hooks. Record which case failed in `docs/e2e-checklist.md` and in the task report. Cursor cards then show only working and done; tell the owner.
+- [ ] **Step 4: Tests:** `TestMapping` rows for each Cursor fixture (`beforeSubmitPrompt → started with prompt title`, `beforeShellExecution → approval with the command as title`, `beforeMCPExecution → approval with the tool name`, `afterShellExecution → resumed`, `postToolUse → resumed`, `stop with status aborted → finished`, `sessionEnd → ended`, `preCompact → info with context_percent`, `afterAgentResponse → ignored`, `missing conversation_id → ignored`); `TestReply` rows: `cursor beforeShellExecution prints {"permission":"ask"}`, `cursor beforeMCPExecution prints ask`, `cursor stop prints the default`, `cursor permission event with garbage stdin still prints ask and exits 0 under 100 ms`; `TestAgentInstall` rows: `cursor into missing file` (file is `{"version": 1, "hooks": {...ours}}`); `cursor keeps other tools' entries and key order`; `cursor permission events get --event in the command`; `cursor uninstall restores the original after re-indent` (compare with `json.Indent` of the original); `cursor uninstall of a file we created removes the file`; `cursor handler has timeout and no failClosed`.
+- [ ] **Step 5:** Fix the manifest until all pass. **Step 6:** Commit (explicit paths): `feat(agents): add Cursor as a built-in agent extension`.
+
+**Gate:** `go test -race ./...` green; Step 2 shows identical Cursor behavior with and without our hooks (or Step 3 was applied and re-checked); a live Cursor task shows a working card, an approval card while Cursor asks, then a done card, with the Cursor mark and the project name.
+
+### Task 6.6: Connections tab in the settings window, and `agent` CLI commands
+
+**Files:** Modify `internal/settings/settings.go`, `internal/settings/settings_test.go`, `internal/settingsui/window.go`, `internal/settingsui/window_test.go`, `internal/cli/settings.go`, `cmd/agent-screensaver/main.go`, `web/settings/settings.ts`, `web/settings/index.html`; Create `internal/settings/connections.go`, `internal/settings/connections_test.go`, `web/settings/connections.ts`, `web/test/connections.test.ts`. Load the design skills `emil-design-eng`, `impeccable` and `design-taste-frontend` before the UI step (owner rule).
+
+**Interfaces:**
+- Consumes: `agents.Load`, `install.PlanAgent`, `install.AddAgentHooks`, `install.RemoveAgentHooks`, the install record, `config.AgentsOff`, `state.json` `sources.<source>.last_event_ms` (Task 6.4 Part C).
+- Produces:
+  ```go
+  // package settings
+  type ConnectionState string // "not_installed" | "no_hooks" | "active" | "idle" | "off"
+  const ActiveWindowMs = 10 * 60 * 1000 // spec §7d: an event in the last 10 minutes means active
+  type Connection struct {
+      ID, Name, Source, Mark, Version string
+      Builtin      bool
+      State        ConnectionState
+      LastEventMs  *int64 // nil: no event yet
+      HooksChanged bool   // the record says added, the file no longer holds our entries
+      Warnings     []string // converter or plugin file lines, shown in the plan dialog
+  }
+  // ConnectionStateFor is pure: the order is off, not installed, no hooks, then active or idle.
+  func ConnectionStateFor(found, hooksAdded, off bool, lastEventMs *int64, nowMs int64) ConnectionState
+  func (s Service) Connections(nowMs int64) ([]Connection, error)
+  func (s Service) SetAgentOn(id string, on bool) error
+  func (s Service) PlanAgentHooks(id string, add bool) (plan []install.PlannedStep, hash string, err error)
+  func (s Service) ApplyAgentHooks(id string, add bool, hash string) error // recomputes the plan; refuses when the hash differs
+  ```
+  Bridge methods (ids and booleans only, never paths): `connections`, `setAgentOn`, `planAgentHooks`, `applyAgentHooks`. CLI: `agent list` (same states and last event as the tab), `agent on|off <id>`, `agent hooks add|remove <id>` (prints the plan and the warnings, asks `Proceed? [y/N]`, `--yes` skips).
+  `connections.ts`: `connectionRows(list: Connection[], nowMs: number): ConnectionRow[]` (pure: state text such as "Active · 4m ago", "Idle · 3h", "Idle · no events yet", "Hooks not added", "Not installed", "Off"; badge "built in" or "from <id> <version>"; last event text; which buttons show: "Add hooks" or "Remove hooks", "Turn off" or "Turn on"). Times reuse the existing duration formatting of the cards (no second formatter).
+- [ ] **Step 1: Tests:** `TestConnectionStateFor` (table: `off wins over everything`; `detect missing → not_installed`; `found, no hooks → no_hooks`; `event 9m ago → active`; `event 10m ago → idle`; `no event yet → idle`); `TestConnectionsListsBuiltinsAndOutside`; `TestConnectionsReadLastEventFromState`; `TestHooksChangedWhenUserRemovedOurEntries`; `TestSetAgentOnPersistsAgentsOff`; `TestApplyRefusesStaleHash` (plan, then change the hook file, then apply with the old hash → error, file unchanged); `TestApplyAddsThenRemoves`; `TestPlanOfOutsideConverterAgentHasWarnings`; bridge: `TestBridgeAgentMethodsTakeIdsOnly` (unknown fields ignored, a `path` param has no effect), `TestBridgeRefusesWhilePicking`. Web: `active row says Active and minutes`; `idle row says Idle and hours`; `idle with no events says no events yet`; `not installed row has no hook buttons`; `no hooks row offers Add hooks`; `changed hooks row says so and offers Add hooks`; `off row offers Turn on and keeps hook buttons`; `outside agent shows id and version`; `plan dialog shows warnings and the trust button for an outside converter`.
+- [ ] **Step 2:** `go test ./internal/settings/ ./internal/settingsui/` and `npm test` → FAIL. **Step 3:** implement (the tab refreshes every 5 s while open; the plan dialog lists every plan line; buttons "Add hooks" / "Remove hooks" / "Cancel", or "I trust <name>, add hooks" when there are warnings). **Step 4:** → PASS; typecheck.
+- [ ] **Step 5:** Manual check on the owner's Mac: the tab shows Claude Code, Codex and Cursor with their marks, states and last event times; a task in Claude makes its row "Active · 0m ago"; turning Codex off shows "Off" and stops new Codex cards, on brings them back; "Remove hooks" for Cursor shows the plan and removes our entries only (row becomes "Hooks not added"); "Add hooks" puts them back; a tool that is not on the Mac shows "Not installed".
+- [ ] **Step 6:** Commit (explicit paths): `feat(settings): add the Connections tab`.
+
+**Gate:** `go test -race ./...`, `npm test`, `npm run typecheck` green; the manual check passes.
+
+### Task 6.7: Real-world re-check after agent extensions
+
+These changes touch every hook, the status line and install. Re-run the checks of Task 6.1 that they can break, on the owner's Mac, from a release build. Tick each line in `docs/e2e-checklist.md` under a new heading "After agent extensions (Tasks 6.4 to 6.6)".
+
+- [ ] **Step 1:** Before: copy `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.cursor/hooks.json` and the install record to the scratchpad (owner agrees first).
+- [ ] **Step 2:** Upgrade: the owner runs `install` from the release zip over the existing install. Check: the plan lists only the status line command change for Claude and the new Cursor entries; after it, `diff` of the Claude and Codex files against the copies shows only the status line command; the Cursor file keeps every other tool's entry.
+- [ ] **Step 3:** Hooks, each tool, with the saver showing:
+  - Claude: running card with title, approval card + sound, idle notification gives no approval, done card with background count, status line still prints the user's own line, Claude rings update, conversation name and context bar shown.
+  - Codex: running card, `PermissionRequest` approval card, done card, helper sessions make no card, Codex rings update (provider by manifest id), session name appears after the first turn, context bar.
+  - Cursor: working card, approval card + sound while Cursor asks for a shell command (Cursor still asks exactly as before: repeat the Task 6.5 Step 2 table on the release build), done card, context after a compaction.
+  - Hook timing: `hook-errors.log` has no new lines; a hook run with a real payload takes under 100 ms (`time` on a recorded payload).
+- [ ] **Step 4:** Connections tab: each row shows the right state and last event time; turn each agent off and on; remove and add hooks for each tool; re-run one task per tool.
+- [ ] **Step 5:** An outside agent: install a test agent extension from a folder (id `test.echo`, source `echo`, a converter that prints one `started` event, hook file `~/agent-screensaver-test/hooks.json`, so no real tool config is touched). Check: the plan shows "from test.echo" and the warning "runs its own program", and needs the explicit trust confirmation; the hook entry goes into the test file; feeding one payload to `agent-screensaver hook --tool echo` makes a card with source `echo` and the row turns "Active"; `agent off test.echo` stops new cards; `ext remove test.echo` removes its hook entry first, then the folder.
+- [ ] **Step 6:** Uninstall: `uninstall` leaves the Claude, Codex and Cursor files equal to the Step 1 copies after `json.Indent` (whitespace may differ only where the original was not two-space indented), restores the status line, removes both LaunchAgents.
+- [ ] **Step 7:** Reinstall (the owner's normal state). Delete the copied payloads and any recordings. Commit `docs/e2e-checklist.md`: `test: re-check hooks and install after agent extensions`.
+
+**Gate:** every line in Steps 2 to 6 passes.
