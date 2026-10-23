@@ -1,0 +1,1 @@
+{"event":"before_tool","session_id":"q-1","cwd":"/Users/me/work/shop-api","tool":"Bash","input":{"command":"go test ./payments/..."}}

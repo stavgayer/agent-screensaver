@@ -1,0 +1,2 @@
+session=t-1
+dir=/Users/me/work/site

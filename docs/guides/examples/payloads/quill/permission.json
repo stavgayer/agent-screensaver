@@ -1,0 +1,1 @@
+{"event":"permission","session_id":"q-1","cwd":"/Users/me/work/shop-api","tool":"Bash","input":{"command":"rm -rf build"}}

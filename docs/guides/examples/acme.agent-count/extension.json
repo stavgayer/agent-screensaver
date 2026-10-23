@@ -1,0 +1,13 @@
+{
+  "id": "acme.agent-count",
+  "name": "Agent count",
+  "version": "1.0.0",
+  "type": "component",
+  "api": 1,
+  "entry": "main.js",
+  "options": {
+    "label": { "type": "string", "default": "agents working", "label": "Label" },
+    "size": { "type": "enum", "default": "large", "values": ["large", "small"], "label": "Size" },
+    "show_dot": { "type": "boolean", "default": true, "label": "Show the dot" }
+  }
+}

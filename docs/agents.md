@@ -4,7 +4,7 @@ This page tells you how to teach agent-screensaver a new coding agent. You write
 
 Claude Code, Codex and Cursor are built-in agent extensions in the same format: `extensions/builtin.claude`, `extensions/builtin.codex` and `extensions/builtin.cursor`. Read them as examples. `builtin.cursor` shows the flat hook shape, a per-event reply and `new_file`.
 
-The design and the reasons are in the spec (§7d) and in `docs/decisions/0006-agent-extensions.md`.
+A short step-by-step guide with tested samples is in [guides/add-an-agent.md](guides/add-an-agent.md). The design and the reasons are in the spec (§7d) and in `docs/decisions/0006-agent-extensions.md`.
 
 ## The folder
 
@@ -16,7 +16,7 @@ acme.opencode/
   bin/convert                   (only if the manifest uses a converter)
 ```
 
-Install it like any extension: `agent-screensaver ext install ./acme.opencode`, or "Install extension" in the settings window. Installing checks the manifest and the recipe and copies the folder. It does not add hooks. In this version only the built-in agents get hooks, through `agent-screensaver install`, which shows its plan first.
+Install it like any extension: `agent-screensaver ext install ./acme.opencode`, or "Install extension" in the settings window. Installing checks the manifest and the recipe and copies the folder. It does not add hooks. Add them as a second step: `agent-screensaver agent hooks add <id>` (or "Add hooks" in the Connections tab). It shows its plan first and needs the install record that `agent-screensaver install` writes.
 
 ## The manifest
 
@@ -230,7 +230,9 @@ A card whose source has no agent extension (any program that writes events) show
 
 `agents_off` in the settings file lists agent ids that are off. An agent that is off keeps its hooks, but its hook only prints its reply and exits. The service drops its events.
 
-## A full example (not tested)
+## An untested example
+
+The samples in [guides/examples](guides/examples/) are tested: `acme.quill` (a mapping and a hook file) and `acme.tern` (a converter and a plugin file). The opencode-shaped example below is not.
 
 This opencode-shaped example shows a plugin file, the event name from `--event`, and a converter-free mapping. It has not been tested with opencode. The event names come from https://opencode.ai/docs/plugins/.
 

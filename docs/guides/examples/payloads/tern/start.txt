@@ -1,0 +1,3 @@
+session=t-1
+dir=/Users/me/work/site
+title=Fix the footer links

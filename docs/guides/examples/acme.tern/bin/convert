@@ -1,0 +1,26 @@
+#!/bin/sh
+# Reads one Tern payload on standard input: lines of key=value.
+# Prints one event as JSON on standard output. Prints nothing to ignore.
+# AGS_EVENT is the --event value. AGS_SOURCE is "tern".
+# It uses only shell built-ins, so it starts fast: the timeout is short.
+session= dir= title=
+while IFS='=' read -r key value; do
+  case $key in
+    session) session=$value ;;
+    dir) dir=$value ;;
+    title) title=$value ;;
+  esac
+done
+[ -n "$session" ] || exit 0
+# Quotes and backslashes would break the JSON line below: ignore such a payload.
+case "$session$dir$title" in *\"*|*\\*) exit 0 ;; esac
+case "$AGS_EVENT" in
+  start) kind=started ;;
+  wait)  kind=approval ;;
+  go)    kind=resumed ;;
+  done)  kind=finished ;;
+  quit)  kind=ended ;;
+  *)     exit 0 ;;
+esac
+project=${dir##*/}
+printf '{"kind":"%s","session":"%s","project":"%s","title":"%s"}\n' "$kind" "$session" "$project" "$title"

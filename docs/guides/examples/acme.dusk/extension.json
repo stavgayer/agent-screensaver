@@ -1,0 +1,17 @@
+{
+  "id": "acme.dusk",
+  "name": "Dusk",
+  "version": "1.0.0",
+  "type": "theme",
+  "api": 1,
+  "theme": {
+    "background": { "id": "acme.drift", "options": { "color": "#ff9a4d", "speed": 0.6 } },
+    "layout": "acme.compact",
+    "style": {
+      "--accent": "#ff9a4d",
+      "--attention": "#ffd166",
+      "--done": "#9ad1ff",
+      "--card-opacity": "0.86"
+    }
+  }
+}

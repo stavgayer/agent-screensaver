@@ -1,0 +1,52 @@
+{
+  "id": "acme.quill",
+  "name": "Quill",
+  "version": "1.0.0",
+  "type": "agent",
+  "api": 1,
+  "agent": {
+    "source": "quill",
+    "mark": "mark.svg",
+    "hooks": {
+      "event": "event",
+      "session": "session_id",
+      "reply": { "events": { "before_tool": "empty_object" } },
+      "common": {
+        "project": { "path": "cwd", "as": "basename" },
+        "cwd": "cwd",
+        "model": { "path": "model", "as": "model_name" }
+      },
+      "rules": [
+        { "on": "prompt", "kind": "started",
+          "set": { "title": { "path": "text", "as": "prompt_title" } } },
+        { "on": "before_tool", "kind": "tool_intent",
+          "set": { "title": { "tool": "tool", "input": "input" } } },
+        { "on": "permission", "kind": "approval",
+          "set": { "title": { "tool": "tool", "input": "input" } } },
+        { "on": ["after_tool", "permission_answered"], "kind": "resumed" },
+        { "on": "stop", "kind": "finished" },
+        { "on": "exit", "kind": "ended" },
+        { "on": "debug", "kind": "ignore" }
+      ]
+    },
+    "install": {
+      "detect": "~/.quill",
+      "hooks": {
+        "file": "~/.quill/hooks.json",
+        "format": "json",
+        "shape": "flat",
+        "new_file": { "version": 1 },
+        "handler": { "timeout": 5 },
+        "events": ["prompt", "before_tool", "permission", "after_tool", "stop", "exit"]
+      },
+      "notes": ["Restart Quill to load the new hooks."]
+    },
+    "details": {
+      "name": [
+        { "jsonl": "~/.quill/sessions.jsonl",
+          "last": { "path": "id", "equals": "{session}" },
+          "value": { "path": "title", "as": "short_title" } }
+      ]
+    }
+  }
+}

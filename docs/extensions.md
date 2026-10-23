@@ -1,6 +1,6 @@
 # Writing extensions
 
-This page tells you how to write an extension for agent-screensaver and how to install it.
+This page tells you how to write an extension for agent-screensaver and how to install it. For short step-by-step guides with tested samples, see [guides/](guides/README.md).
 
 ## The six types
 
@@ -196,9 +196,19 @@ export interface Limit {
   estimated?: boolean;
 }
 
+/** An agent extension as the cards show it: its name and the URL of its mark (an SVG shown with `<img>`). */
+export interface AgentInfo {
+  name: string;
+  mark_url: string;
+}
+
 export interface ViewState {
   mode: Mode;
   cards: Card[];
+  /** The installed agents by card source. A card whose source is not here has no agent extension. */
+  agents: Readonly<Record<string, AgentInfo>>;
+  /** The installed agents' sources, built-ins first: the order limits are shown in. */
+  agentOrder: readonly string[];
   limits: Limit[];
   nowMs: number;
   serviceOk: boolean;

@@ -1,0 +1,22 @@
+{
+  "id": "acme.tern",
+  "name": "Tern",
+  "version": "1.0.0",
+  "type": "agent",
+  "api": 1,
+  "agent": {
+    "source": "tern",
+    "mark": "mark.svg",
+    "hooks": {
+      "event": { "arg": "event" },
+      "converter": { "run": "bin/convert", "timeout_ms": 500 }
+    },
+    "install": {
+      "detect": "~/.config/tern",
+      "files": [
+        { "from": "plugin/agent-screensaver.sh", "to": "~/.config/tern/plugins/agent-screensaver.sh" }
+      ],
+      "notes": ["Restart Tern to load the agent-screensaver plugin."]
+    }
+  }
+}

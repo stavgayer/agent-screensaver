@@ -1,0 +1,11 @@
+{
+  "id": "acme.still",
+  "name": "Still",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "main.js",
+  "options": {
+    "dim": { "type": "number", "default": 0.4, "min": 0, "max": 0.8, "label": "Dim" }
+  }
+}
