@@ -22,6 +22,7 @@ import (
 	"agent-screensaver/internal/settings"
 	"agent-screensaver/internal/settingsui"
 	"agent-screensaver/internal/tray"
+	"agent-screensaver/internal/usage"
 )
 
 // subcommands lists every subcommand, in the order shown in the usage text.
@@ -131,8 +132,10 @@ func runDaemon(args []string, stderr io.Writer) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	service := daemon.New(paths.ForHome(home))
+	p := paths.ForHome(home)
+	service := daemon.New(p)
 	service.Cloner = platform.NewFileCloner()
+	service.Estimator = usage.NewForMac(os.DirFS(home), p.UsageFile)
 	service.Details = sessioninfo.Reader{CodexSessionIndex: filepath.Join(codexHome(home), "session_index.jsonl"), Home: home}
 	providers := limits.All(limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob)), os.Environ())
 	// The daemon runs beside the main goroutine, which must serve the main

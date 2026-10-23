@@ -39,6 +39,17 @@ type AnchorSource interface {
 	Anchors() ([]Anchor, error)
 }
 
+// NewForMac returns an estimator over Claude's files on macOS: the anchor
+// files and ~/.claude/projects under home, with its calibration kept in
+// storeFile.
+func NewForMac(home fs.FS, storeFile string) *Estimator {
+	return &Estimator{
+		Sources:   MacSources(home),
+		Tally:     &Tally{FS: home, Root: ".claude/projects", Weights: DefaultWeights},
+		StoreFile: storeFile,
+	}
+}
+
 // MacSources are the files Claude writes on macOS, relative to the home
 // folder that home is rooted at.
 func MacSources(home fs.FS) []AnchorSource {

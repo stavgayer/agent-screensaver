@@ -20,6 +20,8 @@ type Paths struct {
 	RuntimeDir    string
 	MediaDir      string
 	InstallRecord string
+	// UsageFile keeps what the Claude limits estimate learned.
+	UsageFile string
 
 	// AerialClonesDir holds APFS clones of the downloaded aerials, because
 	// the saver's web view can only load files inside DataDir.
@@ -42,6 +44,7 @@ func ForHome(home string) Paths {
 		RuntimeDir:    filepath.Join(dataDir, "runtime"),
 		MediaDir:      mediaDir,
 		InstallRecord: filepath.Join(dataDir, "install-record.json"),
+		UsageFile:     filepath.Join(dataDir, "claude-usage.json"),
 
 		AerialClonesDir: filepath.Join(mediaDir, "aerials"),
 		Aerials:         aerials.LocationsForHome(home),

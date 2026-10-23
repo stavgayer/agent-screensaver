@@ -72,6 +72,9 @@ type Daemon struct {
 	// Details reads card details from the sessions' files. Without one,
 	// cards show only what the events carry.
 	Details DetailsReader
+	// Estimator keeps one source's limits live between exact readings.
+	// Without one, limits change only when a reading arrives.
+	Estimator LimitEstimator
 
 	paths     paths.Paths
 	state     state.State
@@ -97,6 +100,12 @@ type Daemon struct {
 
 	detailsDue    map[cardKey]bool  // cards to read after this drain
 	detailsReadMs map[cardKey]int64 // when each card was last read
+
+	restored       bool // the limits of the last run were read back
+	estimatedOnce  bool
+	estimateDue    bool // an exact reading arrived or the estimator catches up
+	lastEstimateMs int64
+	estimateErr    string // the last estimate problem, to log only changes
 }
 
 // New returns a daemon that keeps its files under p.
@@ -138,10 +147,15 @@ func (d *Daemon) SetReadFailed(source string, nowMs int64) {
 
 // Step does one round of work: no goroutines, no sleeping, only file IO.
 func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
+	if !d.restored {
+		d.restoreLimits()
+		d.restored = true
+	}
 	// The config is read first: draining the spool needs its ignore list.
 	changed := d.refreshView(nowMs)
 	changed = d.applyPendingLimits() || changed
 	changed = d.drainSpool(nowMs) || changed
+	changed = d.estimateLimits(nowMs) || changed
 	changed = d.readDueDetails(nowMs) || changed
 	changed = d.tick(nowMs) || changed
 
@@ -176,6 +190,7 @@ func (d *Daemon) drainSpool(nowMs int64) bool {
 			continue
 		}
 		d.state.Apply(incoming)
+		d.observeLimits(incoming)
 		d.noteDetailsDue(incoming, nowMs)
 		if incoming.Kind == event.KindFinished && slices.Contains(d.sources, incoming.Source) {
 			d.finished[incoming.Source] = true
