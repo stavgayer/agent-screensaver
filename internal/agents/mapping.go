@@ -638,6 +638,23 @@ func (r Reply) Text(eventArg string) string {
 	return replyText[r.Default]
 }
 
+// For is the reply of an event: its own, else the default ("" means none).
+func (r Reply) For(eventName string) string {
+	if reply, ok := r.Events[eventName]; ok {
+		return reply
+	}
+	return r.Default
+}
+
+// ReplyText is what our hook prints for a reply name. It reports false for
+// a name that is not a reply, so a broken value prints nothing.
+func ReplyText(reply string) (string, bool) {
+	if reply != "" && !validReply(reply) {
+		return "", false
+	}
+	return replyText[reply], true
+}
+
 // HasOwn reports whether an event has a reply of its own, so its command
 // must carry --event.
 func (r Reply) HasOwn(eventName string) bool {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -19,12 +20,22 @@ import (
 
 // hookCommand is the only command a recipe can make a tool run: our own
 // binary. eventArg is set when the event name must come from the command.
-func hookCommand(bin, source, eventArg string) string {
+// reply is the event's reply; it rides along in the command so our hook can
+// still answer when the manifest cannot be read.
+func hookCommand(bin, source, eventArg, reply string) string {
 	command := shellQuote(bin) + " hook --tool " + source
 	if eventArg != "" {
 		command += " --event " + eventArg // CheckRecipe allows only safe event names
 	}
+	if reply != "" && reply != agents.ReplyNone {
+		command += " --reply " + reply // one of the three fixed reply names
+	}
 	return command
+}
+
+// agentHookCommand is the command of one event of an agent.
+func agentHookCommand(bin string, agent agents.Agent, eventName string) string {
+	return hookCommand(bin, agent.Source, eventArgFor(agent, eventName), agent.Hooks.Reply.For(eventName))
 }
 
 func statuslineCommand(bin, source string) string {
@@ -46,10 +57,13 @@ func eventArgFor(agent agents.Agent, eventName string) string {
 // is invalid.
 type workspace struct {
 	home, dataDir string
-	files         map[string]*fileState
-	order         []string
-	copies        []fileWrite
-	removals      []string // copied files to delete
+	// recordBin is the binary of the record whose entries are removed:
+	// only commands of exactly our forms with it are ever removed.
+	recordBin string
+	files     map[string]*fileState
+	order     []string
+	copies    []fileWrite
+	removals  []string // copied files to delete
 }
 
 type fileState struct {
@@ -68,8 +82,31 @@ type fileWrite struct {
 	content []byte
 }
 
-func newWorkspace(home string) *workspace {
-	return &workspace{home: home, dataDir: paths.ForHome(home).DataDir, files: map[string]*fileState{}}
+func newWorkspace(home, recordBin string) *workspace {
+	return &workspace{home: home, dataDir: paths.ForHome(home).DataDir, recordBin: recordBin, files: map[string]*fileState{}}
+}
+
+// ownCommand matches the commands install writes: the hook command with an
+// optional --event and --reply, and the status line command with an optional
+// --tool. A record that lists anything else (an edited record) cannot make
+// uninstall remove a command of the user's.
+func ownCommand(bin, source, command string) bool {
+	quoted := regexp.QuoteMeta(shellQuote(bin))
+	hook := `^` + quoted + ` hook --tool ` + regexp.QuoteMeta(source) +
+		`( --event [A-Za-z0-9_.:-]{1,64})?( --reply (empty_object|ask))?$`
+	statusline := `^` + quoted + ` statusline( --tool ` + regexp.QuoteMeta(source) + `)?$`
+	return regexp.MustCompile(hook).MatchString(command) || regexp.MustCompile(statusline).MatchString(command)
+}
+
+// ownEntry is a record entry with only the commands of our own forms.
+func (w *workspace) ownEntry(entry AgentRecord) AgentRecord {
+	entry.Commands = slices.DeleteFunc(slices.Clone(entry.Commands), func(command string) bool {
+		return !ownCommand(w.recordBin, entry.Source, command)
+	})
+	if !ownCommand(w.recordBin, entry.Source, entry.StatuslineCommand) {
+		entry.StatuslineKey, entry.StatuslineCommand = "", ""
+	}
+	return entry
 }
 
 // open reads a file once. path is a recipe path ("~/...").
@@ -174,7 +211,7 @@ func (w *workspace) addAgent(bin string, agent agents.Agent, prior AgentRecord) 
 func (w *workspace) addHooks(bin string, agent agents.Agent, hooks agents.HookRecipe, prior AgentRecord, entry *AgentRecord) error {
 	commands := map[string]string{} // event -> our command
 	for _, eventName := range hooks.Events {
-		commands[eventName] = hookCommand(bin, agent.Source, eventArgFor(agent, eventName))
+		commands[eventName] = agentHookCommand(bin, agent, eventName)
 	}
 	keep := func(eventName, command string) bool {
 		return prior.File == hooks.File && commands[eventName] == command
@@ -233,7 +270,8 @@ func (w *workspace) addHooks(bin string, agent agents.Agent, hooks agents.HookRe
 
 func (w *workspace) swapAgentStatusline(state *fileState, bin string, agent agents.Agent, prior AgentRecord, entry *AgentRecord) error {
 	ours := statuslineCommand(bin, agent.Source)
-	previous, err := swapStatusline(state.config, agent.Install.Statusline.Key, ours, []string{prior.StatuslineCommand})
+	earlier := w.ownEntry(prior).StatuslineCommand // an edited record cannot call the user's command ours
+	previous, err := swapStatusline(state.config, agent.Install.Statusline.Key, ours, []string{earlier})
 	if err != nil {
 		return fmt.Errorf("%s: %w", state.path, err)
 	}
@@ -306,6 +344,7 @@ func addNewFileKeys(config *jsonedit.Object, raw json.RawMessage) ([]string, err
 // removeHooks prepares the removal of what a record entry wrote, except
 // the (event, command) pairs keep says stay. A nil keep removes all.
 func (w *workspace) removeHooks(entry AgentRecord, keep func(eventName, command string) bool) error {
+	entry = w.ownEntry(entry)
 	if entry.File == "" {
 		return nil
 	}
@@ -478,7 +517,10 @@ func recipeOf(entry AgentRecord) agents.Recipe {
 // AddAgentHooks adds the hooks, status line and files of one agent and
 // records them in rec, which is saved before the first user file changes.
 func AddAgentHooks(home, bin string, a agents.Agent, rec *Record) error {
-	w := newWorkspace(home)
+	if rec.Bin == "" {
+		rec.Bin = bin
+	}
+	w := newWorkspace(home, rec.Bin)
 	prior, _ := rec.agentRecord(a.ID)
 	entry, err := w.addAgent(bin, a, prior)
 	if err != nil {
@@ -505,7 +547,7 @@ func RemoveAgentHooks(home string, a agents.Agent, rec *Record) error {
 	if !ok {
 		return nil
 	}
-	w := newWorkspace(home)
+	w := newWorkspace(home, rec.Bin)
 	if err := w.removeAgent(entry); err != nil {
 		return err
 	}
@@ -570,7 +612,7 @@ type plannedCommand struct {
 func distinctCommands(bin string, a agents.Agent, events []string) []plannedCommand {
 	var planned []plannedCommand
 	for _, eventName := range events {
-		command := hookCommand(bin, a.Source, eventArgFor(a, eventName))
+		command := agentHookCommand(bin, a, eventName)
 		index := slices.IndexFunc(planned, func(item plannedCommand) bool { return item.command == command })
 		if index < 0 {
 			planned = append(planned, plannedCommand{command: command})

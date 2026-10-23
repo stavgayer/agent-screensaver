@@ -88,7 +88,7 @@ func TestAddRejectsWrongShapes(t *testing.T) {
 	for _, in := range []string{`{"hooks":[]}`, `{"hooks":{"Stop":{}}}`} {
 		t.Run(in, func(t *testing.T) {
 			writeFile(t, codexPath(home), []byte(in))
-			w := newWorkspace(home)
+			w := newWorkspace(home, "/bin/x")
 			agent := builtinAgents(t)["codex"]
 			if _, err := w.addAgent("/bin/x", agent, AgentRecord{}); err == nil {
 				t.Error("want an error, got nil")

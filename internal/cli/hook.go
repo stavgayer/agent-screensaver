@@ -38,12 +38,18 @@ func Hook(args []string, stdin io.Reader, stdout io.Writer, p paths.Paths, now f
 	flags.SetOutput(io.Discard) // stdout and stderr must stay silent
 	tool := flags.String("tool", "", "agent source")
 	eventArg := flags.String("event", "", "event name, for tools that do not send it")
+	reply := flags.String("reply", "", "the event's reply, for when the manifest cannot be read")
 	if err := flags.Parse(args); err != nil {
 		logError(p, now, fmt.Errorf("hook flags: %w", err))
 		return 0
 	}
 	agent, ok := findAgent(p, now, *tool)
 	if !ok {
+		// The tool still gets a valid answer. --reply is only ever one of
+		// the fixed replies; anything else prints nothing.
+		if text, valid := agents.ReplyText(*reply); valid {
+			_, _ = io.WriteString(stdout, text)
+		}
 		return 0
 	}
 	_, _ = io.WriteString(stdout, agent.Hooks.Reply.Text(*eventArg))

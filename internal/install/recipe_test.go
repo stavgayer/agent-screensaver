@@ -90,8 +90,8 @@ func TestEventWithReplyGetsEventArg(t *testing.T) {
 	addAgent(t, home, cursorAgent(t), &rec)
 
 	file := readJSON(t, cursorPath(home))
-	ask := shellQuote(testBin) + " hook --tool cursor --event beforeShellExecution"
-	plain := shellQuote(testBin) + " hook --tool cursor"
+	ask := shellQuote(testBin) + " hook --tool cursor --event beforeShellExecution --reply ask"
+	plain := shellQuote(testBin) + " hook --tool cursor --reply empty_object"
 	if got := flatCommands(t, file, "beforeShellExecution"); !slices.Equal(got, []string{ask}) {
 		t.Errorf("beforeShellExecution = %v, want [%s]", got, ask)
 	}
@@ -151,7 +151,7 @@ func TestUninstallUsesRecordOnly(t *testing.T) {
 	addAgent(t, home, agent, &rec)
 	// The manifest changes after install to list one more event, and the
 	// user put our command there by hand.
-	ours := shellQuote(testBin) + " hook --tool cursor"
+	ours := shellQuote(testBin) + " hook --tool cursor --reply empty_object"
 	data := mustRead(t, cursorPath(home))
 	writeFile(t, cursorPath(home), bytes.Replace(data, []byte(`"hooks": {`),
 		[]byte(`"hooks": {"subagentStop": [{"type": "command", "command": "`+jsonEscaped(ours)+`"}],`), 1))
@@ -360,4 +360,62 @@ func mustRead(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+func TestUninstallRemovesOnlyCommandsOfOurForm(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, claudePath(home), readFixture(t, "claude_settings.json"))
+	sm := &fakeServices{}
+	apply(t, home, sm)
+	p := paths.ForHome(home)
+	record, err := LoadRecord(p.InstallRecord, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Someone edits the record to claim the user's own Stop hook and status
+	// line as ours.
+	userStop := `[ -x "$SUPERSET_HOME_DIR/hooks/notify.sh" ] && "$SUPERSET_HOME_DIR/hooks/notify.sh" || true`
+	for index := range record.Agents {
+		if record.Agents[index].ID == "builtin.claude" {
+			record.Agents[index].Commands = append(record.Agents[index].Commands, userStop, "/opt/fake/start.sh")
+			record.Agents[index].Events = append(record.Agents[index].Events, "SessionStart")
+		}
+	}
+	if err := SaveRecord(p.InstallRecord, record); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Uninstall(home, sm); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := compact(t, mustRead(t, claudePath(home))), compact(t, readFixture(t, "claude_settings.json")); got != want {
+		t.Errorf("after uninstall:\n%s\nwant the user's file back:\n%s", got, want)
+	}
+}
+
+func TestOwnCommand(t *testing.T) {
+	bin := "/Applications/agent screensaver/agent-screensaver"
+	tests := []struct {
+		command string
+		want    bool
+	}{
+		{shellQuote(bin) + " hook --tool claude", true},
+		{shellQuote(bin) + " hook --tool cursor --event beforeShellExecution --reply ask", true},
+		{shellQuote(bin) + " hook --tool cursor --reply empty_object", true},
+		{shellQuote(bin) + " statusline", true},
+		{shellQuote(bin) + " statusline --tool claude", true},
+		{shellQuote(bin) + " hook --tool codex", false},
+		{shellQuote(bin) + " hook --tool claude; rm -rf ~", false},
+		{shellQuote(bin) + " hook --tool claude --reply allow", false},
+		{"'/other/agent-screensaver' hook --tool claude", false},
+		{"/opt/fake/start.sh", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			if got := ownCommand(bin, "claude", strings.Replace(tt.command, "--tool cursor", "--tool claude", 1)); got != tt.want {
+				t.Errorf("ownCommand = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

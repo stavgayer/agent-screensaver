@@ -225,7 +225,11 @@ func prepareInstall(home, artifacts string, where locations) (*workspace, Record
 	}
 	prior, _ := LoadRecord(where.paths.InstallRecord, found) // missing record: first install
 	record := Record{Version: RecordVersion, Bin: where.bin, Saver: where.saver, Services: []string{DaemonLabel, TrayLabel}}
-	w := newWorkspace(home)
+	priorBin := prior.Bin
+	if priorBin == "" {
+		priorBin = where.bin
+	}
+	w := newWorkspace(home, priorBin)
 	for _, agent := range found {
 		previous, _ := prior.agentRecord(agent.ID)
 		entry, err := w.addAgent(where.bin, agent, previous)
@@ -267,7 +271,7 @@ func Uninstall(home string, sm platform.ServiceManager) error {
 	if err != nil {
 		return err
 	}
-	w := newWorkspace(home)
+	w := newWorkspace(home, record.Bin)
 	for _, entry := range record.Agents {
 		if err := w.removeAgent(entry); err != nil {
 			return fmt.Errorf("cannot uninstall: %w; nothing was changed", err)

@@ -121,7 +121,7 @@ func upgradeRecord(old recordV1, known []agents.Agent) Record {
 		entry := AgentRecord{
 			ID: agent.ID, Source: source, File: hooks.File, Shape: hooks.Shape,
 			Events:   hooks.Events,
-			Commands: []string{shellQuote(old.Bin) + " hook --tool " + source},
+			Commands: []string{hookCommand(old.Bin, source, "", "")},
 		}
 		if agent.Install.Statusline != nil {
 			entry.StatuslineKey = agent.Install.Statusline.Key

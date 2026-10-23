@@ -172,6 +172,32 @@ func TestReply(t *testing.T) {
 	}
 }
 
+func TestHookReplyWhenTheManifestCannotBeRead(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"ask from the command", []string{"--event", "beforeShellExecution", "--reply", "ask"}, `{"permission":"ask"}` + "\n"},
+		{"empty_object from the command", []string{"--reply", "empty_object"}, "{}\n"},
+		{"no reply in the command prints nothing", nil, ""},
+		{"a reply that is not one of ours prints nothing", []string{"--reply", "allow"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := paths.ForHome(t.TempDir())
+			writeAgent(t, p, "acme.cursorish", "acme", cursorLike, "")
+			writeTestFile(t, filepath.Join(p.ExtensionsDir, "acme.cursorish", "extension.json"), "{broken", 0o644)
+
+			output, code := runHook(t, p, `{"conversation_id":"s1"}`, append([]string{"--tool", "acme"}, tt.args...)...)
+
+			if code != 0 || output != tt.want {
+				t.Errorf("code %d, output %q, want %q", code, output, tt.want)
+			}
+		})
+	}
+}
+
 func TestHookOfAnAgentThatIsOffWritesNothing(t *testing.T) {
 	p := paths.ForHome(t.TempDir())
 	copyBuiltinAgent(t, p, "builtin.claude")
