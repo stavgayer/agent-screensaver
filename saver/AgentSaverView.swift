@@ -13,6 +13,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
     private var pageLoaded = false
     private var lastModified: Date?
     private var hostObservers: [NSObjectProtocol] = []
+    private var workspaceObservers: [NSObjectProtocol] = []
     private var lockUIShown = false
 
     override init?(frame: NSRect, isPreview: Bool) {
@@ -30,6 +31,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         webView.autoresizingMask = [.width, .height]
         addSubview(webView)
         observeHost()
+        observeEngine()
         loadRuntime()
     }
 
@@ -71,20 +73,15 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
 
     override func startAnimation() {
         super.startAnimation()
-        webView.isHidden = false
         // The lock screen cannot be up when the saver starts; a missed ...Hidden (the System
         // Settings preview never quits) must not leave the components hidden.
         setLockUI(false)
-        guard timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.pushStateIfChanged() }
+        updateRunning()
     }
 
     override func stopAnimation() {
         super.stopAnimation()
-        // A hidden view makes the page hidden, so the runtime pauses its frames and videos.
-        webView.isHidden = true
-        timer?.invalidate()
-        timer = nil
+        updateRunning()
     }
 
     override func viewDidMoveToWindow() {
@@ -92,6 +89,49 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         // The display role may have changed: send the same file again with the new role.
         lastModified = nil
         pushStateIfChanged()
+        updateRunning()
+    }
+
+    private static let engineBundleID = "com.apple.ScreenSaver.Engine"
+
+    /// WallpaperAgent starts a spare legacyScreenSaver after each run and animates its views
+    /// although nothing shows them (decision 0007). A full-screen view is on screen only while
+    /// ScreenSaverEngine runs; the System Settings preview has no engine.
+    private static var engineRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: engineBundleID).isEmpty
+    }
+
+    /// Only legacyScreenSaver makes spare views; any other host (the test harness) shows its view.
+    private static let hostMakesSpares = Bundle.main.bundleIdentifier == "com.apple.ScreenSaver.Engine.legacyScreenSaver"
+
+    private var shouldRun: Bool {
+        isAnimating && window != nil && (isPreview || !Self.hostMakesSpares || Self.engineRunning)
+    }
+
+    /// Pauses the page when nothing shows it: a hidden view makes the page hidden, so the
+    /// runtime stops its frames and videos and WebKit can suspend the web process.
+    private func updateRunning() {
+        let run = shouldRun
+        webView.isHidden = !run
+        if run, timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.pushStateIfChanged() }
+            lastModified = nil
+            pushStateIfChanged()
+        } else if !run {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    private func observeEngine() {
+        let center = NSWorkspace.shared.notificationCenter
+        let names = [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification]
+        workspaceObservers = names.map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                if app?.bundleIdentifier == Self.engineBundleID { self?.updateRunning() }
+            }
+        }
     }
 
     /// loginwindow posts screenLockUIIsShown when its lock screen (clock, login) appears over
@@ -100,6 +140,7 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         let center = DistributedNotificationCenter.default()
         let handlers: [(String, (AgentSaverView) -> Void)] = [
             ("com.apple.screensaver.willstop", { $0.shutDown() }),
+            ("com.apple.screensaver.didstart", { $0.updateRunning() }),
             ("com.apple.screenLockUIIsShown", { $0.setLockUI(true) }),
             ("com.apple.screenLockUIIsHidden", { $0.setLockUI(false) }),
         ]
@@ -114,6 +155,9 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         let center = DistributedNotificationCenter.default()
         hostObservers.forEach(center.removeObserver)
         hostObservers = []
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspaceObservers.forEach(workspace.removeObserver)
+        workspaceObservers = []
     }
 
     private func setLockUI(_ shown: Bool) {
