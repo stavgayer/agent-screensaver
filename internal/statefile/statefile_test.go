@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -92,5 +93,46 @@ func TestWriteAtomicLeavesNoTmp(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 1 {
 		t.Fatalf("dir has %d entries, want only state.json", len(entries))
+	}
+}
+
+func TestReadLimits(t *testing.T) {
+	resets := int64(1_792_760_400)
+	written := []state.Limit{
+		{Source: "claude", Window: "5h", UsedPercent: 42, ResetsAt: &resets, UpdatedAtMs: 1000, Estimated: true},
+		{Source: "codex", Window: "week", UsedPercent: 7, UpdatedAtMs: 2000},
+	}
+	tests := []struct {
+		name    string
+		content string // "" means no file
+		want    []state.Limit
+		wantErr bool
+	}{
+		{"limits of the last run come back", "write", written, false},
+		{"no file yet is not an error", "", nil, false},
+		{"a broken file is an error", "{", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.json")
+			switch tt.content {
+			case "":
+			case "write":
+				if err := WriteAtomic(path, Build(state.State{Limits: written}, view.View{}, 5000)); err != nil {
+					t.Fatal(err)
+				}
+			default:
+				if err := os.WriteFile(path, []byte(tt.content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := ReadLimits(path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ReadLimits error = %v, want error %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ReadLimits = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }

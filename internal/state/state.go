@@ -94,6 +94,8 @@ type Limit struct {
 	UsedPercent float64      `json:"used_percent"`
 	ResetsAt    *int64       `json:"resets_at,omitempty"`
 	UpdatedAtMs int64        `json:"updated_at_ms"`
+	// Estimated is true when the percent is a local estimate.
+	Estimated bool `json:"estimated,omitempty"`
 }
 
 // State is everything the screen saver shows. Cards keep insertion order so
@@ -287,6 +289,7 @@ func (s *State) applyLimits(incoming event.Event) {
 		limit := &s.Limits[index]
 		limit.UsedPercent = reading.UsedPercent
 		limit.ResetsAt = copyInt64(reading.ResetsAt)
+		limit.Estimated = reading.Estimated
 		limit.UpdatedAtMs = max(limit.UpdatedAtMs, incoming.AtMs)
 	}
 }

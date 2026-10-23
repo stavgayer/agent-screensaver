@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 
+	"agent-screensaver/internal/atomicfile"
 	"agent-screensaver/internal/state"
 	"agent-screensaver/internal/view"
 )
 
 const (
 	formatVersion = 1
-	dirMode       = 0o755
 	fileMode      = 0o644 // the sandboxed saver must be able to read it
 )
 
@@ -62,25 +62,27 @@ func WriteAtomic(path string, f StateFile) error {
 	if err != nil {
 		return fmt.Errorf("encode state file: %w", err)
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, dirMode); err != nil {
-		return fmt.Errorf("create state dir: %w", err)
-	}
-	temp, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp state file: %w", err)
-	}
-	tempPath := temp.Name()
-	_, writeErr := temp.Write(data)
-	chmodErr := temp.Chmod(fileMode)
-	closeErr := temp.Close()
-	if err := errors.Join(writeErr, chmodErr, closeErr); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("write temp state file: %w", err)
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("replace state file: %w", err)
+	if err := atomicfile.Write(path, data, fileMode); err != nil {
+		return fmt.Errorf("write state file: %w", err)
 	}
 	return nil
+}
+
+// ReadLimits returns the limits of the state file at path, so a restarted
+// service shows the last readings at once. A missing file has none.
+func ReadLimits(path string) ([]state.Limit, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read state file: %w", err)
+	}
+	var file struct {
+		Limits []state.Limit `json:"limits"`
+	}
+	if err := json.Unmarshal(data, &file); err != nil {
+		return nil, fmt.Errorf("decode state file: %w", err)
+	}
+	return file.Limits, nil
 }

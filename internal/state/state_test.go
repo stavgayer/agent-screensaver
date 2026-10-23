@@ -297,6 +297,18 @@ func TestApplyLimits(t *testing.T) {
 			},
 			want: []Limit{{Source: "claude", Window: event.Week, UsedPercent: 31, UpdatedAtMs: 5000}},
 		},
+		{
+			name: "an estimate is marked and the next exact reading clears the mark",
+			events: []event.Event{
+				limitsEvent("claude", 1000, event.LimitReading{Window: event.FiveHour, UsedPercent: 40, Estimated: true},
+					event.LimitReading{Window: event.Week, UsedPercent: 20, Estimated: true}),
+				limitsEvent("claude", 2000, event.LimitReading{Window: event.Week, UsedPercent: 21}),
+			},
+			want: []Limit{
+				{Source: "claude", Window: event.FiveHour, UsedPercent: 40, UpdatedAtMs: 1000, Estimated: true},
+				{Source: "claude", Window: event.Week, UsedPercent: 21, UpdatedAtMs: 2000},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

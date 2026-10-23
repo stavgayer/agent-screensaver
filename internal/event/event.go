@@ -34,6 +34,9 @@ type LimitReading struct {
 	Window      Window  `json:"window"`
 	UsedPercent float64 `json:"used_percent"`
 	ResetsAt    *int64  `json:"resets_at,omitempty"` // Unix seconds
+	// Estimated is true when the percent was worked out locally between
+	// exact readings, not read from the tool.
+	Estimated bool `json:"estimated,omitempty"`
 }
 
 // Kind says what happened.
