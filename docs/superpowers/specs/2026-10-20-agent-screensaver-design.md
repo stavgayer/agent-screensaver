@@ -22,7 +22,7 @@ The owner is the first user. The project will be open source.
 ### Goals (version 1)
 
 1. A real macOS screen saver. It works with the system lock. When the owner comes back, macOS asks for the password, as it does today.
-2. It shows agent status for Claude Code and Codex: waiting for approval, running (with time), finished. Cursor shows the same, with approvals for shell and MCP commands (§7d). Users can add other agents as agent extensions (§7d).
+2. It shows agent status for Claude Code and Codex: waiting for approval, running (with time), finished. Cursor shows running and finished; its shell and MCP commands show on the working card, never as approvals (§7d). Users can add other agents as agent extensions (§7d).
 3. It shows usage limits: Claude Max session (5 hours) and weekly, Codex session (5 hours) and weekly, in percent, with the time until reset.
 4. When an agent waits for approval, the screen makes it obvious from far away, and a small sound plays.
 5. It is fast and light. This is the top priority.
@@ -31,7 +31,7 @@ The owner is the first user. The project will be open source.
 ### Non-goals (not in version 1)
 
 - Linux and Windows. The design must not block them later, but no work goes there now.
-- Cursor usage limits. Its usage data is only available through cookies or internal endpoints. (Cursor task status is in version 1, as a built-in agent extension, §7d. Owner decision, 22/10/2026.)
+- Cursor usage limits. Cursor keeps usage on its server only; it is reachable only with the login token or cookies through undocumented endpoints (research file `cursor-usage-research.md`, 24/10/2026). (Cursor task status is in version 1, as a built-in agent extension, §7d. Owner decision, 22/10/2026.)
 - Jira, GitHub, calendar, Slack, social networks (Reddit, Bluesky, YouTube, Gmail). The card model (section 6) must make them easy to add later.
 - A drag-and-drop layout editor.
 - Running another company's screen saver inside ours.
@@ -393,9 +393,9 @@ The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/20
         { "on": "beforeSubmitPrompt", "kind": "started",
           "set": { "title": { "path": "prompt", "as": "prompt_title" },
                    "model": { "path": "model", "as": "model_name" } } },
-        { "on": "beforeShellExecution", "kind": "approval",
+        { "on": "beforeShellExecution", "kind": "tool_intent",
           "set": { "title": { "path": "command", "as": "short_title" } } },
-        { "on": "beforeMCPExecution", "kind": "approval",
+        { "on": "beforeMCPExecution", "kind": "tool_intent",
           "set": { "title": { "path": "tool_name", "as": "short_title" } } },
         { "on": ["afterShellExecution", "afterMCPExecution", "postToolUse"], "kind": "resumed" },
         { "on": "stop", "kind": "finished",
@@ -422,10 +422,10 @@ The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/20
 }
 ```
 
-**Cursor approval cards (owner decision, 23/10/2026).** Cursor has no approval event that only reports. Its approval events are permission hooks: Cursor reads the hook's answer, and an invalid answer blocks the action. The built-in Cursor extension subscribes to `beforeShellExecution` and `beforeMCPExecution`, and our hook always answers `{"permission": "ask"}` for them. "Ask" means "let Cursor ask the user", so Cursor should behave as before. Our hook never answers allow or deny (a hard rule of the engine, see "Safety rules"). `afterShellExecution` and `afterMCPExecution` clear the approval card.
+**Cursor commands are working steps, not approvals (owner decision, 24/10/2026; replaces the 23/10 approval cards).** Cursor has no approval event that only reports. Its events before a command are permission hooks: Cursor reads the hook's answer, and an invalid answer blocks the action. The built-in Cursor extension subscribes to `beforeShellExecution` and `beforeMCPExecution`, and our hook always answers `{"permission": "ask"}` for them. "Ask" means "let Cursor ask the user", so Cursor behaves as before (live test, below). Our hook never answers allow or deny (a hard rule of the engine, see "Safety rules"). The two events map to `tool_intent`: the working card shows the command or the MCP tool name. They are not approvals, because Cursor does not tell the hook whether it will really ask the user, and in "Run Everything" mode it sends them before every command, which would show a false approval card and play its sound for each one. So Cursor never makes an approval card. `afterShellExecution` and `afterMCPExecution` map to `resumed`.
 
 - `preToolUse` is not used. The docs say Cursor accepts `ask` there but does not enforce it today, so its effect is unclear.
-- Risk: Cursor can run some commands without asking (an allow list or auto-run mode). The docs do not say whether a hook's `ask` makes Cursor ask for such a command. Task 6.5 tests this live on the owner's Mac, with and without our hook. If Cursor behaves differently in any case, the recipe drops the two permission events (and their `after...` events), and Cursor cards show only working and done.
+- Risk: Cursor can run some commands without asking (an allow list or auto-run mode). The docs do not say whether a hook's `ask` makes Cursor ask for such a command. Task 6.5 tested this live on the owner's Mac, with and without our hook.
 - Task 6.5 (live test, 24/10/2026, Cursor 3.26.16, run mode "Run Everything"): Cursor behaved the same with and without our hooks, and showed no error when our hook printed nothing, so the reply default is `none`. The model is set only on `beforeSubmitPrompt` and `stop`, the events that carry the full model name. A run mode where Cursor asks was not tested. Results: `docs/e2e-checklist.md`.
 - Cursor also runs the Claude Code hooks of `~/.claude/settings.json` with its own payloads. `builtin.claude` ignores payloads that have `cursor_version`, so a Cursor chat is never also a Claude card.
 

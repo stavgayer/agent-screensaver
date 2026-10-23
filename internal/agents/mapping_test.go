@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/state"
 )
 
 const (
@@ -293,10 +294,12 @@ func TestMappingCursor(t *testing.T) {
 	}{
 		{"beforeSubmitPrompt is started with the prompt as title", "before_submit_prompt.json",
 			cursorEvent(event.KindStarted, func(e *event.Event) { e.Title, e.Model = "Fix the login bug", "grok-4.7-high" })},
-		{"beforeShellExecution is an approval with the command as title", "before_shell_execution.json",
-			cursorEvent(event.KindApproval, func(e *event.Event) { e.Title = "npm run migrate" })},
-		{"beforeMCPExecution is an approval with the tool name as title", "before_mcp_execution.json",
-			cursorEvent(event.KindApproval, func(e *event.Event) { e.Title = "create_issue" })},
+		// Owner decision 24/10: Cursor sends these before every command, also
+		// when it will not ask, so they are working steps, never approvals.
+		{"beforeShellExecution is a working step with the command as title", "before_shell_execution.json",
+			cursorEvent(event.KindToolIntent, func(e *event.Event) { e.Title = "npm run migrate" })},
+		{"beforeMCPExecution is a working step with the tool name as title", "before_mcp_execution.json",
+			cursorEvent(event.KindToolIntent, func(e *event.Event) { e.Title = "create_issue" })},
 		{"afterShellExecution is resumed", "after_shell_execution.json", cursorEvent(event.KindResumed, nil)},
 		{"afterMCPExecution is resumed", "after_mcp_execution.json", cursorEvent(event.KindResumed, nil)},
 		{"postToolUse is resumed", "post_tool_use.json", cursorEvent(event.KindResumed, nil)},
@@ -319,5 +322,41 @@ func TestMappingCursor(t *testing.T) {
 				t.Errorf("event:\n got  %+v\n want %+v", got, *tt.want)
 			}
 		})
+	}
+}
+
+// TestCursorNeverAsksForAttention: no Cursor payload makes an approval card,
+// because Cursor does not say whether it will really ask the user.
+func TestCursorNeverAsksForAttention(t *testing.T) {
+	fixtures, err := filepath.Glob(filepath.Join("testdata", "cursor", "*.json"))
+	if err != nil || len(fixtures) == 0 {
+		t.Fatalf("no Cursor fixtures (%v)", err)
+	}
+	for _, fixture := range fixtures {
+		if got, ok := mapHook(t, "cursor", readTestFile(t, fixture)); ok && got.Kind == event.KindApproval {
+			t.Errorf("%s maps to an approval", filepath.Base(fixture))
+		}
+	}
+}
+
+// TestCursorShellCommandMakesAWorkingCard follows a Cursor turn into the
+// card state: the command shows on a working card, which never asks for
+// attention.
+func TestCursorShellCommandMakesAWorkingCard(t *testing.T) {
+	var cards state.State
+	for _, fixture := range []string{"before_submit_prompt.json", "before_shell_execution.json"} {
+		mapped, ok := mapHook(t, "cursor", readTestFile(t, filepath.Join("testdata", "cursor", fixture)))
+		if !ok {
+			t.Fatalf("%s gave no event", fixture)
+		}
+		cards.Apply(mapped)
+	}
+
+	if len(cards.Cards) != 1 {
+		t.Fatalf("cards = %+v, want one", cards.Cards)
+	}
+	card := cards.Cards[0]
+	if card.Kind != state.KindRunning || card.Request != "npm run migrate" || cards.NeedsAttention() {
+		t.Errorf("card = %+v, needs attention %v; want running with the command and no attention", card, cards.NeedsAttention())
 	}
 }

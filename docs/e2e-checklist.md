@@ -68,5 +68,7 @@ What the recordings showed (22 Cursor payloads, one conversation):
 
 Not tested:
 
-- A run mode where Cursor asks before a command, and a real deny. In "Run Everything" mode Cursor still sends `beforeShellExecution` and `beforeMCPExecution` before every call, so by the mapping the card shows "approval" from each `before...` event until its `after...` event (about 13 s for the three shell commands here), although Cursor does not ask.
+- A run mode where Cursor asks before a command, and a real deny.
+
+Follow-up (owner decision, 24/10/2026): in "Run Everything" mode Cursor still sends `beforeShellExecution` and `beforeMCPExecution` before every call, so the first mapping showed an approval card from each `before...` event until its `after...` event (about 13 s for the three shell commands here), although Cursor did not ask. `builtin.cursor` now maps them to `tool_intent`: the command shows on the working card, and Cursor never makes an approval card or its sound. The reply stays `{"permission":"ask"}`, the answer used in this test.
 - `sessionEnd` and `preCompact` were not recorded (the chat was not closed, nothing was compacted). Their fixtures keep the documented shape.

@@ -96,3 +96,7 @@ What the model does not cover: a converter or a plugin file is code the user cho
 5. JSON configs only in version 1.
 6. Turning an agent off keeps its hooks; the agent is silent. The settings list becomes a "Connections" tab with states (not installed, no hooks, active, idle, off) and the last event time per source, which the daemon records.
 7. Hermes is checked later.
+
+## Addendum (2026-10-24): Cursor commands are working steps
+
+The live test (Task 6.5, Cursor 3.26.16, "Run Everything" mode) showed that Cursor behaves the same with our "ask" hooks as without them. It also showed that Cursor sends `beforeShellExecution` and `beforeMCPExecution` before every command, also when it will not ask, and the payload does not say whether it will. An approval card from these events would be false for every command in that mode and would play the approval sound. Owner decision: the two events map to `tool_intent` (the command shows on the working card), and Cursor never makes an approval card. The hook still answers "ask", because Cursor needs an answer and the live test showed it is harmless. This replaces answer 1 of 2026-10-23 for the cards; the "ask" reply stays. Cursor has no usage ring: its usage is on its server only.
