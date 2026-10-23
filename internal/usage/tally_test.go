@@ -124,8 +124,7 @@ func TestTallyReadsIncrementally(t *testing.T) {
 	if got := tally.Between(since, at11); got != 15 {
 		t.Errorf("after the whole line: %v, want 15", got)
 	}
-	// Only the unfinished half line was read twice.
-	if want := int64(len(first) + 20 + len(second)); tally.readBytes != want {
+	if want := int64(len(first) + len(second)); tally.readBytes != want {
 		t.Errorf("read %d bytes in all, want %d", tally.readBytes, want)
 	}
 
@@ -159,7 +158,8 @@ func TestTallyScanKeepsToItsBudget(t *testing.T) {
 			t.Fatal(err)
 		}
 		scans++
-		if read := tally.readBytes - before; read > budget {
+		// A scan may finish the line it is in, never more.
+		if read := tally.readBytes - before; read > budget+int64(len(lines[39])) {
 			t.Fatalf("scan %d read %d bytes, budget %d", scans, read, budget)
 		}
 		if caughtUp {
@@ -236,5 +236,52 @@ func TestTallyPollAfterFirstReadIsCheap(t *testing.T) {
 	}
 	if got := tally.Between(at10, at11); got != 35 {
 		t.Errorf("new answer counted as %v, want 35", got)
+	}
+}
+
+// Lines longer than the read buffer still count; a line over the size
+// bound is passed over without holding it, and the lines after it count.
+func TestTallyLongLines(t *testing.T) {
+	root := t.TempDir()
+	transcript := filepath.Join(root, "projects", "p", "s.jsonl")
+	long := strings.Replace(assistantLine("long", time.UnixMilli(at10), 1), `"usage"`,
+		`"content":"`+strings.Repeat("x", 3*readBufferBytes)+`","usage"`, 1)
+	huge := strings.Replace(assistantLine("huge", time.UnixMilli(at10), 100), `"usage"`,
+		`"content":"`+strings.Repeat("x", maxLineBytes)+`","usage"`, 1)
+	appendTo(t, transcript, long+huge+assistantLine("after", time.UnixMilli(at10), 2))
+	tally := &Tally{FS: os.DirFS(root), Root: "projects", Weights: DefaultWeights}
+	if caughtUp, err := tally.Scan(at10-dayMs, bigBudget); err != nil || !caughtUp {
+		t.Fatalf("Scan = %v, %v", caughtUp, err)
+	}
+	if got := tally.Between(at10-dayMs, at11); got != 5+10 {
+		t.Errorf("Between = %v, want 15 (the long line and the one after the huge one)", got)
+	}
+	if cap(tally.long) > maxLineBytes+readBufferBytes {
+		t.Errorf("line buffer grew to %d bytes", cap(tally.long))
+	}
+}
+
+// The dedupe set holds only the calls inside the horizon, however many
+// polls run: 8 days of one call a minute, scanned with a horizon of one
+// day, keeps one day of calls.
+func TestTallyDedupeSetStaysBounded(t *testing.T) {
+	root := t.TempDir()
+	transcript := filepath.Join(root, "projects", "p", "s.jsonl")
+	tally := &Tally{FS: os.DirFS(root), Root: "projects", Weights: DefaultWeights}
+	start := at10 - 8*dayMs
+	for day := range 8 {
+		var lines strings.Builder
+		for minute := range 24 * 60 {
+			atMs := start + int64(day)*dayMs + int64(minute)*minuteMs
+			lines.WriteString(assistantLine(fmt.Sprint(atMs), time.UnixMilli(atMs), 1))
+		}
+		appendTo(t, transcript, lines.String())
+		nowMs := start + int64(day+1)*dayMs
+		if _, err := tally.Scan(nowMs-dayMs, bigBudget); err != nil {
+			t.Fatal(err)
+		}
+		if len(tally.calls) > 24*60 {
+			t.Fatalf("day %d: %d calls kept, want at most one day (%d)", day, len(tally.calls), 24*60)
+		}
 	}
 }

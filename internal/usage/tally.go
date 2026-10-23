@@ -1,10 +1,12 @@
 package usage
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/fs"
 	"path"
@@ -45,11 +47,24 @@ type Tally struct {
 	Weights TokenWeights
 
 	files map[string]int64 // bytes read of each file, up to a whole line
-	calls map[string]call  // by message id and request id
-	// readBytes counts every byte read, so tests can check nothing is
-	// read twice.
+	// calls holds the calls of the last horizon by a hash of message id
+	// and request id: 8 bytes a key instead of two 30-character strings.
+	calls map[uint64]call
+	// reader and long are reused for every file, so a scan holds one
+	// small buffer, not whole files.
+	reader *bufio.Reader
+	long   []byte
+	// readBytes counts the bytes of every whole line read, so tests can
+	// check nothing is read twice.
 	readBytes int64
 }
+
+const (
+	readBufferBytes = 64 << 10
+	// maxLineBytes is the longest line kept for parsing. The longest
+	// answer line in the owner's 1.2 GiB of transcripts is 0.4 MiB.
+	maxLineBytes = 1 << 20
+)
 
 // call is one model call. A streamed answer is written several times with
 // the same ids and growing usage; a resumed session copies old calls into
@@ -67,7 +82,7 @@ type call struct {
 func (t *Tally) Scan(sinceMs, budget int64) (bool, error) {
 	if t.files == nil {
 		t.files = map[string]int64{}
-		t.calls = map[string]call{}
+		t.calls = map[uint64]call{}
 	}
 	t.forgetBefore(sinceMs)
 	seen := map[string]bool{}
@@ -100,11 +115,9 @@ func (t *Tally) Scan(sinceMs, budget int64) (bool, error) {
 			caughtUp = false
 			return nil
 		}
-		// A line longer than the whole budget may be read at once, but
-		// only with a fresh budget, so one scan stays near its budget.
-		before := t.readBytes
-		read, done, err := t.readFile(name, offset, info.Size(), left, left == budget, sinceMs)
-		left -= t.readBytes - before
+		// A scan stops at the first line end past its budget.
+		read, done, err := t.readFile(name, offset, info.Size(), left, sinceMs)
+		left -= read - offset
 		if err != nil {
 			return nil // a file that cannot be read now is tried next scan
 		}
@@ -159,6 +172,16 @@ func (t *Tally) windowStart(closedAtMs, lengthMs, nowMs int64) (int64, bool) {
 	return start, nowMs < start+lengthMs
 }
 
+// callKey hashes the two ids of a call (FNV-1a, 64 bits). A clash between
+// two real calls is too unlikely to matter for an estimate.
+func callKey(messageID, requestID string) uint64 {
+	hash := fnv.New64a()
+	_, _ = hash.Write([]byte(messageID))
+	_, _ = hash.Write([]byte{':'})
+	_, _ = hash.Write([]byte(requestID))
+	return hash.Sum64()
+}
+
 func (t *Tally) forgetBefore(sinceMs int64) {
 	for key, found := range t.calls {
 		if found.atMs <= sinceMs {
@@ -167,42 +190,71 @@ func (t *Tally) forgetBefore(sinceMs int64) {
 	}
 }
 
-// readFile reads whole lines of one file from offset, at most budget bytes
-// unless a single line is longer and longLine allows it. It returns the new offset and whether the
+// readFile reads whole lines of one file from offset until budget bytes
+// are used, streaming them through one small reused buffer so a large
+// file never sits in memory. It returns the new offset and whether the
 // file was read to its end. A last line without its newline is still being
 // written: it is left for the next scan.
-func (t *Tally) readFile(name string, offset, size, budget int64, longLine bool, sinceMs int64) (int64, bool, error) {
+func (t *Tally) readFile(name string, offset, size, budget, sinceMs int64) (int64, bool, error) {
 	file, err := t.FS.Open(name)
 	if err != nil {
 		return offset, false, fmt.Errorf("open transcript: %w", err)
 	}
 	defer file.Close()
-	reader, ok := file.(io.ReaderAt)
+	readerAt, ok := file.(io.ReaderAt)
 	if !ok {
 		return offset, false, fmt.Errorf("transcript %s cannot be read at an offset", name)
 	}
-	chunk, err := t.readAt(reader, offset, min(size-offset, budget))
-	if err != nil {
-		return offset, false, err
+	section := io.NewSectionReader(readerAt, offset, size-offset)
+	if t.reader == nil {
+		t.reader = bufio.NewReaderSize(section, readBufferBytes)
+	} else {
+		t.reader.Reset(section)
 	}
-	end := bytes.LastIndexByte(chunk, '\n')
-	if end < 0 && offset+int64(len(chunk)) < size {
-		if !longLine {
-			return offset, false, nil
+	var consumed int64
+	for consumed < budget {
+		line, length, complete := t.nextLine()
+		if !complete {
+			return offset + consumed, true, nil
 		}
-		if chunk, err = t.readAt(reader, offset, size-offset); err != nil {
-			return offset, false, err
-		}
-		end = bytes.LastIndexByte(chunk, '\n')
-	}
-	done := offset+int64(len(chunk)) >= size
-	if end < 0 {
-		return offset, done, nil
-	}
-	for _, line := range bytes.Split(chunk[:end], []byte("\n")) {
+		consumed += length
+		t.readBytes += length
 		t.addLine(line, sinceMs)
 	}
-	return offset + int64(end) + 1, done, nil
+	return offset + consumed, offset+consumed >= size, nil
+}
+
+// nextLine returns the next whole line without its newline and its length
+// on disk. A line longer than maxLineBytes is passed over and returned
+// empty: no real answer line is that long, and holding it would cost the
+// memory this reader saves. complete is false at the end of the data,
+// where a line has no newline yet, or on a read error.
+func (t *Tally) nextLine() (line []byte, length int64, complete bool) {
+	t.long = t.long[:0]
+	tooLong := false
+	for {
+		part, err := t.reader.ReadSlice('\n')
+		length += int64(len(part))
+		switch {
+		case err == nil && len(t.long) == 0 && !tooLong:
+			return part[:len(part)-1], length, true
+		case err == nil || errors.Is(err, bufio.ErrBufferFull):
+			if !tooLong && len(t.long)+len(part) <= maxLineBytes {
+				t.long = append(t.long, part...)
+			} else {
+				tooLong, t.long = true, t.long[:0]
+			}
+			if err != nil {
+				continue
+			}
+			if tooLong {
+				return nil, length, true
+			}
+			return t.long[:len(t.long)-1], length, true
+		default:
+			return nil, 0, false
+		}
+	}
 }
 
 func (t *Tally) addLine(line []byte, sinceMs int64) {
@@ -226,7 +278,7 @@ func (t *Tally) addLine(line []byte, sinceMs int64) {
 	if err != nil || at.UnixMilli() <= sinceMs {
 		return
 	}
-	key := entry.Message.ID + ":" + entry.RequestID
+	key := callKey(entry.Message.ID, entry.RequestID)
 	found := call{atMs: at.UnixMilli(), weighted: t.Weights.weigh(*entry.Message.Usage)}
 	if old, ok := t.calls[key]; ok {
 		// Keep the fullest copy, at the time the call was first seen.
@@ -234,14 +286,4 @@ func (t *Tally) addLine(line []byte, sinceMs int64) {
 		found.weighted = max(found.weighted, old.weighted)
 	}
 	t.calls[key] = found
-}
-
-func (t *Tally) readAt(reader io.ReaderAt, offset, length int64) ([]byte, error) {
-	chunk := make([]byte, length)
-	read, err := reader.ReadAt(chunk, offset)
-	t.readBytes += int64(read)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("read transcript: %w", err)
-	}
-	return chunk[:read], nil
 }
