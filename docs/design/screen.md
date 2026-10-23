@@ -171,3 +171,42 @@ Saver harness, live times, Default (Matrix) and Calm (a real aerial). Not commit
 - After: the same names with `after-` in place of `before-`.
 - Worst case (Hebrew title and project, long title, long project, no activity, check the terminal, 12 in background, four cards): `<scratchpad>/t62/shots/after-state-stress-default-1512x982.png`, `<scratchpad>/t62/shots/after-state-stress-default-1024x768.png`, `<scratchpad>/t62/shots/after-state-stress-calm-1512x982.png`, `<scratchpad>/t62/shots/after-state-stress-calm-1024x768.png`
 - Settings, General, Ignored projects (scratch copy of the page with a stub bridge): `<scratchpad>/t62/shots/settings-ignored-projects.jpg`
+
+## Richer task cards (23 October)
+
+The owner asked each card to say which agent it is, the conversation's name, whether anything runs in the background, whether the agent works or is done, and how full the context is. Each card must still read at a glance from about 3 m.
+
+### What each card shows now
+
+Four lines, top to bottom:
+
+1. **State and agent.** The 6.2 state line ("Working · 24m", "Done · 3m ago", ...) on the left. On the right, a small drawn mark and the product name in muted white: a speech bubble for Claude, a terminal prompt for Codex, a pointer for Cursor, a ring for any other agent. The marks are our own shapes, not the products' logos (their brand terms do not allow them). A theme can recolor them (`--source-color`) or replace each shape (`--mark-claude`, `--mark-codex`, `--mark-cursor`, `--mark-other`, see docs/extensions.md).
+2. **What.** The conversation name when the agent has one (Claude `/rename` or its own title, the Codex thread name), else the prompt title, else the project.
+3. **Context.** "Context", a thin bar whose fill is the true share of the window, and the percent. The fill is muted white; from 80% the fill and the percent take the attention color, because Claude Code compacts the conversation near the end of the window. No bar when the agent does not say.
+4. **Where.** Project · model · branch, then "N in background" in the accent.
+
+The last line sits at the bottom of the card, so a card without a context bar still lines up with its neighbours.
+
+### Hierarchy and narrow cards
+
+The state and the name stay the two big lines (2.2vmin and 2.6vmin). Everything added is small (1.7 to 1.9vmin) and quiet: color is only on the state, the high context bar and the background count. When the last line is too long, the branch gives way first, then the model, and the project last. Narrow cards drop words in this order: under 40vmin the branch; under 33vmin the model, the word "Context" and the agent's name (the mark stays); under 26vmin the mark too. The state and the count are never cut for them. Checked with four cards at 1024x768: every state line fits.
+
+Not added: cost, Codex background terminals, a plan-mode chip (it would need one more field from every hook and one more mark on the top line).
+
+### Limit rings never show old numbers as current
+
+Claude limits come only from the Claude Code status line, so a reading can be many hours old. After a window's `resets_at` the ring is empty and says "Reset" until a newer reading comes. A reading older than 30 minutes (5h window) or 6 hours (week and plan) is dimmed to 45% and its caption adds the age ("20h ago"). Fresh readings look as before.
+
+### Checks
+
+- `impeccable detect` on the task row and the rings: no findings. `design-taste-frontend` lint (`--app`): 0 FAIL, 0 WARN.
+- No new motion. Every line is one line with an ellipsis.
+
+### Screenshots
+
+Saver harness, live times, Default (Matrix) and Calm (a real aerial), 1512x982 and 1024x768. Not committed. "Before" is the 6.2 runtime fed the same state.
+
+- Idle: `<scratchpad>/t63/shots/before-idle-default-1512x982.png` and `<scratchpad>/t63/shots/after-idle-default-1512x982.png`; the other theme and size use the same pattern (`-calm-`, `-1024x768`).
+- Attention: `<scratchpad>/t63/shots/before-attention-default-1024x768.png` and `<scratchpad>/t63/shots/after-attention-default-1024x768.png`, same pattern.
+- Worst case (Hebrew name and project, long name, long project and branch, long model, 97% context, no context, 12 in background, four cards): `<scratchpad>/t63/shots/before-stress-default-1024x768.png` and `<scratchpad>/t63/shots/after-stress-default-1024x768.png`, same pattern.
+- Rings (Claude 5h reset with an old 20%, Claude week 20 h old, Codex plan fresh): `<scratchpad>/t63/shots/before-rings-default-1512x982.png` and `<scratchpad>/t63/shots/after-rings-default-1512x982.png`, same pattern.
