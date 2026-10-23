@@ -1,0 +1,14 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "cursor",
+      "session": "22222222-2222-4222-8222-222222222222",
+      "kind": "started",
+      "at_ms": 1760000000000,
+      "project": "app",
+      "title": "Fix the login bug",
+      "model": "grok-4.7-high"
+    }
+  ]
+}

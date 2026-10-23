@@ -1,0 +1,95 @@
+{
+  "hooks": {
+    "afterShellExecution": [
+      {
+        "command": "\"/Library/Application Support/Collector/enforcer\" --editor cursor",
+        "timeout": 30,
+        "type": "command"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "\"/Library/Application Support/Collector/enforcer\" --editor cursor",
+        "timeout": 30,
+        "type": "command"
+      },
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh PermissionRequest"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "\"/Library/Application Support/Collector/enforcer\" --editor cursor",
+        "timeout": 30,
+        "type": "command"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "\"/Library/Application Support/Collector/enforcer\" --editor cursor",
+        "timeout": 30,
+        "type": "command"
+      },
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh PermissionRequest"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "\"/Library/Application Support/Collector/enforcer\" --editor cursor",
+        "timeout": 30,
+        "type": "command"
+      },
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh Start"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh Start",
+        "matcher": "^(Shell|MCP:.+)$"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh Start",
+        "matcher": "^(Shell|MCP:.+)$"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "\"/Library/Application Support/Collector/enforcer\" --editor cursor",
+        "timeout": 30,
+        "type": "command"
+      },
+      {
+        "command": "shellfilter hook cursor",
+        "matcher": "Shell"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh SessionEnd"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "\"/Library/Application Support/Collector/enforcer\" --editor cursor",
+        "timeout": 30,
+        "type": "command"
+      },
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh SessionStart"
+      },
+      {
+        "command": "'/Library/Application Support/Tracker/tracker' --agent cursor"
+      }
+    ],
+    "stop": [
+      {
+        "command": "/Users/example/.dashboard/hooks/cursor-hook.sh Stop"
+      }
+    ]
+  },
+  "version": 1
+}

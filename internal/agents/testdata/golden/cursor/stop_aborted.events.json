@@ -1,0 +1,14 @@
+{
+  "events": [
+    {
+      "v": 1,
+      "source": "cursor",
+      "session": "22222222-2222-4222-8222-222222222222",
+      "kind": "finished",
+      "at_ms": 1760000000000,
+      "project": "app",
+      "model": "grok-4.7-high",
+      "transcript": "/Users/example/.cursor/projects/Users-example-work-app/agent-transcripts/22222222-2222-4222-8222-222222222222/22222222-2222-4222-8222-222222222222.jsonl"
+    }
+  ]
+}

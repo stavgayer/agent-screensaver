@@ -40,3 +40,33 @@ Not verified:
 - Claude `Edit` permission: only Bash was recorded. The Edit fixture is kept from the docs.
 
 Codex runs hook commands through a shell. The installed command has a quoted path with a space (`.../Application Support/...`), and the payloads were recorded, so the quoting works.
+
+## Cursor behavior check
+
+Done on 24 Oct 2026 on the owner's Mac. Cursor 3.26.16, run mode "Run Everything (Unsandboxed)": Cursor runs every command without asking. Each case was run twice: first without our Cursor hooks, then with them (`builtin.cursor` added to `~/.cursor/hooks.json` through the install engine, recordings on). After the test our hooks were removed and the file was put back byte for byte.
+
+| Case | Without our hooks | With our hooks |
+|---|---|---|
+| Shell command (`touch /tmp/ags-ask-N`) | ran, no prompt | ran, no prompt |
+| Same kind of command, meant to be denied (`touch /tmp/ags-deny-N`) | ran, no prompt (nothing to deny in this mode) | ran, no prompt |
+| Command that runs without asking (`echo ags-allow-N`) | ran, no prompt | ran, no prompt |
+| MCP call (case 4) | ran, no prompt | ran, no prompt |
+| MCP call (case 5) | ran, no prompt | ran, no prompt |
+| Cursor Hooks output panel | no error | no error from our hook; `hook-errors.log` got no new line |
+
+Result: Cursor behaved the same with and without our hooks, so the permission events stay (no fallback).
+
+What the recordings showed (22 Cursor payloads, one conversation):
+
+- `conversation_id` was the same in every payload, and `session_id` equals it. `workspace_roots` had one folder. `hook_event_name` uses Cursor's names.
+- `transcript_path` is `null` on every event except `stop`. `cwd` is an empty string on shell events.
+- `model` is `grok-4.7-high` (with the effort) on `beforeSubmitPrompt` and `stop`, and `grok-4.7` on tool events. `builtin.cursor` takes the model from the first two only, so the card does not switch.
+- `beforeMCPExecution` sends `tool_input` as a string, plus `mcp_server_name`. `postToolUse` names MCP tools `MCP:<tool>`.
+- Our hook printed nothing for the events without a reply, and Cursor showed no error, so the reply default is `none`, not `empty_object`.
+- Cursor also runs the Claude Code hooks of `~/.claude/settings.json` (Cursor's settings list them under "Claude"). Our `hook --tool claude` got the same Cursor payloads. They made no Claude card, because their event names are Cursor's; `builtin.claude` now ignores any payload with `cursor_version`, so it stays that way. Cursor never runs Claude `PermissionRequest` or `Notification` hooks, so it never waits for a reply from our Claude hook.
+- The card, read from `state.json`: one card with source `cursor`, project `agent-screensaver` and model `grok-4.7-high`, finished at the end. No Claude card and no second card for the chat. The "Cu" mark on screen was not looked at during this test.
+
+Not tested:
+
+- A run mode where Cursor asks before a command, and a real deny. In "Run Everything" mode Cursor still sends `beforeShellExecution` and `beforeMCPExecution` before every call, so by the mapping the card shows "approval" from each `before...` event until its `after...` event (about 13 s for the three shell commands here), although Cursor does not ask.
+- `sessionEnd` and `preCompact` were not recorded (the chat was not closed, nothing was compacted). Their fixtures keep the documented shape.

@@ -33,14 +33,13 @@ func loadAgentDir(t *testing.T, dir string) agents.Agent {
 	return agent
 }
 
-// builtinAgents are the shipped Claude and Codex agents and the
-// Cursor-shaped test agent.
+// builtinAgents are the shipped Claude, Codex and Cursor agents.
 func builtinAgents(t *testing.T) map[string]agents.Agent {
 	t.Helper()
 	return map[string]agents.Agent{
 		"claude": loadAgentDir(t, filepath.Join("..", "..", "extensions", "builtin.claude")),
 		"codex":  loadAgentDir(t, filepath.Join("..", "..", "extensions", "builtin.codex")),
-		"cursor": loadAgentDir(t, filepath.Join("testdata", "cursor")),
+		"cursor": loadAgentDir(t, filepath.Join("..", "..", "extensions", "builtin.cursor")),
 	}
 }
 

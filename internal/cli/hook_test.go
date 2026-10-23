@@ -126,9 +126,11 @@ func TestReply(t *testing.T) {
 	sleeper := "#!/bin/sh\nsleep 2\n"
 	tests := []struct {
 		name       string
+		builtin    string // a built-in agent of the repo instead of hooks
 		hooks      string
 		script     string
 		off        bool
+		fast       bool // the hook must return within 100 ms
 		payload    string
 		args       []string
 		wantOutput string
@@ -151,17 +153,39 @@ func TestReply(t *testing.T) {
 		{name: "reply printed when the converter times out", script: sleeper,
 			hooks:   `{"event":{"arg":"event"},"reply":{"default":"ask"},"converter":{"run":"bin/convert","timeout_ms":100}}`,
 			payload: `{}`, args: []string{"--event", "x"}, wantOutput: `{"permission":"ask"}` + "\n"},
+		{name: "cursor beforeShellExecution prints ask", builtin: "builtin.cursor",
+			payload: `{"conversation_id":"c1","hook_event_name":"beforeShellExecution","command":"npm run migrate"}`,
+			args:    []string{"--event", "beforeShellExecution", "--reply", "ask"}, wantOutput: `{"permission":"ask"}` + "\n", wantEvents: 1},
+		{name: "cursor beforeMCPExecution prints ask", builtin: "builtin.cursor",
+			payload: `{"conversation_id":"c1","hook_event_name":"beforeMCPExecution","tool_name":"create_issue"}`,
+			args:    []string{"--event", "beforeMCPExecution", "--reply", "ask"}, wantOutput: `{"permission":"ask"}` + "\n", wantEvents: 1},
+		{name: "cursor stop prints the default (nothing)", builtin: "builtin.cursor",
+			payload:    `{"conversation_id":"c1","hook_event_name":"stop","status":"completed"}`,
+			wantOutput: "", wantEvents: 1},
+		{name: "cursor permission event with garbage stdin still prints ask fast", builtin: "builtin.cursor", fast: true,
+			payload: "\x00\xff not json {{{", args: []string{"--event", "beforeShellExecution", "--reply", "ask"},
+			wantOutput: `{"permission":"ask"}` + "\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := paths.ForHome(t.TempDir())
-			writeAgent(t, p, "acme.cursorish", "acme", tt.hooks, tt.script)
+			tool := "acme"
+			if tt.builtin != "" {
+				copyBuiltinAgent(t, p, tt.builtin)
+				tool = strings.TrimPrefix(tt.builtin, "builtin.")
+			} else {
+				writeAgent(t, p, "acme.cursorish", "acme", tt.hooks, tt.script)
+			}
 			if tt.off {
 				setAgentsOff(t, p, "acme.cursorish")
 			}
 
-			output, code := runHook(t, p, tt.payload, append([]string{"--tool", "acme"}, tt.args...)...)
+			started := time.Now()
+			output, code := runHook(t, p, tt.payload, append([]string{"--tool", tool}, tt.args...)...)
 
+			if elapsed := time.Since(started); tt.fast && elapsed > 100*time.Millisecond {
+				t.Errorf("hook took %v, want under 100 ms", elapsed)
+			}
 			if code != 0 || output != tt.wantOutput {
 				t.Errorf("code %d, output %q, want %q (log %s)", code, output, tt.wantOutput, errorLog(p))
 			}

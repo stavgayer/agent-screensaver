@@ -383,23 +383,23 @@ The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/20
       "event": "hook_event_name",
       "session": "conversation_id",
       "reply": {
-        "default": "empty_object",
         "events": { "beforeShellExecution": "ask", "beforeMCPExecution": "ask" }
       },
       "common": {
         "project": { "path": ["workspace_roots.0", "cwd"], "as": "basename" },
-        "model": { "path": "model", "as": "model_name" },
         "transcript": "transcript_path"
       },
       "rules": [
         { "on": "beforeSubmitPrompt", "kind": "started",
-          "set": { "title": { "path": "prompt", "as": "prompt_title" } } },
+          "set": { "title": { "path": "prompt", "as": "prompt_title" },
+                   "model": { "path": "model", "as": "model_name" } } },
         { "on": "beforeShellExecution", "kind": "approval",
           "set": { "title": { "path": "command", "as": "short_title" } } },
         { "on": "beforeMCPExecution", "kind": "approval",
           "set": { "title": { "path": "tool_name", "as": "short_title" } } },
         { "on": ["afterShellExecution", "afterMCPExecution", "postToolUse"], "kind": "resumed" },
-        { "on": "stop", "kind": "finished" },
+        { "on": "stop", "kind": "finished",
+          "set": { "model": { "path": "model", "as": "model_name" } } },
         { "on": "sessionEnd", "kind": "ended" },
         { "on": "preCompact", "kind": "info",
           "set": { "context_percent": { "path": "context_usage_percent", "as": "percent" } } }
@@ -426,7 +426,8 @@ The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/20
 
 - `preToolUse` is not used. The docs say Cursor accepts `ask` there but does not enforce it today, so its effect is unclear.
 - Risk: Cursor can run some commands without asking (an allow list or auto-run mode). The docs do not say whether a hook's `ask` makes Cursor ask for such a command. Task 6.5 tests this live on the owner's Mac, with and without our hook. If Cursor behaves differently in any case, the recipe drops the two permission events (and their `after...` events), and Cursor cards show only working and done.
-- `"default": "empty_object"` makes our hook print `{}` for the other events. The docs say Cursor reads JSON from a hook that exits 0, but not what empty output does. Task 6.5 checks this; if empty output works, the default goes back to `none`.
+- Task 6.5 (live test, 24/10/2026, Cursor 3.26.16, run mode "Run Everything"): Cursor behaved the same with and without our hooks, and showed no error when our hook printed nothing, so the reply default is `none`. The model is set only on `beforeSubmitPrompt` and `stop`, the events that carry the full model name. A run mode where Cursor asks was not tested. Results: `docs/e2e-checklist.md`.
+- Cursor also runs the Claude Code hooks of `~/.claude/settings.json` with its own payloads. `builtin.claude` ignores payloads that have `cursor_version`, so a Cursor chat is never also a Claude card.
 
 ### The mapping language
 

@@ -98,6 +98,17 @@ func firstRule(agent map[string]any) map[string]any {
 	return list(object(agent, "hooks"), "rules")[0].(map[string]any)
 }
 
+// firstRuleWithSet is the first hook rule that sets fields (the first rule
+// may be an ignore rule, as in builtin.claude).
+func firstRuleWithSet(agent map[string]any) map[string]any {
+	for _, rule := range list(object(agent, "hooks"), "rules") {
+		if _, ok := rule.(map[string]any)["set"]; ok {
+			return rule.(map[string]any)
+		}
+	}
+	return nil
+}
+
 func TestValidateAgentManifest(t *testing.T) {
 	setMark := func(content string) func(t *testing.T, dir string) {
 		return func(t *testing.T, dir string) { writeTestFile(t, filepath.Join(dir, "mark.svg"), content, 0o644) }
@@ -111,6 +122,7 @@ func TestValidateAgentManifest(t *testing.T) {
 	}{
 		{name: "valid claude manifest", builtin: "builtin.claude"},
 		{name: "valid codex manifest", builtin: "builtin.codex"},
+		{name: "valid cursor manifest", builtin: "builtin.cursor"},
 		{name: "missing mark", builtin: "builtin.claude", mutate: func(agent map[string]any) { delete(agent, "mark") }, wantErr: "agent.mark"},
 		{name: "mark over 8 KiB", builtin: "builtin.claude", files: setMark("<svg>" + strings.Repeat(" ", 9000) + "</svg>"), wantErr: "limit"},
 		{name: "mark with script", builtin: "builtin.claude", files: setMark(`<svg><script>x()</script></svg>`), wantErr: "script"},
@@ -124,7 +136,7 @@ func TestValidateAgentManifest(t *testing.T) {
 			object(agent, "hooks")["converter"] = map[string]any{"run": "mark.svg"}
 		}, wantErr: "converter"},
 		{name: "unknown transform", builtin: "builtin.claude", mutate: func(agent map[string]any) {
-			object(firstRule(agent), "set")["title"] = map[string]any{"path": "prompt", "as": "upper"}
+			object(firstRuleWithSet(agent), "set")["title"] = map[string]any{"path": "prompt", "as": "upper"}
 		}, wantErr: "transform"},
 		{name: "two operators in one condition", builtin: "builtin.codex", mutate: func(agent map[string]any) {
 			firstRule(agent)["if"] = map[string]any{"path": "transcript_path", "equals": nil, "present": true}
@@ -147,7 +159,7 @@ func TestValidateAgentManifest(t *testing.T) {
 			list(object(agent, "statusline"), "rules")[0].(map[string]any)["on"] = "x"
 		}, wantErr: "on"},
 		{name: "ratio outside details", builtin: "builtin.claude", mutate: func(agent map[string]any) {
-			object(firstRule(agent), "set")["context_percent"] = map[string]any{"ratio": []any{"a", "b"}}
+			object(firstRuleWithSet(agent), "set")["context_percent"] = map[string]any{"ratio": []any{"a", "b"}}
 		}, wantErr: "ratio"},
 		{name: "unknown details provider", builtin: "builtin.claude", mutate: func(agent map[string]any) {
 			list(object(agent, "details"), "context_percent")[0] = map[string]any{"provider": "x"}

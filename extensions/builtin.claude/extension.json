@@ -18,6 +18,7 @@
         "name": { "path": "session_title", "as": "short_title" }
       },
       "rules": [
+        { "if": { "path": "cursor_version", "present": true }, "kind": "ignore" },
         { "on": "UserPromptSubmit", "kind": "started",
           "set": { "title": { "path": "prompt", "as": "prompt_title" },
                    "background": { "path": "background_tasks", "as": "count" } } },

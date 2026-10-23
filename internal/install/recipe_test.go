@@ -2,9 +2,11 @@ package install
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -25,7 +27,7 @@ func pluginAgent(t *testing.T, id string) agents.Agent {
 		"type":"agent","api":1,"agent":{"source":"acme","mark":"mark.svg",
 		"hooks":{"event":{"arg":"event"},"converter":{"run":"bin/convert"}},
 		"install":{"files":[{"from":"plugin/agent-screensaver.js","to":"~/.acme/plugins/agent-screensaver.js"}]}}}`, id)))
-	writeFile(t, filepath.Join(dir, "mark.svg"), readFixture(t, filepath.Join("cursor", "mark.svg")))
+	writeFile(t, filepath.Join(dir, "mark.svg"), readRepoFile(t, filepath.Join("extensions", "builtin.cursor", "mark.svg")))
 	writeFile(t, filepath.Join(dir, "plugin", "agent-screensaver.js"), []byte("// runs agent-screensaver hook --tool acme"))
 	writeFile(t, filepath.Join(dir, "bin", "convert"), []byte("#!/bin/sh\ncat >/dev/null\n"))
 	if err := os.Chmod(filepath.Join(dir, "bin", "convert"), 0o755); err != nil {
@@ -36,7 +38,7 @@ func pluginAgent(t *testing.T, id string) agents.Agent {
 
 func cursorAgent(t *testing.T) agents.Agent {
 	t.Helper()
-	return loadAgentDir(t, filepath.Join("testdata", "cursor"))
+	return loadAgentDir(t, filepath.Join("..", "..", "extensions", "builtin.cursor"))
 }
 
 func cursorPath(home string) string { return filepath.Join(home, ".cursor", "hooks.json") }
@@ -91,7 +93,7 @@ func TestEventWithReplyGetsEventArg(t *testing.T) {
 
 	file := readJSON(t, cursorPath(home))
 	ask := shellQuote(testBin) + " hook --tool cursor --event beforeShellExecution --reply ask"
-	plain := shellQuote(testBin) + " hook --tool cursor --reply empty_object"
+	plain := shellQuote(testBin) + " hook --tool cursor"
 	if got := flatCommands(t, file, "beforeShellExecution"); !slices.Equal(got, []string{ask}) {
 		t.Errorf("beforeShellExecution = %v, want [%s]", got, ask)
 	}
@@ -416,6 +418,171 @@ func TestOwnCommand(t *testing.T) {
 			if got := ownCommand(bin, "claude", strings.Replace(tt.command, "--tool cursor", "--tool claude", 1)); got != tt.want {
 				t.Errorf("ownCommand = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+// objectKeys lists the keys of a JSON object in file order.
+func objectKeys(t *testing.T, raw []byte) []string {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if _, err := decoder.Token(); err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			t.Fatal(err)
+		}
+		keys = append(keys, key.(string))
+	}
+	return keys
+}
+
+// hooksObject is the raw "hooks" object of a Cursor hook file.
+func hooksObject(t *testing.T, data []byte) []byte {
+	t.Helper()
+	var file struct {
+		Hooks json.RawMessage `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &file); err != nil {
+		t.Fatal(err)
+	}
+	return file.Hooks
+}
+
+// ourHandlers are the handlers of a Cursor hook file whose command runs our
+// binary, by event.
+func ourHandlers(t *testing.T, data []byte) map[string][]map[string]any {
+	t.Helper()
+	var file struct {
+		Hooks map[string][]map[string]any `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &file); err != nil {
+		t.Fatal(err)
+	}
+	ours := map[string][]map[string]any{}
+	for event, handlers := range file.Hooks {
+		for _, handler := range handlers {
+			if command, _ := handler["command"].(string); strings.HasPrefix(command, shellQuote(testBin)+" ") {
+				ours[event] = append(ours[event], handler)
+			}
+		}
+	}
+	return ours
+}
+
+func TestAgentInstall(t *testing.T) {
+	userFile := readFixture(t, "cursor_hooks.json")
+	tests := []struct {
+		name  string
+		user  []byte // the hook file before install; nil means none
+		check func(t *testing.T, home string, agent agents.Agent, rec *Record)
+	}{
+		{name: "cursor into missing file", check: func(t *testing.T, home string, agent agents.Agent, _ *Record) {
+			data := mustRead(t, cursorPath(home))
+			if keys := objectKeys(t, data); !slices.Equal(keys, []string{"version", "hooks"}) {
+				t.Errorf("top-level keys = %v, want [version hooks]", keys)
+			}
+			if keys := objectKeys(t, hooksObject(t, data)); !slices.Equal(keys, agent.Install.Hooks.Events) {
+				t.Errorf("events = %v, want %v", keys, agent.Install.Hooks.Events)
+			}
+			for event, handlers := range ourHandlers(t, data) {
+				if len(handlers) != 1 {
+					t.Errorf("%s has %d handlers of ours", event, len(handlers))
+				}
+			}
+		}},
+		{name: "cursor keeps other tools' entries and key order", user: userFile,
+			check: func(t *testing.T, home string, agent agents.Agent, _ *Record) {
+				data := mustRead(t, cursorPath(home))
+				if keys := objectKeys(t, data); !slices.Equal(keys, []string{"hooks", "version"}) {
+					t.Errorf("top-level keys = %v, want the user's order [hooks version]", keys)
+				}
+				before := objectKeys(t, hooksObject(t, userFile))
+				after := objectKeys(t, hooksObject(t, data))
+				if !slices.Equal(after[:len(before)], before) {
+					t.Errorf("events = %v, want the user's %v first", after, before)
+				}
+				var original, updated struct {
+					Hooks map[string][]map[string]any `json:"hooks"`
+				}
+				if json.Unmarshal(userFile, &original) != nil || json.Unmarshal(data, &updated) != nil {
+					t.Fatal("decode")
+				}
+				for event, handlers := range original.Hooks {
+					got := updated.Hooks[event]
+					if len(got) < len(handlers) || !reflect.DeepEqual(got[:len(handlers)], handlers) {
+						t.Errorf("%s: the user's handlers changed:\n got  %v\n want %v first", event, got, handlers)
+					}
+				}
+			}},
+		{name: "cursor permission events get --event in the command", user: userFile,
+			check: func(t *testing.T, home string, agent agents.Agent, _ *Record) {
+				for event, handlers := range ourHandlers(t, mustRead(t, cursorPath(home))) {
+					command := handlers[0]["command"].(string)
+					want := shellQuote(testBin) + " hook --tool cursor"
+					if agent.Hooks.Reply.HasOwn(event) {
+						want = shellQuote(testBin) + " hook --tool cursor --event " + event + " --reply ask"
+					}
+					if command != want {
+						t.Errorf("%s command = %q, want %q", event, command, want)
+					}
+				}
+			}},
+		{name: "cursor uninstall restores the original after re-indent", user: userFile,
+			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
+				if err := RemoveAgentHooks(home, agent, rec); err != nil {
+					t.Fatal(err)
+				}
+				var indented bytes.Buffer
+				if err := json.Indent(&indented, userFile, "", "  "); err != nil {
+					t.Fatal(err)
+				}
+				if got := mustRead(t, cursorPath(home)); strings.TrimSpace(string(got)) != strings.TrimSpace(indented.String()) {
+					t.Errorf("after uninstall:\n%s\nwant:\n%s", got, indented.String())
+				}
+			}},
+		{name: "cursor uninstall of a file we created removes the file",
+			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
+				if err := RemoveAgentHooks(home, agent, rec); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := os.Stat(cursorPath(home)); !os.IsNotExist(err) {
+					t.Errorf("the hook file is still there (%v)", err)
+				}
+			}},
+		{name: "cursor handler has timeout and no failClosed", user: userFile,
+			check: func(t *testing.T, home string, agent agents.Agent, _ *Record) {
+				ours := ourHandlers(t, mustRead(t, cursorPath(home)))
+				if len(ours) != len(agent.Install.Hooks.Events) {
+					t.Errorf("our events = %d, want %d", len(ours), len(agent.Install.Hooks.Events))
+				}
+				for event, handlers := range ours {
+					handler := handlers[0]
+					if _, found := handler["failClosed"]; found || handler["timeout"] != float64(5) || handler["type"] != "command" {
+						t.Errorf("%s handler = %v", event, handler)
+					}
+				}
+			}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			if tt.user != nil {
+				writeFile(t, cursorPath(home), tt.user)
+			}
+			agent := cursorAgent(t)
+			rec := Record{Version: RecordVersion}
+
+			addAgent(t, home, agent, &rec)
+
+			tt.check(t, home, agent, &rec)
 		})
 	}
 }

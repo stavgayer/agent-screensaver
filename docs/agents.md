@@ -2,7 +2,7 @@
 
 This page tells you how to teach agent-screensaver a new coding agent. You write an extension folder. You do not change our code.
 
-Claude Code and Codex are built-in agent extensions in the same format: `extensions/builtin.claude` and `extensions/builtin.codex`. Read them as examples.
+Claude Code, Codex and Cursor are built-in agent extensions in the same format: `extensions/builtin.claude`, `extensions/builtin.codex` and `extensions/builtin.cursor`. Read them as examples. `builtin.cursor` shows the flat hook shape, a per-event reply and `new_file`.
 
 The design and the reasons are in the spec (§7d) and in `docs/decisions/0006-agent-extensions.md`.
 
@@ -210,7 +210,7 @@ Before any change, the service shows the plan: each file, each event, each comma
 
 The card shows the agent's mark and name. The mark is a small SVG file (not a symlink) of at most 8 KiB with an `<svg>` root. It may not hold, also after character references such as `&#40;` are decoded, `<script>`, `<foreignObject>`, `on...=` attributes, an `href` that does not start with `#`, a `url(` that does not start with `url(#`, or `@import`. The runtime shows it with `<img>`, so a mark can run no code and load nothing.
 
-The project ships no company logos. The built-in marks are plain letter tiles of our own: "C" for Claude Code and "X" for Codex.
+The project ships no company logos. The built-in marks are plain letter tiles of our own: "C" for Claude Code, "X" for Codex and "Cu" for Cursor.
 
 You can use your own icon for any agent without editing its extension: put an SVG file named `<source>.svg` in the `marks` folder of the data folder, for example `~/Library/Application Support/agent-screensaver/marks/codex.svg`. It must pass the same checks. A file that fails them is ignored and the extension's mark is shown.
 
@@ -221,6 +221,9 @@ A card whose source has no agent extension (any program that writes events) show
 - Paths in `details` are fixed. A tool that moves its folder with an environment variable is not followed: Codex's `$CODEX_HOME` is not read, so `builtin.codex` reads `~/.codex/session_index.jsonl`.
 - A new agent's `limits` provider is used after the service starts again.
 - macOS checks a new program on its first start, which can take up to a second. A converter can time out on its first run.
+- Cursor also runs Claude Code hooks from `~/.claude/settings.json`, with its own payloads (Cursor event names and fields such as `cursor_version`). `builtin.claude` ignores every payload that has `cursor_version`, so a Cursor chat gives one Cursor card, not a Claude card too.
+- Cursor approval cards come from `beforeShellExecution` and `beforeMCPExecution`, which Cursor sends before every shell command and MCP call, also when it will not ask. With Cursor's run mode "Run Everything" the card says "approval" while each command runs, although Cursor asks nothing. The live test (24/10/2026, Cursor 3.26.16) was done only in that mode; a run mode where Cursor asks was not tested.
+- Cursor sends `transcript_path` only on `stop`, and the full model name (with the effort, for example `grok-4.7-high`) only on `beforeSubmitPrompt` and `stop`, so `builtin.cursor` sets the model only there. Cursor has no declared details: its chat name is in an undocumented database.
 
 ## Turning an agent off
 

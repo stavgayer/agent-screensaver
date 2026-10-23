@@ -1,0 +1,17 @@
+{
+  "conversation_id": "22222222-2222-4222-8222-222222222222",
+  "generation_id": "44444444-4444-4444-8444-444444444444",
+  "model": "grok-4.7",
+  "reason": "user_close",
+  "duration_ms": 60000,
+  "final_status": "completed",
+  "is_background_agent": false,
+  "session_id": "22222222-2222-4222-8222-222222222222",
+  "hook_event_name": "sessionEnd",
+  "cursor_version": "3.26.16",
+  "workspace_roots": [
+    "/Users/example/work/app"
+  ],
+  "user_email": "user@example.com",
+  "transcript_path": null
+}

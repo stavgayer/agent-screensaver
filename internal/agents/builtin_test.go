@@ -63,6 +63,8 @@ func TestMap(t *testing.T) {
 		{"claude missing session is ignored", "claude", "missing_session.json", false, "", "", "", ""},
 		{"claude unknown event is ignored", "claude", "unknown_event.json", false, "", "", "", ""},
 		{"claude invalid json is ignored", "claude", "invalid.json", false, "", "", "", ""},
+		{"claude ignores what Cursor sends to Claude hooks", "claude", "from_cursor_post_tool_use.json", false, "", "", "", ""},
+		{"claude ignores a Cursor payload with a Claude event name", "claude", "from_cursor_claude_event_name.json", false, "", "", "", ""},
 		{"codex started", "codex", "user_prompt_submit.json", true, event.KindStarted, codexSession, "workspace", "Refactor the parser"},
 		{"codex tool intent", "codex", "pre_tool_use.json", true, event.KindToolIntent, codexSession, "workspace", "Bash: git status"},
 		{"codex tool intent joins command array", "codex", "pre_tool_use_command_array.json", true, event.KindToolIntent, "thr_1", "codex-app", "shell: git status"},

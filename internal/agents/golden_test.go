@@ -23,6 +23,8 @@ type goldenEvents struct {
 // manifests and compares the events with testdata/golden. The golden files
 // were written by the Go adapters before they were removed (Task 6.4, the
 // equivalence gate), so this keeps Claude and Codex exactly as before.
+// Cursor never had a Go adapter: its golden files were written from its
+// manifest (Task 6.5) and checked by hand, and now guard it the same way.
 func TestBuiltinManifestsMatchGolden(t *testing.T) {
 	cases := []struct {
 		group, fixtures string
@@ -31,6 +33,7 @@ func TestBuiltinManifestsMatchGolden(t *testing.T) {
 		{"claude", "claude", func(t *testing.T) *Mapping { agent := builtinAgent(t, "claude"); return &agent.Hooks }},
 		{"codex", "codex", func(t *testing.T) *Mapping { agent := builtinAgent(t, "codex"); return &agent.Hooks }},
 		{"statusline", "statusline", func(t *testing.T) *Mapping { return builtinAgent(t, "claude").Statusline }},
+		{"cursor", "cursor", func(t *testing.T) *Mapping { agent := builtinAgent(t, "cursor"); return &agent.Hooks }},
 	}
 	for _, group := range cases {
 		fixtures, err := filepath.Glob(filepath.Join("testdata", group.fixtures, "*.json"))

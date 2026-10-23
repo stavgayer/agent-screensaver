@@ -1,0 +1,19 @@
+{
+  "conversation_id": "22222222-2222-4222-8222-222222222222",
+  "generation_id": "44444444-4444-4444-8444-444444444444",
+  "model": "grok-4.7",
+  "tool_name": "create_issue",
+  "tool_input": "{}",
+  "result_json": "{\"ok\":true}",
+  "duration": 2417.666,
+  "tool_use_id": "55555555-5555-4555-8555-555555555555",
+  "mcp_server_name": "tracker",
+  "session_id": "22222222-2222-4222-8222-222222222222",
+  "hook_event_name": "afterMCPExecution",
+  "cursor_version": "3.26.16",
+  "workspace_roots": [
+    "/Users/example/work/app"
+  ],
+  "user_email": "user@example.com",
+  "transcript_path": null
+}

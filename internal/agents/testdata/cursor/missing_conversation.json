@@ -1,0 +1,32 @@
+{
+  "generation_id": "44444444-4444-4444-8444-444444444444",
+  "model": "grok-4.7-high",
+  "model_id": "grok-4.7",
+  "model_params": [
+    {
+      "id": "context",
+      "value": "256k"
+    },
+    {
+      "id": "reasoning_effort",
+      "value": "high"
+    },
+    {
+      "id": "fast",
+      "value": "false"
+    }
+  ],
+  "status": "completed",
+  "loop_count": 0,
+  "input_tokens": 152719,
+  "output_tokens": 1442,
+  "cache_read_tokens": 150016,
+  "cache_write_tokens": 0,
+  "hook_event_name": "stop",
+  "cursor_version": "3.26.16",
+  "workspace_roots": [
+    "/Users/example/work/app"
+  ],
+  "user_email": "user@example.com",
+  "transcript_path": "/Users/example/.cursor/projects/Users-example-work-app/agent-transcripts/22222222-2222-4222-8222-222222222222/22222222-2222-4222-8222-222222222222.jsonl"
+}

@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -267,5 +268,56 @@ func TestReplyText(t *testing.T) {
 	}
 	if strings.Contains(reply.Text("x"), "allow") {
 		t.Error("a reply allowed an action")
+	}
+}
+
+// TestMappingCursor maps the recorded Cursor payloads with the built-in
+// Cursor manifest.
+func TestMappingCursor(t *testing.T) {
+	const session = "22222222-2222-4222-8222-222222222222"
+	// Cursor sends a transcript path only on stop, and the full model name
+	// (with the effort) only on beforeSubmitPrompt and stop.
+	transcript := "/Users/example/.cursor/projects/Users-example-work-app/agent-transcripts/" + session + "/" + session + ".jsonl"
+	finished := func(e *event.Event) { e.Model, e.Transcript = "grok-4.7-high", transcript }
+	cursorEvent := func(kind event.Kind, change func(*event.Event)) *event.Event {
+		mapped := event.Event{V: event.Version, Source: "cursor", Session: session, Kind: kind, AtMs: testNowMs, Project: "app"}
+		if change != nil {
+			change(&mapped)
+		}
+		return &mapped
+	}
+	tests := []struct {
+		name    string
+		fixture string
+		want    *event.Event // nil means the payload is ignored
+	}{
+		{"beforeSubmitPrompt is started with the prompt as title", "before_submit_prompt.json",
+			cursorEvent(event.KindStarted, func(e *event.Event) { e.Title, e.Model = "Fix the login bug", "grok-4.7-high" })},
+		{"beforeShellExecution is an approval with the command as title", "before_shell_execution.json",
+			cursorEvent(event.KindApproval, func(e *event.Event) { e.Title = "npm run migrate" })},
+		{"beforeMCPExecution is an approval with the tool name as title", "before_mcp_execution.json",
+			cursorEvent(event.KindApproval, func(e *event.Event) { e.Title = "create_issue" })},
+		{"afterShellExecution is resumed", "after_shell_execution.json", cursorEvent(event.KindResumed, nil)},
+		{"afterMCPExecution is resumed", "after_mcp_execution.json", cursorEvent(event.KindResumed, nil)},
+		{"postToolUse is resumed", "post_tool_use.json", cursorEvent(event.KindResumed, nil)},
+		{"stop is finished", "stop.json", cursorEvent(event.KindFinished, finished)},
+		{"stop with status aborted is finished", "stop_aborted.json", cursorEvent(event.KindFinished, finished)},
+		{"sessionEnd is ended", "session_end.json", cursorEvent(event.KindEnded, nil)},
+		{"preCompact is info with context_percent", "pre_compact.json",
+			cursorEvent(event.KindInfo, func(e *event.Event) { e.ContextPercent = floatPointer(87) })},
+		{"afterAgentResponse is ignored", "after_agent_response.json", nil},
+		{"missing conversation_id is ignored", "missing_conversation.json", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := mapHook(t, "cursor", readTestFile(t, filepath.Join("testdata", "cursor", tt.fixture)))
+
+			if ok != (tt.want != nil) {
+				t.Fatalf("ok = %v, event %+v", ok, got)
+			}
+			if tt.want != nil && !reflect.DeepEqual(got, *tt.want) {
+				t.Errorf("event:\n got  %+v\n want %+v", got, *tt.want)
+			}
+		})
 	}
 }
