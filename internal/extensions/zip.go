@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -259,4 +260,20 @@ func writeNewFile(target string, in io.Reader, limit int64, source fs.FileMode) 
 		return errors.New("archive is too large uncompressed")
 	}
 	return closeErr
+}
+
+// KeepExecutable sets every regular file under dir to 0644, except the
+// files in programs (full paths), which become 0755. Install copies keep a
+// source's execute bit; this narrows it to the programs the manifest names.
+func KeepExecutable(dir string, programs []string) error {
+	return filepath.WalkDir(dir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || !entry.Type().IsRegular() {
+			return walkErr
+		}
+		mode := fs.FileMode(0o644)
+		if slices.Contains(programs, path) {
+			mode = 0o755
+		}
+		return os.Chmod(path, mode)
+	})
 }

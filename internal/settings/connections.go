@@ -54,8 +54,12 @@ type Connection struct {
 	// offer the right hook button.
 	Found      bool `json:"found"`
 	HooksAdded bool `json:"hooks_added"`
-	// HooksChanged: the record says added, the file no longer holds our entries.
+	// HooksChanged: the record says added, the file no longer holds our
+	// entries under the events the record names.
 	HooksChanged bool `json:"hooks_changed"`
+	// StatuslineOwn: the hooks are in place, but the status line now runs
+	// the user's own command.
+	StatuslineOwn bool `json:"statusline_own"`
 	// Warnings are the converter and plugin file lines of the add plan; the
 	// confirm button then says "I trust <name>, add hooks".
 	Warnings []string `json:"warnings"`
@@ -97,15 +101,20 @@ func (s Service) Connections(nowMs int64) ([]Connection, error) {
 			last = &at
 		}
 		found := install.Detected(s.Paths.Home, agent)
+		hooks := install.HooksOK
+		if added {
+			hooks = install.CheckHooks(s.Paths.Home, entry)
+		}
 		connection := Connection{
 			ID: agent.ID, Name: marks[agent.Source].Name, Source: agent.Source, Mark: marks[agent.Source].MarkURL,
 			Version: agent.Version, Builtin: agent.Builtin,
-			State:        ConnectionStateFor(found, added, cfg.AgentOff(agent.ID), last, nowMs),
-			LastEventMs:  last,
-			Found:        found,
-			HooksAdded:   added,
-			HooksChanged: added && !install.HooksInPlace(s.Paths.Home, entry),
-			Warnings:     []string{},
+			State:         ConnectionStateFor(found, added, cfg.AgentOff(agent.ID), last, nowMs),
+			LastEventMs:   last,
+			Found:         found,
+			HooksAdded:    added,
+			HooksChanged:  hooks == install.HooksChanged,
+			StatuslineOwn: hooks == install.HooksOwnStatusline,
+			Warnings:      []string{},
 		}
 		if !agent.Builtin {
 			if plan, err := install.PlanAgent(s.Paths.Home, s.bin(record), agent, record); err == nil {
@@ -228,7 +237,10 @@ func (s Service) prepareHooks(id string, add bool) (preparedHooks, error) {
 	default:
 		prepared.plan = install.PlanRemoveAgent(s.Paths.Home, entry)
 	}
-	prepared.hash, err = planHash(id, add, prepared.plan, entry, install.TouchedFiles(s.Paths.Home, agent, entry))
+	// The agent's own files count too: a reinstall of the same version with
+	// another manifest or converter between plan and apply is refused.
+	files := append(install.TouchedFiles(s.Paths.Home, agent, entry), install.SourceFiles(agent)...)
+	prepared.hash, err = planHash(id, add, prepared.plan, entry, files)
 	return prepared, err
 }
 

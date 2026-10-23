@@ -636,28 +636,10 @@ func distinctCommands(bin string, a agents.Agent, events []string) []plannedComm
 
 // converterPrograms lists the agent's own programs, relative to its folder.
 func converterPrograms(a agents.Agent) []string {
-	var programs []string
-	add := func(converter *agents.Converter) {
-		if converter == nil {
-			return
-		}
-		relative, err := filepath.Rel(a.Dir, converter.Run)
-		if err != nil {
-			relative = converter.Run
-		}
-		if !slices.Contains(programs, relative) {
-			programs = append(programs, relative)
-		}
-	}
-	add(a.Hooks.Converter)
-	if a.Statusline != nil {
-		add(a.Statusline.Converter)
-	}
-	if a.Details != nil {
-		for _, sources := range [][]agents.DetailSource{a.Details.Name, a.Details.ContextPercent, a.Details.Model} {
-			for _, source := range sources {
-				add(source.DetailsConverter())
-			}
+	programs := Programs(a)
+	for index, program := range programs {
+		if relative, err := filepath.Rel(a.Dir, program); err == nil {
+			programs[index] = relative
 		}
 	}
 	return programs

@@ -105,8 +105,11 @@ func StateText(c settings.Connection, nowMs int64) string {
 			text = "Idle · " + tray.FormatDuration(nowMs-*c.LastEventMs)
 		}
 	}
-	if c.HooksChanged {
+	switch {
+	case c.HooksChanged:
 		text += " · Hooks were changed outside agent-screensaver"
+	case c.StatuslineOwn:
+		text += " · Status line points to your own command"
 	}
 	return text
 }

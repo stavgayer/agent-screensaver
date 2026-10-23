@@ -277,15 +277,21 @@ func (s Service) InstallExtension(path string) (extensions.Manifest, error) {
 	return extensions.InstallChecked(path, s.Paths.ExtensionsDir, s.checkAgent)
 }
 
+// checkAgent runs on the staged copy. It also leaves the execute bit only
+// on the programs an agent manifest names as converters: every other file
+// of any extension is 0644, so nothing else in it can be run by accident.
 func (s Service) checkAgent(m extensions.Manifest, dir string) error {
 	if m.Type != extensions.TypeAgent {
-		return nil
+		return extensions.KeepExecutable(dir, nil)
 	}
 	agent, err := agents.FromManifest(m, dir)
 	if err != nil {
 		return err
 	}
-	return install.CheckRecipe(s.Paths.Home, s.Paths.DataDir, agent.Install)
+	if err := install.CheckRecipe(s.Paths.Home, s.Paths.DataDir, agent.Install); err != nil {
+		return err
+	}
+	return extensions.KeepExecutable(dir, install.Programs(agent))
 }
 
 // RemoveExtension removes an installed extension. Built-ins are refused. An

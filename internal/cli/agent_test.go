@@ -90,6 +90,7 @@ func TestStateText(t *testing.T) {
 		{"no hooks", settings.Connection{State: settings.StateNoHooks}, "Hooks not added"},
 		{"not installed", settings.Connection{State: settings.StateNotInstalled}, "Not installed"},
 		{"off", settings.Connection{State: settings.StateOff, LastEventMs: at(1)}, "Off"},
+		{"the user's own status line", settings.Connection{State: settings.StateIdle, StatuslineOwn: true}, "Idle · no events yet · Status line points to your own command"},
 		{"changed outside", settings.Connection{State: settings.StateIdle, HooksChanged: true}, "Idle · no events yet · Hooks were changed outside agent-screensaver"},
 	}
 	for _, tt := range tests {

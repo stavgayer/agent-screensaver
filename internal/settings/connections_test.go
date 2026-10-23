@@ -2,6 +2,7 @@ package settings
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -338,4 +339,101 @@ func planOf(t *testing.T, service Service) []install.PlannedStep {
 		t.Fatal(err)
 	}
 	return plan
+}
+
+// converterAgentFolder is an outside agent with a converter program and one
+// more executable file that no manifest field names.
+func converterAgentFolder(t *testing.T) string {
+	t.Helper()
+	dir := agentFolder(t, "~/.acme/hooks.json")
+	writeFile(t, filepath.Join(dir, "extension.json"), `{"id":"acme.agent","name":"Acme","version":"1.0.0","type":"agent","api":1,
+		"agent":{"source":"acme","mark":"mark.svg","hooks":{"converter":{"run":"bin/convert"}},
+		"install":{"hooks":{"file":"~/.acme/hooks.json","format":"json","shape":"flat","events":["stop"]}}}}`)
+	mkdir(t, filepath.Join(dir, "bin"))
+	for _, name := range []string{"convert", "other"} {
+		writeFile(t, filepath.Join(dir, "bin", name), "#!/bin/sh\ncat\n")
+		if err := os.Chmod(filepath.Join(dir, "bin", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func TestInstallKeepsTheExecuteBitOnlyOnConverters(t *testing.T) {
+	service := newService(t)
+
+	if _, err := service.InstallExtension(converterAgentFolder(t)); err != nil {
+		t.Fatal(err)
+	}
+
+	installed := filepath.Join(service.Paths.ExtensionsDir, "acme.agent")
+	for name, want := range map[string]os.FileMode{"bin/convert": 0o755, "bin/other": 0o644, "extension.json": 0o644} {
+		info, err := os.Stat(filepath.Join(installed, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s mode = %v, want %v", name, got, want)
+		}
+	}
+}
+
+func TestApplyRefusesWhenTheAgentChangedSinceThePlan(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(t *testing.T, installed string)
+	}{
+		{"same version, other manifest", func(t *testing.T, installed string) {
+			manifest := filepath.Join(installed, "extension.json")
+			data, _ := os.ReadFile(manifest)
+			writeFile(t, manifest, strings.Replace(string(data), `"events":["stop"]`, `"events":["stop","start"]`, 1))
+		}},
+		{"same version, other converter", func(t *testing.T, installed string) {
+			writeFile(t, filepath.Join(installed, "bin", "convert"), "#!/bin/sh\ncurl example.com\n")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := newService(t)
+			saveRecord(t, service)
+			if _, err := service.InstallExtension(converterAgentFolder(t)); err != nil {
+				t.Fatal(err)
+			}
+			_, hash, err := service.PlanAgentHooks("acme.agent", true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tt.change(t, filepath.Join(service.Paths.ExtensionsDir, "acme.agent"))
+
+			if err := service.ApplyAgentHooks("acme.agent", true, hash); !errors.Is(err, ErrPlanChanged) {
+				t.Fatalf("error = %v, want ErrPlanChanged", err)
+			}
+			if _, err := os.Stat(filepath.Join(service.Paths.Home, ".acme", "hooks.json")); !os.IsNotExist(err) {
+				t.Errorf("hook file written (err %v)", err)
+			}
+		})
+	}
+}
+
+func TestConnectionsSeeTheUsersOwnStatusline(t *testing.T) {
+	service := newService(t)
+	installBuiltinAgents(t, service)
+	mkdir(t, filepath.Join(service.Paths.Home, ".claude"))
+	saveRecord(t, service)
+	addHooks(t, service, "builtin.claude")
+	settingsFile := filepath.Join(service.Paths.Home, ".claude", "settings.json")
+	data, _ := os.ReadFile(settingsFile)
+	var file map[string]any
+	if err := json.Unmarshal(data, &file); err != nil {
+		t.Fatal(err)
+	}
+	ours := file["statusLine"].(map[string]any)["command"].(string)
+	writeFile(t, settingsFile, strings.Replace(string(data), ours, "my-statusline", 1))
+
+	list, _ := service.Connections(0)
+
+	claude := byConnectionID(t, list, "builtin.claude")
+	if !claude.StatuslineOwn || claude.HooksChanged {
+		t.Errorf("claude = %+v, want the user's own status line, hooks unchanged", claude)
+	}
 }
