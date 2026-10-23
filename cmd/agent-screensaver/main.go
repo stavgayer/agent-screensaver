@@ -18,6 +18,7 @@ import (
 	"agent-screensaver/internal/limits"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
+	"agent-screensaver/internal/sessioninfo"
 	"agent-screensaver/internal/settings"
 	"agent-screensaver/internal/settingsui"
 	"agent-screensaver/internal/tray"
@@ -132,6 +133,7 @@ func runDaemon(args []string, stderr io.Writer) int {
 	defer stop()
 	service := daemon.New(paths.ForHome(home))
 	service.Cloner = platform.NewFileCloner()
+	service.Details = sessioninfo.Reader{CodexSessionIndex: filepath.Join(codexHome(home), "session_index.jsonl"), Home: home}
 	providers := limits.All(limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob)), os.Environ())
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.
@@ -147,6 +149,15 @@ func runDaemon(args []string, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// codexHome is where Codex keeps its files: CODEX_HOME when set, as Codex
+// itself does, else ~/.codex.
+func codexHome(home string) string {
+	if dir := os.Getenv("CODEX_HOME"); dir != "" {
+		return dir
+	}
+	return filepath.Join(home, ".codex")
 }
 
 // runTray shows the menu bar icon until the user quits it or the process gets

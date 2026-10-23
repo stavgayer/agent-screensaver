@@ -69,6 +69,9 @@ type Daemon struct {
 	Logf func(format string, args ...any)
 	// Cloner makes the aerial clones. Without one, no new clone is made.
 	Cloner platform.FileCloner
+	// Details reads card details from the sessions' files. Without one,
+	// cards show only what the events carry.
+	Details DetailsReader
 
 	paths     paths.Paths
 	state     state.State
@@ -91,6 +94,9 @@ type Daemon struct {
 	lastPoll map[string]int64
 	failed   map[string]bool // the last read of the source failed
 	finished map[string]bool // source finished a task since its last poll
+
+	detailsDue    map[cardKey]bool  // cards to read after this drain
+	detailsReadMs map[cardKey]int64 // when each card was last read
 }
 
 // New returns a daemon that keeps its files under p.
@@ -101,6 +107,9 @@ func New(p paths.Paths) *Daemon {
 		lastPoll: map[string]int64{},
 		failed:   map[string]bool{},
 		finished: map[string]bool{},
+
+		detailsDue:    map[cardKey]bool{},
+		detailsReadMs: map[cardKey]int64{},
 	}
 }
 
@@ -132,7 +141,8 @@ func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	// The config is read first: draining the spool needs its ignore list.
 	changed := d.refreshView(nowMs)
 	changed = d.applyPendingLimits() || changed
-	changed = d.drainSpool() || changed
+	changed = d.drainSpool(nowMs) || changed
+	changed = d.readDueDetails(nowMs) || changed
 	changed = d.tick(nowMs) || changed
 
 	attention := d.state.NeedsAttention()
@@ -157,7 +167,7 @@ func (d *Daemon) applyPendingLimits() bool {
 	return changed
 }
 
-func (d *Daemon) drainSpool() bool {
+func (d *Daemon) drainSpool(nowMs int64) bool {
 	events := spool.Drain(d.paths.SpoolDir)
 	for _, incoming := range events {
 		// An ignored project never makes or changes a card, so it can never
@@ -166,6 +176,7 @@ func (d *Daemon) drainSpool() bool {
 			continue
 		}
 		d.state.Apply(incoming)
+		d.noteDetailsDue(incoming, nowMs)
 		if incoming.Kind == event.KindFinished && slices.Contains(d.sources, incoming.Source) {
 			d.finished[incoming.Source] = true
 		}

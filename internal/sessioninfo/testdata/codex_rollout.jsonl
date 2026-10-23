@@ -1,0 +1,6 @@
+{"timestamp":"2026-10-22T15:11:57.000Z","type":"session_meta","payload":{"id":"33333333-3333-4333-8333-333333333333","cwd":"/Users/example/workspace","originator":"codex-tui","cli_version":"0.162.0","source":"cli"}}
+{"timestamp":"2026-10-22T15:11:58.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t1","model_context_window":258400}}
+{"timestamp":"2026-10-22T15:11:58.100Z","type":"turn_context","payload":{"cwd":"/Users/example/workspace","model":"gpt-example","effort":"medium"}}
+{"timestamp":"2026-10-22T15:11:59.000Z","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":null}}
+{"timestamp":"2026-10-22T15:12:10.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":15800000,"cached_input_tokens":15000000,"cache_write_input_tokens":0,"output_tokens":90000,"reasoning_output_tokens":20000,"total_tokens":15890000},"last_token_usage":{"input_tokens":199000,"cached_input_tokens":180000,"cache_write_input_tokens":0,"output_tokens":867,"reasoning_output_tokens":200,"total_tokens":199867},"model_context_window":258400},"rate_limits":null}}
+{"timestamp":"2026-10-22T15:12:19.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"t1","last_agent_message":"Done."}}
