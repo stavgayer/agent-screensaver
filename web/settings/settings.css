@@ -16,6 +16,9 @@
   --danger: #c4281c;
   --notice-ground: #fff8e6;
   --notice-ink: #7a4b00;
+  --active-ground: #dcfae5;
+  --active-ink: #0b5a2a; /* 7.0:1 on its ground */
+  --active-dot: #1f9d55;
   --screen: #000000;
   --radius-panel: 10px;
   --radius-control: 6px;
@@ -39,6 +42,9 @@
     --danger: #ff6b5e;
     --notice-ground: #3a2f16;
     --notice-ink: #f5d48a;
+    --active-ground: #18321f;
+    --active-ink: #9be8b4; /* 9.6:1 on its ground */
+    --active-dot: #4cc77a;
   }
 }
 
@@ -335,6 +341,84 @@ input[type="color"] { width: 44px; height: 24px; padding: 0; border: 0; backgrou
 .preview-summary p { color: var(--secondary); }
 .preview-summary .hint { font-size: 12px; }
 
+/* ---------- connections ---------- */
+
+.connection { justify-content: flex-start; gap: 12px; min-height: 60px; }
+.connection .row-text { flex: 1; }
+/* A fixed slot, so every name starts on one edge, with or without a mark. */
+.connection-mark { flex: none; width: 24px; height: 24px; }
+.connection-mark img { display: block; width: 24px; height: 24px; }
+/* Fixed columns, so the state and both buttons line up from row to row. */
+.connection-controls {
+  display: grid;
+  grid-template-columns: max-content 112px 80px;
+  justify-items: end;
+}
+.connection-controls .button { width: 100%; }
+.row-warning { color: var(--notice-ink); font-size: 12px; }
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--selected);
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.state-pill[data-state="active"] { background: var(--active-ground); color: var(--active-ink); }
+.state-pill[data-state="active"]::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--active-dot);
+}
+
+/* The plan dialog: a sheet over the window, the only thing that floats. */
+.plan-dialog {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.08);
+  overflow-y: auto;
+}
+.plan-dialog[open] { animation: plan-in 180ms var(--ease-out); }
+.plan-dialog::backdrop { background: rgb(0 0 0 / 0.25); }
+.plan-dialog h2 { font-size: 15px; margin-bottom: 12px; }
+.plan-dialog p { margin-bottom: 10px; }
+.plan-trust, .plan-notice { padding: 8px 10px; border-radius: var(--radius-control); background: var(--notice-ground); color: var(--notice-ink); }
+.plan-intro { color: var(--secondary); }
+.plan-lines {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.plan-lines li { padding: 6px 10px; border-radius: var(--radius-control); background: var(--ground); overflow-wrap: anywhere; }
+.plan-lines li.warning { background: var(--notice-ground); color: var(--notice-ink); font-weight: 500; }
+.plan-hint { color: var(--secondary); font-size: 12px; }
+.plan-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.button:disabled { opacity: 0.6; }
+
+@keyframes plan-in {
+  from { opacity: 0; transform: scale(0.97); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .switch, .switch::after, .button, .status { transition: none; }
+  .plan-dialog[open] { animation: none; }
 }

@@ -10,7 +10,7 @@ Sources for the criteria: the `emil-design-eng` skill (motion and polish), the `
 
 ## Structure
 
-- A sidebar with four views: Theme & background, Extension options, Extensions, General. One view per area, with the area's name as the title. One long page of every area would put General four screens down.
+- A sidebar with five views: Theme & background, Extension options, Extensions, Connections, General. One view per area, with the area's name as the title. One long page of every area would put General four screens down.
 - The title and the save status stay at the top while the view scrolls, so an error is never out of sight.
 - Each view is one centred column, at most 760px wide, so a wide window keeps equal margins.
 
@@ -36,6 +36,16 @@ Sources for the criteria: the `emil-design-eng` skill (motion and polish), the `
 - The active sidebar item is a neutral grey fill, not a colored pill.
 - Secondary text is #636366 in light (6.0:1 on the panel, 5.4:1 on the ground) and #a6a6ab in dark (5.7:1 on the panel). Every tier with words passes 4.5:1.
 - The switch is a checkbox drawn as the macOS switch. It keeps checkbox behavior for the keyboard and for VoiceOver (`role="switch"`).
+
+## Connections
+
+- One row per agent extension, built-ins first: the mark in a fixed 24px slot (so names share one edge), the name, "Built in" or "From <id> <version>" with the last event under it, then one status pill and two buttons in fixed columns, so the states and buttons line up down the list.
+- One status mark per row. Only "Active" has color (a pale green pill with a dot); every other state is a neutral grey pill. "Hooks were changed outside agent-screensaver" is a second line in the notice color, because it is a separate fact that asks for an action.
+- The state text comes from `connections.ts`, which reuses the cards' `formatDuration`, so "4m" means the same on the screen saver and here. The CLI's `agent list` writes the same text.
+- Adding or removing hooks changes the user's own files, so it opens a modal sheet (`<dialog>`) with every plan line, Cancel focused. This is the one place in the window that interrupts: it protects a change outside our data folder. Warning lines (an outside agent's own program or plugin file) are tinted, a sentence above them says the agent runs code of its own, and the confirm button says "I trust <name>, add hooks".
+- When a file changed between showing and applying, Go refuses by plan hash and the sheet opens again with the new plan and one sentence saying why.
+- While the view is open and the window is visible, it reads the states again every 5 seconds. It redraws only when the text would change, and never under an open sheet.
+- The sheet fades in from 97% scale in 180 ms (strong ease-out); reduced motion turns it off. It is seen rarely, so it may move; the rows do not.
 
 ## Feedback and errors
 

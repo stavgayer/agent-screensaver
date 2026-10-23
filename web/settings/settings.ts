@@ -2,6 +2,7 @@ import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
 import { withProject, withoutProject } from "./projects.ts";
 import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning } from "./preview-url.ts";
+import { connectionRows, isPlanChanged, planDialog, type Connection, type ConnectionRow, type HookAction, type Plan } from "./connections.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
 interface Snapshot {
@@ -38,17 +39,20 @@ interface PickResult {
   manifest?: { id: string; name?: string };
 }
 
-type View = "appearance" | "options" | "extensions" | "general";
+type View = "appearance" | "options" | "extensions" | "connections" | "general";
 
 const VIEW_TITLES: Record<View, string> = {
   appearance: "Theme & background",
   options: "Extension options",
   extensions: "Extensions",
+  connections: "Connections",
   general: "General",
 };
 const TYPE_NAMES = { background: "Background", component: "Component", layout: "Layout", theme: "Theme" };
 const FPS_CHOICES = [0, 15, 24, 30, 60, 120, 240];
 const PREVIEW_POLL_MS = 1000;
+// The Connections tab reads the agents' states again this often while it is open.
+const CONNECTIONS_POLL_MS = 5000;
 const STATUS_CLEAR_MS = 2000;
 // The runtime's own default accent (styles.css), for a theme that sets none.
 const DEFAULT_ACCENT = "#00e07a";
@@ -70,6 +74,8 @@ const bridge = createBridge(
 window.__agsReply = (id, result, error) => bridge.reply(id, result, error);
 
 let snapshot: Snapshot | undefined;
+/** The agent extensions, read only while the Connections view is open. */
+let connections: Connection[] = [];
 let notices: Record<string, string> = {};
 let currentView: View = "appearance";
 /** The extension whose Remove button waits for a second click. */
@@ -372,6 +378,143 @@ async function installExtension(): Promise<void> {
   if (result?.manifest !== undefined) showStatus(`Installed ${result.manifest.name || result.manifest.id}`, "saved");
 }
 
+// ---------- Connections ----------
+
+/** The mark is shown only from the data folder, where Go found it. */
+function markImage(row: ConnectionRow): HTMLElement {
+  const slot = h("span", { class: "connection-mark", "aria-hidden": "true" });
+  if (row.mark.startsWith(dataFolderUrl(location.href))) slot.append(h("img", { src: row.mark, alt: "", width: "24", height: "24" }));
+  return slot;
+}
+
+function connectionRow(row: ConnectionRow): HTMLElement {
+  const hookId = `hook-${row.id}`;
+  const powerId = `power-${row.id}`;
+  const hook = row.hook === null
+    ? h("span", { class: "connection-spacer" })
+    : button(row.hook.label, () => void openPlan(row, (row.hook as { action: HookAction }).action), "plain", hookId);
+  const power = row.power === null
+    ? h("span", { class: "connection-spacer" })
+    : button(row.power.label, () => void change("setAgentOn", { id: row.id, on: (row.power as { on: boolean }).on }, powerId), "plain", powerId);
+  if (row.hook !== null) hook.setAttribute("aria-label", `${row.hook.label} for ${row.name}`);
+  if (row.power !== null) power.setAttribute("aria-label", `${row.power.label} ${row.name}`);
+  const state = h("span", { class: "state-pill" }, row.stateText);
+  state.dataset.state = row.state;
+  return h(
+    "div",
+    { class: "row connection" },
+    markImage(row),
+    h(
+      "div",
+      { class: "row-text" },
+      h("span", { class: "row-label" }, row.name),
+      h("p", { class: "row-description" }, `${capitalized(row.badge)} · ${row.lastEvent}`),
+      row.changed === null ? null : h("p", { class: "row-warning" }, `${row.changed}.`),
+      errorLine(hookId),
+      errorLine(powerId),
+    ),
+    h("div", { class: "row-control connection-controls" }, state, hook, power),
+  );
+}
+
+const capitalized = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+function connectionsView(): Node[] {
+  const rows = connectionRows(connections, Date.now());
+  const list: Node[] = rows.length === 0
+    ? [h("p", { class: "panel-note" }, "No agent extensions are installed.")]
+    : rows.map(connectionRow);
+  list.unshift(
+    h("p", { class: "panel-note" }, "Each agent reports to the screen saver through hooks in its own settings file. Turning an agent off keeps its hooks; it goes quiet until you turn it on again."),
+  );
+  const install = button("Install…", () => void installExtension(), "plain", "install-agent");
+  return [
+    group("Agents", list),
+    group(undefined, [row("Add another agent", install, { id: "install-agent", description: "Install its extension from a folder or a .zip file. It shows here with Add hooks." })]),
+  ];
+}
+
+// ---------- the hook plan dialog ----------
+
+/** Shows the plan Go computed. Nothing changes until the confirm button is pressed. */
+async function openPlan(row: ConnectionRow, action: HookAction, notice?: string): Promise<void> {
+  const source = `hook-${row.id}`;
+  errors = {};
+  let plan: Plan;
+  try {
+    plan = await bridge.call<Plan>("planAgentHooks", { id: row.id, add: action === "add" });
+  } catch (err) {
+    errors[source] = err instanceof Error ? err.message : String(err);
+    showStatus("Not saved", "error");
+    render();
+    return;
+  }
+  showPlanDialog(row, action, plan, notice);
+}
+
+function showPlanDialog(row: ConnectionRow, action: HookAction, plan: Plan, notice?: string): void {
+  const content = planDialog(row.name, action, plan);
+  const dialog = h("dialog", { class: "plan-dialog", "aria-labelledby": "plan-title" });
+  const close = () => {
+    dialog.close();
+    dialog.remove();
+  };
+  const cancel = button("Cancel", close, "plain", "plan-cancel");
+  const confirm = button(content.confirmLabel, () => void applyPlan(row, action, plan, dialog, close), "primary", "plan-confirm");
+  const parts: Array<Node | null> = [
+    h("h2", { id: "plan-title" }, content.title),
+    notice === undefined ? null : h("p", { class: "plan-notice", role: "alert" }, notice),
+    content.trustNote === null ? null : h("p", { class: "plan-trust" }, content.trustNote),
+    h("p", { class: "plan-intro" }, "This will:"),
+    h("ul", { class: "plan-lines" }, ...content.lines.map((line) => h("li", { class: line.warning ? "warning" : "" }, line.text))),
+    h("p", { class: "plan-hint" }, `Nothing changes until you press ${content.confirmLabel}.`),
+    h("div", { class: "plan-buttons" }, cancel, confirm),
+  ];
+  dialog.append(...parts.filter((part): part is Node => part !== null));
+  dialog.addEventListener("close", () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+  cancel.focus();
+}
+
+/**
+ * Applies the plan the dialog shows, by its hash. When a file changed in
+ * between, Go refuses, and the dialog shows the new plan instead.
+ */
+async function applyPlan(row: ConnectionRow, action: HookAction, plan: Plan, dialog: HTMLDialogElement, close: () => void): Promise<void> {
+  for (const control of Array.from(dialog.querySelectorAll("button"))) control.disabled = true;
+  errors = {};
+  try {
+    await bridge.call("applyAgentHooks", { id: row.id, add: action === "add", hash: plan.hash });
+    close();
+    showStatus(action === "add" ? `Added hooks for ${row.name}` : `Removed hooks for ${row.name}`, "saved");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    close();
+    if (isPlanChanged(message)) {
+      await openPlan(row, action, "A file changed while this plan was open. This is the new plan.");
+      return;
+    }
+    errors[`hook-${row.id}`] = message;
+    showStatus("Not saved", "error");
+  }
+  await refresh();
+}
+
+/** Reads the agents again every few seconds while the Connections view is open and visible. */
+const connectionsPoll = {
+  timer: undefined as ReturnType<typeof setInterval> | undefined,
+
+  sync(): void {
+    const wanted = currentView === "connections" && document.visibilityState === "visible";
+    if (wanted && this.timer === undefined) this.timer = setInterval(() => void refresh("outside"), CONNECTIONS_POLL_MS);
+    if (!wanted && this.timer !== undefined) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+    }
+  },
+};
+
 // ---------- General ----------
 
 function generalView(): Node[] {
@@ -537,6 +680,7 @@ const VIEWS: Record<View, () => Node[]> = {
   appearance: appearanceView,
   options: optionsView,
   extensions: extensionsView,
+  connections: connectionsView,
   general: generalView,
 };
 
@@ -558,6 +702,7 @@ function render(): void {
   byId("view").replaceChildren(...VIEWS[currentView]());
   if (currentView === "appearance") renderPreviewSummary();
   preview.sync();
+  connectionsPoll.sync();
   content.scrollTop = scroll;
   if (focusedId) document.getElementById(focusedId)?.focus();
 }
@@ -568,17 +713,21 @@ function render(): void {
  * settings changed, so a refresh never rebuilds a control under the pointer.
  */
 async function refresh(after: "change" | "outside" = "change"): Promise<void> {
-  const before = JSON.stringify([snapshot, notices]);
+  // The connection rows are compared as text, so "4m ago" turning into "5m ago" redraws them.
+  const drawn = () => JSON.stringify([snapshot, notices, connectionRows(connections, Date.now())]);
+  const before = drawn();
   try {
     const next = await bridge.call<Snapshot>("snapshot");
     const withOptions = next.extensions.filter((ext) => Object.keys(ext.manifest.options ?? {}).length > 0);
     const answers = await Promise.all(withOptions.map((ext) => bridge.call<string>("notice", { extension: ext.manifest.id })));
+    if (currentView === "connections") connections = await bridge.call<Connection[]>("connections");
     snapshot = next;
     notices = Object.fromEntries(withOptions.map((ext, index) => [ext.manifest.id, answers[index] ?? ""]));
   } catch (err) {
     showStatus(err instanceof Error ? err.message : String(err), "error");
   }
-  if (after === "outside" && JSON.stringify([snapshot, notices]) === before) return;
+  // A redraw from outside never rebuilds the page under an open plan dialog.
+  if (after === "outside" && (drawn() === before || document.querySelector("dialog[open]") !== null)) return;
   render();
 }
 
@@ -590,6 +739,7 @@ function show(view: View): void {
   byId("status").classList.remove("visible");
   (document.querySelector(".content") as HTMLElement).scrollTop = 0;
   render();
+  if (view === "connections") void refresh();
 }
 
 for (const link of Array.from(document.querySelectorAll<HTMLButtonElement>(".sidebar button"))) {
@@ -599,6 +749,7 @@ for (const link of Array.from(document.querySelectorAll<HTMLButtonElement>(".sid
 // window is shown again.
 document.addEventListener("visibilitychange", () => {
   preview.sync();
+  connectionsPoll.sync();
   if (document.visibilityState === "visible") void refresh("outside");
 });
 // WebKit focuses the first control when the window opens, with a keyboard
