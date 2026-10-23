@@ -587,6 +587,12 @@ func TestDetails(t *testing.T) {
 			changed: true,
 		},
 		{
+			name:   "the status line context beats the context read from a file",
+			events: []event.Event{started, infoEvent("s1", 2000, "", "", percent(42))},
+			file:   &Details{ContextPercent: percent(10)},
+			want:   details{ContextPercent: percent(42), Kind: KindRunning, UpdatedAtMs: 1000},
+		},
+		{
 			name:   "set details with nothing new reports no change",
 			events: []event.Event{started},
 			file:   &Details{},

@@ -59,6 +59,56 @@ func TestClaudeModel(t *testing.T) {
 	}
 }
 
+func TestClaudeContext(t *testing.T) {
+	tests := []struct {
+		name       string
+		transcript string
+		want       *float64
+	}{
+		// 3 + 2,000 + 18,000 tokens of the last turn in a 200,000 window.
+		{"last turn against the default window", fixture("claude_transcript.jsonl"), percent(10)},
+		// 150,000 tokens in a 1,000,000 window.
+		{"the 1M marker", fixture("claude_context_1m.jsonl"), percent(15)},
+		// 450,000 tokens cannot fit 200,000, so the window is the 1M one;
+		// the synthetic error line after it is not a real turn.
+		{"more than the default window means 1M", fixture("claude_context_over_default.jsonl"), percent(45)},
+		{"unknown model hides the bar", fixture("claude_context_unknown_model.jsonl"), nil},
+		{"missing file", fixture("missing.jsonl"), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ClaudeContext(tt.transcript)
+			if !equalPercent(got, tt.want) {
+				t.Errorf("ClaudeContext = %v, want %v", show(got), show(tt.want))
+			}
+		})
+	}
+}
+
+func TestContextWindow(t *testing.T) {
+	tests := []struct {
+		model  string
+		used   float64
+		want   float64
+		wantOK bool
+	}{
+		{"claude-opus-5-5", 1000, 200_000, true},
+		{"claude-opus-5-5[1m]", 1000, 1_000_000, true},
+		{"Opus 5.5 (1M context)", 1000, 1_000_000, true},
+		{"claude-sonnet-5-5", 250_000, 1_000_000, true},
+		{"<synthetic>", 1000, 0, false},
+		{"", 1000, 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			got, ok := contextWindow(tt.model, tt.used)
+			if got != tt.want || ok != tt.wantOK {
+				t.Errorf("contextWindow(%q, %v) = %v, %v; want %v, %v", tt.model, tt.used, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
 func TestCodexName(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -169,9 +219,9 @@ func TestReaderPicksBySource(t *testing.T) {
 		card state.Card
 		want state.Details
 	}{
-		{"claude: name from the transcript, context from the status line only",
+		{"claude: name, model and context from the transcript",
 			state.Card{Source: "claude", Session: claudeSession, Cwd: cwd, Transcript: fixture("claude_transcript.jsonl")},
-			state.Details{Name: "Fix the login session expiry", Model: "Opus 5.5", Branch: "main"}},
+			state.Details{Name: "Fix the login session expiry", Model: "Opus 5.5", ContextPercent: percent(10), Branch: "main"}},
 		{"codex: name from the index, context from the rollout",
 			state.Card{Source: "codex", Session: codexSession, Cwd: cwd, Transcript: fixture("codex_rollout.jsonl")},
 			state.Details{Name: "Parser refactor, part two", ContextPercent: percent(77), Branch: "main"}},

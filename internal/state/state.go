@@ -56,6 +56,10 @@ type Card struct {
 	Transcript string `json:"-"`
 
 	names names
+	// contextFromEvent is true once an event (the status line) said how
+	// full the context is. It is fresher than the transcript, so a value
+	// read from the files no longer replaces it.
+	contextFromEvent bool
 }
 
 // names holds the conversation name from each place it can come from. The
@@ -158,7 +162,7 @@ func (s *State) SetDetails(source, session string, found Details) bool {
 		card.names.file = found.Name
 		card.Name = card.names.best()
 	}
-	if found.ContextPercent != nil {
+	if found.ContextPercent != nil && !card.contextFromEvent {
 		card.ContextPercent = copyFloat64(found.ContextPercent)
 	}
 	if found.Branch != "" {
@@ -183,6 +187,7 @@ func applyDetails(card *Card, incoming event.Event, nameSlot *string) {
 	}
 	if incoming.ContextPercent != nil {
 		card.ContextPercent = copyFloat64(incoming.ContextPercent)
+		card.contextFromEvent = true
 	}
 	if incoming.Cwd != "" {
 		card.Cwd = incoming.Cwd

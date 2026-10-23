@@ -39,12 +39,13 @@ func (r Reader) Read(card state.Card) state.Details {
 	details := state.Details{Branch: Branch(card.Cwd, r.Home)}
 	switch card.Source {
 	case "claude":
-		// The context fullness of Claude comes from the status line: the
-		// transcript does not have the window size.
 		details.Name = ClaudeName(card.Transcript, card.Session)
 		// The desktop app runs no status line, and most hooks carry no
 		// model, so the transcript is the one place that always has it.
 		details.Model = ClaudeModel(card.Transcript)
+		// The status line says how full the context is, but only in the
+		// terminal; its value wins over this one (state.SetDetails).
+		details.ContextPercent = ClaudeContext(card.Transcript)
 	case "codex":
 		details.Name = CodexName(r.CodexSessionIndex, card.Session)
 		details.ContextPercent = CodexContext(card.Transcript)
@@ -107,6 +108,77 @@ func ClaudeModel(transcript string) string {
 		return false
 	})
 	return text.ShortModel(model)
+}
+
+// Claude context window sizes, in tokens. The transcript does not say the
+// window size, so it comes from the model name: a "[1m]" or "(1M context)"
+// marker means the 1M window, any other Claude model has the default one.
+// A turn larger than the default window can only fit the 1M window.
+const (
+	defaultClaudeContext = 200_000
+	millionContext       = 1_000_000
+)
+
+// claudeModelPrefix marks the Claude models the default size is known for.
+// "<synthetic>" lines (local error messages) and other names are unknown.
+const claudeModelPrefix = "claude-"
+
+var millionMarkers = []string{"[1m]", "(1M context)"}
+
+// ClaudeContext returns how full the context window is, in whole percent,
+// from the last answer in a Claude transcript: the input, cache read and
+// cache write tokens of that turn over the window size. nil means unknown,
+// for example when the model is not a known Claude model.
+func ClaudeContext(transcript string) *float64 {
+	var found *float64
+	eachLastLine(transcript, func(line []byte) bool {
+		if !bytes.Contains(line, []byte(`"usage"`)) {
+			return true
+		}
+		var entry struct {
+			Type    string `json:"type"`
+			Message struct {
+				Model string `json:"model"`
+				Usage *struct {
+					InputTokens              float64 `json:"input_tokens"`
+					CacheCreationInputTokens float64 `json:"cache_creation_input_tokens"`
+					CacheReadInputTokens     float64 `json:"cache_read_input_tokens"`
+				} `json:"usage"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(line, &entry) != nil || entry.Type != "assistant" || entry.Message.Usage == nil {
+			return true
+		}
+		usage := entry.Message.Usage
+		used := usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+		if used == 0 {
+			// Not a real call (a local error line): look further back.
+			return true
+		}
+		if window, ok := contextWindow(entry.Message.Model, used); ok {
+			percent := math.Round(min(used/window*100, 100))
+			found = &percent
+		}
+		return false
+	})
+	return found
+}
+
+// contextWindow returns the window size of a model for a turn of used
+// tokens, and false when the model is unknown.
+func contextWindow(model string, used float64) (float64, bool) {
+	for _, marker := range millionMarkers {
+		if strings.Contains(model, marker) {
+			return millionContext, true
+		}
+	}
+	if !strings.HasPrefix(model, claudeModelPrefix) {
+		return 0, false
+	}
+	if used > defaultClaudeContext {
+		return millionContext, true
+	}
+	return defaultClaudeContext, true
 }
 
 // CodexName returns the last name Codex wrote for a thread in its session
