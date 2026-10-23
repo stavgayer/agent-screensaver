@@ -144,7 +144,7 @@ func TestAnchorFilesAreParsedOncePerChange(t *testing.T) {
 }
 
 func TestNewForMacReadsTheProjectsFolder(t *testing.T) {
-	estimator := NewForMac(fstest.MapFS{}, "/data/claude-usage.json")
+	estimator := NewForMac(fstest.MapFS{}, "/data/claude-usage.json", "claude")
 	if estimator.Tally.Root != ".claude/projects" || estimator.StoreFile != "/data/claude-usage.json" || len(estimator.Sources) != 2 {
 		t.Errorf("estimator = %+v", estimator)
 	}

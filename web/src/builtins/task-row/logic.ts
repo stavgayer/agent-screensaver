@@ -1,5 +1,5 @@
-import type { Card } from "../../api.ts";
-import { displayName, formatDuration } from "../../format.ts";
+import type { AgentInfo, Card } from "../../api.ts";
+import { agentName, displayName, formatDuration } from "../../format.ts";
 
 const MS_PER_MINUTE = 60_000;
 
@@ -92,10 +92,12 @@ export function taskContext(card: Card): TaskContext | undefined {
   return { percent, text: `${percent}%`, high: percent >= CONTEXT_HIGH_PERCENT };
 }
 
-/** Sources with a drawn mark of their own; any other source gets the plain mark. */
-const MARKED_SOURCES = new Set(["claude", "codex", "cursor"]);
-
-/** Which drawn mark and which product name stand for the card's agent. */
-export function taskSource(card: Card): { mark: string; name: string } {
-  return { mark: MARKED_SOURCES.has(card.source) ? card.source : "other", name: displayName(card.source) };
+/**
+ * The card's agent: the mark of its agent extension (or the user's own mark, which the
+ * service puts in its place) and its name. A source without an agent extension has no
+ * mark (the card shows a neutral dot) and is named by its source.
+ */
+export function taskSource(card: Card, agents: Readonly<Record<string, AgentInfo>>): { markUrl: string | undefined; name: string } {
+  const agent = Object.hasOwn(agents, card.source) ? agents[card.source] : undefined;
+  return { markUrl: agent?.mark_url || undefined, name: agentName(card.source, agents) };
 }

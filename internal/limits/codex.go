@@ -43,14 +43,16 @@ const (
 
 // Codex reads limits through the Codex app-server.
 type Codex struct {
-	Bin string
+	// SourceName is the source of the agent that names this provider.
+	SourceName string
+	Bin        string
 	// Env is the environment the child starts with. The caller passes it in
 	// (os.Environ() in the daemon) so tests never read the real one.
 	Env []string
 }
 
 // Source implements Provider.
-func (Codex) Source() string { return codexBinary }
+func (codex Codex) Source() string { return codex.SourceName }
 
 // Read starts the app-server, asks for the rate limits and stops it again.
 // The child runs in its own process group and the whole group is killed on

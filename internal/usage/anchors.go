@@ -42,12 +42,13 @@ type AnchorSource interface {
 
 // NewForMac returns an estimator over Claude's files on macOS: the anchor
 // files and ~/.claude/projects under home, with its calibration kept in
-// storeFile.
-func NewForMac(home fs.FS, storeFile string) *Estimator {
+// storeFile. source is the agent source the limits belong to.
+func NewForMac(home fs.FS, storeFile, source string) *Estimator {
 	return &Estimator{
-		Sources:   MacSources(home),
-		Tally:     &Tally{FS: home, Root: ".claude/projects", Weights: DefaultWeights},
-		StoreFile: storeFile,
+		SourceName: source,
+		Sources:    MacSources(home),
+		Tally:      &Tally{FS: home, Root: ".claude/projects", Weights: DefaultWeights},
+		StoreFile:  storeFile,
 	}
 }
 

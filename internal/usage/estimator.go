@@ -81,8 +81,10 @@ type Result struct {
 // learned from two earlier anchors of the same window. Without a ratio it
 // gives the anchor only, never a made-up number.
 type Estimator struct {
-	Sources []AnchorSource
-	Tally   *Tally
+	// SourceName is the source of the agent that names this provider.
+	SourceName string
+	Sources    []AnchorSource
+	Tally      *Tally
 	// StoreFile keeps the calibration across restarts.
 	StoreFile string
 
@@ -95,7 +97,7 @@ type Estimator struct {
 }
 
 // Source is the limits source the estimator speaks for.
-func (e *Estimator) Source() string { return "claude" }
+func (e *Estimator) Source() string { return e.SourceName }
 
 // Observe records exact readings that arrived as an event (the status line).
 func (e *Estimator) Observe(readings []event.LimitReading, atMs int64) {

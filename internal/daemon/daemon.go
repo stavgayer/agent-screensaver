@@ -11,6 +11,7 @@ import (
 	"slices"
 	"time"
 
+	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/event"
 	"agent-screensaver/internal/extensions"
@@ -82,12 +83,13 @@ type Daemon struct {
 	state     state.State
 	cfg       config.Config
 	installed []extensions.Installed
+	agents    []agents.Agent
 	view      view.View
 
-	configStamp, extensionsStamp fileStamp
-	viewLoaded                   bool
-	aerialClones                 []string
-	aerialsSyncedMs              int64
+	configStamp, extensionsStamp, marksStamp fileStamp
+	viewLoaded                               bool
+	aerialClones                             []string
+	aerialsSyncedMs                          int64
 
 	attention    bool
 	written      bool
@@ -151,6 +153,7 @@ func (d *Daemon) SetReadFailed(source string, nowMs int64) {
 func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	if !d.restored {
 		d.restoreLimits()
+		d.restoreSources()
 		d.restored = true
 	}
 	// The config is read first: draining the spool needs its ignore list.
@@ -186,20 +189,30 @@ func (d *Daemon) applyPendingLimits() bool {
 func (d *Daemon) drainSpool(nowMs int64) bool {
 	events := spool.Drain(d.paths.SpoolDir)
 	for _, incoming := range events {
+		// Every valid event proves the source's hooks work, even one that
+		// is dropped below.
+		d.state.NoteEvent(incoming.Source, incoming.AtMs)
 		// An ignored project never makes or changes a card, so it can never
-		// ask for approval or play the sound either.
-		if d.cfg.IgnoresProject(incoming.Project) {
+		// ask for approval or play the sound either. Nor can an agent that
+		// the user turned off.
+		if d.cfg.IgnoresProject(incoming.Project) || d.agentOff(incoming.Source) {
 			continue
 		}
 		d.state.Apply(incoming)
 		d.observeLimits(incoming)
 		d.learnContextWindow(incoming)
-		d.noteDetailsDue(incoming, nowMs)
+		d.noteDetailsDue(incoming)
 		if incoming.Kind == event.KindFinished && slices.Contains(d.sources, incoming.Source) {
 			d.finished[incoming.Source] = true
 		}
 	}
 	return len(events) > 0
+}
+
+// agentOff reports whether the agent writing this source is turned off.
+func (d *Daemon) agentOff(source string) bool {
+	agent, ok := agents.BySource(d.agents, source)
+	return ok && d.cfg.AgentOff(agent.ID)
 }
 
 // refreshView resolves the view again when the config file or the
@@ -208,12 +221,13 @@ func (d *Daemon) drainSpool(nowMs int64) bool {
 // clones are synced on every re-read and every aerialSyncEveryMs, not on
 // every tick.
 func (d *Daemon) refreshView(nowMs int64) bool {
-	configStamp, extensionsStamp := stampOf(d.paths.ConfigFile), stampOf(d.paths.ExtensionsDir)
-	reread := !d.viewLoaded || configStamp != d.configStamp || extensionsStamp != d.extensionsStamp
+	configStamp, extensionsStamp, marksStamp := stampOf(d.paths.ConfigFile), stampOf(d.paths.ExtensionsDir), stampOf(d.paths.MarksDir)
+	reread := !d.viewLoaded || configStamp != d.configStamp || extensionsStamp != d.extensionsStamp || marksStamp != d.marksStamp
 	if reread {
-		d.configStamp, d.extensionsStamp, d.viewLoaded = configStamp, extensionsStamp, true
+		d.configStamp, d.extensionsStamp, d.marksStamp, d.viewLoaded = configStamp, extensionsStamp, marksStamp, true
 		d.cfg = config.Load(d.paths.ConfigFile)
 		d.installed = extensions.Scan(d.paths.ExtensionsDir)
+		d.loadAgents()
 	} else if nowMs-d.aerialsSyncedMs < aerialSyncEveryMs {
 		return false
 	}
@@ -225,7 +239,17 @@ func (d *Daemon) refreshView(nowMs int64) bool {
 	}
 	d.aerialClones = clones
 	d.view = view.Resolve(d.cfg, d.installed, clones)
+	d.view.Agents = view.AgentViews(d.agents, d.paths.MarksDir)
 	return true
+}
+
+// loadAgents picks the agent extensions out of the installed ones.
+func (d *Daemon) loadAgents() {
+	loaded, err := agents.FromInstalled(d.installed, nil)
+	if err != nil {
+		d.Logf("agent extensions: %v", err)
+	}
+	d.agents = loaded
 }
 
 // tick ages the cards and reports whether that changed anything.

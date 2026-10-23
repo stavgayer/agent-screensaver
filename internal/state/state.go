@@ -98,11 +98,30 @@ type Limit struct {
 	Estimated bool `json:"estimated,omitempty"`
 }
 
+// Source is what the service knows of one event source.
+type Source struct {
+	// LastEventMs is the time of the source's latest valid event. It proves
+	// the source's hooks work, so events of ignored projects count too.
+	LastEventMs int64 `json:"last_event_ms"`
+}
+
 // State is everything the screen saver shows. Cards keep insertion order so
 // the screen does not shuffle between updates.
 type State struct {
-	Cards  []Card
-	Limits []Limit
+	Cards   []Card
+	Limits  []Limit
+	Sources map[string]Source
+}
+
+// NoteEvent records that a valid event of source arrived. The latest time
+// wins, since hooks can deliver out of order.
+func (s *State) NoteEvent(source string, atMs int64) {
+	if s.Sources == nil {
+		s.Sources = map[string]Source{}
+	}
+	if atMs > s.Sources[source].LastEventMs {
+		s.Sources[source] = Source{LastEventMs: atMs}
+	}
 }
 
 // Apply folds one event into the state.

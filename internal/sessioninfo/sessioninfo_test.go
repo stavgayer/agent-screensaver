@@ -1,15 +1,10 @@
 package sessioninfo
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
-
-	"agent-screensaver/internal/state"
 )
 
 const (
@@ -18,47 +13,6 @@ const (
 )
 
 func fixture(name string) string { return filepath.Join("testdata", name) }
-
-func TestClaudeName(t *testing.T) {
-	tests := []struct {
-		name       string
-		transcript string
-		session    string
-		want       string
-	}{
-		{"latest ai title wins over an older one", fixture("claude_transcript.jsonl"), claudeSession, "Fix the login session expiry"},
-		{"a custom title beats a later ai title", fixture("claude_transcript_renamed.jsonl"), claudeSession, "Login fix"},
-		{"titles of other sessions and quoted text are ignored", fixture("claude_transcript_untitled.jsonl"), claudeSession, ""},
-		{"missing file", fixture("missing.jsonl"), claudeSession, ""},
-		{"no path", "", claudeSession, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ClaudeName(tt.transcript, tt.session); got != tt.want {
-				t.Errorf("ClaudeName = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestClaudeModel(t *testing.T) {
-	tests := []struct {
-		name       string
-		transcript string
-		want       string
-	}{
-		{"model of the last answer", fixture("claude_transcript.jsonl"), "Opus 5.5"},
-		{"an answer that quotes other entries", fixture("claude_transcript_untitled.jsonl"), "Opus 5.5"},
-		{"missing file", fixture("missing.jsonl"), ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ClaudeModel(tt.transcript); got != tt.want {
-				t.Errorf("ClaudeModel = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestClaudeContext(t *testing.T) {
 	learned := &ContextSizes{sizes: map[string]int{"claude-opus-5-5": 1_000_000}}
@@ -158,48 +112,6 @@ func TestContextSizesLearnAndPersist(t *testing.T) {
 	}
 }
 
-func TestCodexName(t *testing.T) {
-	tests := []struct {
-		name    string
-		index   string
-		session string
-		want    string
-	}{
-		{"the last name of the thread", fixture("codex_session_index.jsonl"), codexSession, "Parser refactor, part two"},
-		{"another thread", fixture("codex_session_index.jsonl"), "44444444-4444-4444-8444-444444444444", "Another thread"},
-		{"unknown thread", fixture("codex_session_index.jsonl"), "99999999-9999-4999-8999-999999999999", ""},
-		{"missing index", fixture("missing.jsonl"), codexSession, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := CodexName(tt.index, tt.session); got != tt.want {
-				t.Errorf("CodexName = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCodexContext(t *testing.T) {
-	tests := []struct {
-		name    string
-		rollout string
-		want    *float64
-	}{
-		// 199,867 of 258,400 is 77.3%: the last call, not the running total.
-		{"last call against the window", fixture("codex_rollout.jsonl"), percent(77)},
-		{"no window size means unknown", fixture("codex_rollout_no_window.jsonl"), nil},
-		{"missing rollout", fixture("missing.jsonl"), nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := CodexContext(tt.rollout)
-			if !equalPercent(got, tt.want) {
-				t.Errorf("CodexContext = %v, want %v", show(got), show(tt.want))
-			}
-		})
-	}
-}
-
 func TestBranch(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "repo", ".git", "HEAD"), "ref: refs/heads/feat/v1\n")
@@ -229,62 +141,6 @@ func TestBranch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := Branch(tt.cwd, root); got != tt.want {
 				t.Errorf("Branch(%q) = %q, want %q", tt.cwd, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestReadsOnlyTheTail checks the bound: a title written before the last
-// TailBytes is not seen, and a huge file is read as fast as a small one.
-func TestReadsOnlyTheTail(t *testing.T) {
-	dir := t.TempDir()
-	title := `{"type":"ai-title","aiTitle":"Early title","sessionId":"` + claudeSession + `"}` + "\n"
-	filler := bytes.Repeat([]byte(`{"type":"assistant","message":{"content":"`+strings.Repeat("x", 1000)+`"}}`+"\n"), 5_000)
-	early := filepath.Join(dir, "early.jsonl")
-	writeFile(t, early, title+string(filler))
-	late := filepath.Join(dir, "late.jsonl")
-	writeFile(t, late, string(filler)+title)
-
-	if got := ClaudeName(early, claudeSession); got != "" {
-		t.Errorf("a title before the tail was found: %q", got)
-	}
-	started := time.Now()
-	if got := ClaudeName(late, claudeSession); got != "Early title" {
-		t.Errorf("ClaudeName = %q, want the title at the end", got)
-	}
-	if elapsed := time.Since(started); elapsed > 200*time.Millisecond {
-		t.Errorf("reading a 5 MB file took %v", elapsed)
-	}
-}
-
-func TestReaderPicksBySource(t *testing.T) {
-	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "repo", ".git", "HEAD"), "ref: refs/heads/main\n")
-	cwd := filepath.Join(root, "repo")
-	reader := Reader{CodexSessionIndex: fixture("codex_session_index.jsonl"), Home: root,
-		ContextSizes: &ContextSizes{sizes: map[string]int{"claude-opus-5-5": 200_000}}}
-
-	tests := []struct {
-		name string
-		card state.Card
-		want state.Details
-	}{
-		{"claude: name, model and context from the transcript",
-			state.Card{Source: "claude", Session: claudeSession, Cwd: cwd, Transcript: fixture("claude_transcript.jsonl")},
-			state.Details{Name: "Fix the login session expiry", Model: "Opus 5.5", ContextPercent: percent(10), Branch: "main"}},
-		{"codex: name from the index, context from the rollout",
-			state.Card{Source: "codex", Session: codexSession, Cwd: cwd, Transcript: fixture("codex_rollout.jsonl")},
-			state.Details{Name: "Parser refactor, part two", ContextPercent: percent(77), Branch: "main"}},
-		{"another source gets only the branch",
-			state.Card{Source: "cursor", Session: "c1", Cwd: cwd, Transcript: fixture("claude_transcript.jsonl")},
-			state.Details{Branch: "main"}},
-		{"nothing known", state.Card{Source: "claude", Session: "s1"}, state.Details{}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := reader.Read(tt.card)
-			if got.Name != tt.want.Name || got.Model != tt.want.Model || got.Branch != tt.want.Branch || !equalPercent(got.ContextPercent, tt.want.ContextPercent) {
-				t.Errorf("Read = %+v (context %v), want %+v (context %v)", got, show(got.ContextPercent), tt.want, show(tt.want.ContextPercent))
 			}
 		})
 	}

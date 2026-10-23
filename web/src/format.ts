@@ -1,3 +1,5 @@
+import type { AgentInfo } from "./api.ts";
+
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
 const MS_PER_DAY = 24 * MINUTES_PER_HOUR * MS_PER_MINUTE;
@@ -69,4 +71,9 @@ export function formatDate(date: Date): string {
 /** "claude" is "Claude", "codex" is "Codex"; any other source gets a capital first letter. */
 export function displayName(source: string): string {
   return source.charAt(0).toUpperCase() + source.slice(1);
+}
+
+/** The name of a card's agent from its extension, else the source with a capital letter. */
+export function agentName(source: string, agents: Readonly<Record<string, AgentInfo>>): string {
+  return (Object.hasOwn(agents, source) ? agents[source]?.name : undefined) || displayName(source);
 }

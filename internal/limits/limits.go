@@ -1,5 +1,6 @@
 // Package limits reads usage limits from tools that expose them locally.
-// Adding a tool means one new file with a Provider and one line in All.
+// An agent extension names a provider by id (agents.Limits...); the
+// service builds it for that agent's source.
 package limits
 
 import (
@@ -27,21 +28,20 @@ const (
 
 // Provider reads the current usage limits of one tool.
 type Provider interface {
-	// Source is the tool name, for example "codex". It matches the
-	// agents.Adapter name.
+	// Source is the event source of the agent whose limits these are.
 	Source() string
 	Read(ctx context.Context) ([]event.LimitReading, error)
 }
 
-// All is the one registry of providers. A tool is listed only when its
-// program can be found, so a missing tool is not an error.
-// environ is the base environment given to the tool programs.
-func All(lookPath func(string) (string, error), environ []string) []Provider {
-	var providers []Provider
-	if bin, err := lookPath(codexBinary); err == nil {
-		providers = append(providers, Codex{Bin: bin, Env: environ})
+// NewCodex returns the Codex app-server provider for an agent's source,
+// when the codex program can be found. A missing tool is not an error.
+// environ is the base environment given to the program.
+func NewCodex(source string, lookPath func(string) (string, error), environ []string) (Provider, bool) {
+	bin, err := lookPath(codexBinary)
+	if err != nil {
+		return nil, false
 	}
-	return providers
+	return Codex{SourceName: source, Bin: bin, Env: environ}, true
 }
 
 // ToolDirs lists folders where command line tools are usually installed but

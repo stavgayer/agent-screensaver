@@ -1,4 +1,4 @@
-import type { Card, Limit, Mode, Region, ViewState } from "./api.ts";
+import type { AgentInfo, Card, Limit, Mode, Region, ViewState } from "./api.ts";
 import { regionsFor } from "./layout.ts";
 import { screenMode } from "./mode.ts";
 
@@ -28,6 +28,8 @@ export interface StateFile {
     style: Record<string, unknown>;
     privacy: unknown;
     max_fps: number;
+    /** Left out by a service from before agent extensions. */
+    agents?: Record<string, AgentInfo>;
   };
 }
 
@@ -129,6 +131,7 @@ export function toViewState(state: StateFile, display: "main" | "secondary", now
   return {
     mode: screenMode(state.cards, display),
     cards: state.cards,
+    agents: state.view.agents ?? {},
     limits: state.limits,
     nowMs,
     serviceOk: state.service_ok,

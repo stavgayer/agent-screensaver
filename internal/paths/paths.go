@@ -27,6 +27,10 @@ type Paths struct {
 	// ContextSizesFile keeps the context window size of each model.
 	ContextSizesFile string
 
+	// MarksDir holds the user's own agent marks, <source>.svg, which
+	// replace the mark of that agent's extension.
+	MarksDir string
+
 	// AerialClonesDir holds APFS clones of the downloaded aerials, because
 	// the saver's web view can only load files inside DataDir.
 	AerialClonesDir string
@@ -52,6 +56,7 @@ func ForHome(home string) Paths {
 		UsageFile:        filepath.Join(dataDir, "claude-usage.json"),
 		ContextSizesFile: filepath.Join(dataDir, "context-windows.json"),
 
+		MarksDir:        filepath.Join(dataDir, "marks"),
 		AerialClonesDir: filepath.Join(mediaDir, "aerials"),
 		Aerials:         aerials.LocationsForHome(home),
 	}

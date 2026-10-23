@@ -82,10 +82,20 @@ func ConverterEnv(home, path, source, eventArg string) []string {
 // line. On a timeout the whole process group is killed and nothing is
 // returned. The caller forces the source and checks each event (Normalize).
 func RunConverter(ctx context.Context, c Converter, payload []byte, env []string) ([]event.Event, error) {
+	output, err := RunProgram(ctx, c, payload, env)
+	if err != nil {
+		return nil, err
+	}
+	return parseConverterOutput(output), nil
+}
+
+// RunProgram runs a converter and returns what it printed, at most
+// MaxConverterOutput bytes. A timeout, a failure or more output is an error.
+func RunProgram(ctx context.Context, c Converter, input []byte, env []string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
 	child := exec.CommandContext(ctx, c.Run)
-	child.Stdin = bytes.NewReader(payload[:min(len(payload), MaxConverterInput)])
+	child.Stdin = bytes.NewReader(input[:min(len(input), MaxConverterInput)])
 	child.Env = env
 	child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	child.Cancel = func() error { return syscall.Kill(-child.Process.Pid, syscall.SIGKILL) }
@@ -102,7 +112,7 @@ func RunConverter(ctx context.Context, c Converter, payload []byte, env []string
 	if output.over {
 		return nil, fmt.Errorf("converter %s printed more than 64 KiB", c.Run)
 	}
-	return parseConverterOutput(output.data), nil
+	return output.data, nil
 }
 
 // parseConverterOutput keeps the first MaxConverterEvents lines that are

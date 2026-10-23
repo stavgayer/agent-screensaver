@@ -138,21 +138,23 @@ func TestPollDue(t *testing.T) {
 	}
 }
 
-func TestAll(t *testing.T) {
+func TestNewCodex(t *testing.T) {
 	found := func(name string) (string, error) { return "/bin/" + name, nil }
 	missing := func(string) (string, error) { return "", errors.New("not found") }
 	tests := []struct {
 		name     string
+		source   string
 		lookPath func(string) (string, error)
 		want     []string
 	}{
-		{"codex present gives one provider", found, []string{"codex"}},
-		{"codex absent gives none", missing, nil},
+		{"codex present gives one provider", "codex", found, []string{"codex"}},
+		{"the source comes from the agent manifest", "acme", found, []string{"acme"}},
+		{"codex absent gives none", "codex", missing, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []string
-			for _, provider := range All(tt.lookPath, nil) {
+			if provider, ok := NewCodex(tt.source, tt.lookPath, nil); ok {
 				got = append(got, provider.Source())
 			}
 			if !reflect.DeepEqual(got, tt.want) {

@@ -77,3 +77,16 @@ func (d *Daemon) restoreLimits() {
 	}
 	d.state.Limits = limits
 }
+
+// restoreSources reads back the last event time of each source, which the
+// Connections tab shows, so a restart does not lose it.
+func (d *Daemon) restoreSources() {
+	sources, err := statefile.ReadSources(d.paths.StateFile)
+	if err != nil {
+		d.Logf("restore sources: %v", err)
+		return
+	}
+	for source, known := range sources {
+		d.state.NoteEvent(source, known.LastEventMs)
+	}
+}

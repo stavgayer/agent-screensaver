@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/cli"
 	"agent-screensaver/internal/daemon"
 	"agent-screensaver/internal/limits"
@@ -135,15 +136,13 @@ func runDaemon(args []string, stderr io.Writer) int {
 	p := paths.ForHome(home)
 	service := daemon.New(p)
 	service.Cloner = platform.NewFileCloner()
-	service.Estimator = usage.NewForMac(os.DirFS(home), p.UsageFile)
 	contextSizes, err := sessioninfo.LoadContextSizes(p.ContextSizesFile)
 	if err != nil {
 		fmt.Fprintf(stderr, "agent-screensaver daemon: %v\n", err)
 	}
 	service.ContextSizes = contextSizes
-	service.Details = sessioninfo.Reader{CodexSessionIndex: filepath.Join(codexHome(home), "session_index.jsonl"), Home: home,
-		ContextSizes: contextSizes}
-	providers := limits.All(limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob)), os.Environ())
+	service.Details = sessioninfo.Reader{Home: home, ContextSizes: contextSizes}
+	providers := limitsProviders(home, p, service, stderr)
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.
 	finished := make(chan struct{})
@@ -160,13 +159,27 @@ func runDaemon(args []string, stderr io.Writer) int {
 	return 0
 }
 
-// codexHome is where Codex keeps its files: CODEX_HOME when set, as Codex
-// itself does, else ~/.codex.
-func codexHome(home string) string {
-	if dir := os.Getenv("CODEX_HOME"); dir != "" {
-		return dir
+// limitsProviders builds the Go limits providers that the installed agent
+// extensions name (agent.limits). A new agent extension with limits is
+// picked up when the daemon starts again.
+func limitsProviders(home string, p paths.Paths, service *daemon.Daemon, stderr io.Writer) []limits.Provider {
+	installed, err := agents.Load(p.ExtensionsDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver daemon: %v\n", err)
 	}
-	return filepath.Join(home, ".codex")
+	lookPath := limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob))
+	var providers []limits.Provider
+	for _, agent := range installed {
+		switch agent.Limits {
+		case agents.LimitsCodexAppServer:
+			if provider, ok := limits.NewCodex(agent.Source, lookPath, os.Environ()); ok {
+				providers = append(providers, provider)
+			}
+		case agents.LimitsClaudeUsageEstimate:
+			service.Estimator = usage.NewForMac(os.DirFS(home), p.UsageFile, agent.Source)
+		}
+	}
+	return providers
 }
 
 // runTray shows the menu bar icon until the user quits it or the process gets

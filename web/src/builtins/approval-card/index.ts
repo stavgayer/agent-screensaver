@@ -1,5 +1,5 @@
 import type { ComponentExt, ViewState } from "../../api.ts";
-import { displayName } from "../../format.ts";
+import { agentName } from "../../format.ts";
 import { approvalQueue } from "../../mode.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "./logic.ts";
 
@@ -63,7 +63,7 @@ function createApprovalCard(): ComponentExt {
     box?.toggleAttribute("hidden", first === undefined);
     if (first === undefined) return;
     const lines: Array<[string, string]> = [
-      ["meta", `${displayName(first.source)} · ${approvalWaitingLabel(first, state.nowMs)}`],
+      ["meta", `${agentName(first.source, state.agents)} · ${approvalWaitingLabel(first, state.nowMs)}`],
       ["headline", "Needs approval"],
       ["where", first.project ?? ""],
       ["request", first.request ?? ""],

@@ -5,7 +5,6 @@ import { displayName, formatResetDate } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
 import { orderLimits, ringCaption, ringPercent, ringView } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha, numberOption } from "../src/builtins/matrix/logic.ts";
-import { SOURCE_MARK_STYLE } from "../src/builtins/task-row/marks.ts";
 import { CONTEXT_HIGH_PERCENT, taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
 
 const MINUTE_MS = 60_000;
@@ -106,15 +105,25 @@ describe("taskContext", () => {
 });
 
 describe("taskSource", () => {
-  const cases: Array<[string, { mark: string; name: string }]> = [
-    ["claude", { mark: "claude", name: "Claude" }],
-    ["codex", { mark: "codex", name: "Codex" }],
-    ["cursor", { mark: "cursor", name: "Cursor" }],
-    ["aider", { mark: "other", name: "Aider" }],
-  ];
-  for (const [source, want] of cases) {
-    it(source, () => assert.deepEqual(taskSource(card({ source })), want));
-  }
+  const agents = {
+    claude: { name: "Claude Code", mark_url: "file:///data/extensions/builtin.claude/mark.svg" },
+    codex: { name: "Codex", mark_url: "file:///data/marks/codex.svg" },
+  };
+  it("card shows the agent mark from state", () => {
+    assert.deepEqual(taskSource(card({ source: "claude" }), agents), {
+      markUrl: "file:///data/extensions/builtin.claude/mark.svg",
+      name: "Claude Code",
+    });
+  });
+  it("a user's own mark comes the same way", () => {
+    assert.equal(taskSource(card({ source: "codex" }), agents).markUrl, "file:///data/marks/codex.svg");
+  });
+  it("card without agent shows a neutral dot and the source name", () => {
+    assert.deepEqual(taskSource(card({ source: "jira" }), agents), { markUrl: undefined, name: "Jira" });
+  });
+  it("an older state file without agents works", () => {
+    assert.deepEqual(taskSource(card({ source: "claude" }), {}), { markUrl: undefined, name: "Claude" });
+  });
 });
 
 describe("taskCards", () => {
@@ -294,10 +303,3 @@ describe("matrix logic", () => {
   });
 });
 
-describe("source marks", () => {
-  for (const id of ["claude", "codex", "cursor", "other"]) {
-    it(`${id} has a drawn mark a theme can replace with --mark-${id}`, () => {
-      assert.match(SOURCE_MARK_STYLE, new RegExp(`data-source="${id}"\\] \\.source-mark \\{ --mark: var\\(--mark-${id}, url\\("data:image/svg\\+xml,`));
-    });
-  }
-});

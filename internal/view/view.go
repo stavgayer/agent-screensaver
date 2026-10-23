@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"agent-screensaver/internal/aerials"
+	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
 )
@@ -40,6 +41,15 @@ type View struct {
 	Style      map[string]any  `json:"style"`
 	Privacy    bool            `json:"privacy"`
 	MaxFPS     int             `json:"max_fps"` // 0 = no ceiling beyond the display
+	// Agents names each agent and its mark, by event source. A card whose
+	// source is not here shows a neutral dot and the source name.
+	Agents map[string]AgentView `json:"agents"`
+}
+
+// AgentView is how a card shows its agent.
+type AgentView struct {
+	Name    string `json:"name"`
+	MarkURL string `json:"mark_url"`
 }
 
 // layoutModes is the part of a layout manifest that lists components.
@@ -145,7 +155,27 @@ func emptyView(cfg config.Config) View {
 		Style:      map[string]any{},
 		Privacy:    cfg.Privacy,
 		MaxFPS:     maxFPS,
+		Agents:     map[string]AgentView{},
 	}
+}
+
+// AgentViews names the agents and their marks. A user's own mark,
+// marksDir/<source>.svg, replaces the extension's when it passes the same
+// checks (extensions.CheckMark); the runtime shows marks with <img>.
+func AgentViews(installed []agents.Agent, marksDir string) map[string]AgentView {
+	views := make(map[string]AgentView, len(installed))
+	for _, agent := range installed {
+		mark := agent.MarkPath()
+		if own := filepath.Join(marksDir, agent.Source+".svg"); extensions.CheckMark(own) == nil {
+			mark = own
+		}
+		name := agent.Name
+		if name == "" {
+			name = agent.Source
+		}
+		views[agent.Source] = AgentView{Name: name, MarkURL: fileURL(mark)}
+	}
+	return views
 }
 
 // applyLayout stores the sanitized layout and the components it uses. A

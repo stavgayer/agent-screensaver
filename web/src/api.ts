@@ -39,9 +39,17 @@ export interface Limit {
   estimated?: boolean;
 }
 
+/** An agent extension as the cards show it: its name and the URL of its mark (an SVG shown with `<img>`). */
+export interface AgentInfo {
+  name: string;
+  mark_url: string;
+}
+
 export interface ViewState {
   mode: Mode;
   cards: Card[];
+  /** The installed agents by card source. A card whose source is not here has no agent extension. */
+  agents: Readonly<Record<string, AgentInfo>>;
   limits: Limit[];
   nowMs: number;
   serviceOk: boolean;

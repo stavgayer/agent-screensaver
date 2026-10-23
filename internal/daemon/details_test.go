@@ -1,62 +1,119 @@
 package daemon
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/spool"
 	"agent-screensaver/internal/state"
 )
 
 // fakeDetails answers every read with the same details and counts the reads.
 type fakeDetails struct {
-	answer state.Details
-	reads  []state.Card
+	answer  state.Details
+	reads   []state.Card
+	details []*agents.Details
 }
 
-func (f *fakeDetails) Read(card state.Card) state.Details {
+func (f *fakeDetails) Read(details *agents.Details, card state.Card) state.Details {
 	f.reads = append(f.reads, card)
+	f.details = append(f.details, details)
 	return f.answer
 }
 
-func TestDetailsAreReadOnTurnEdgesAndAtMostEvery30s(t *testing.T) {
+// installBuiltinAgents copies the repo's built-in agents into the
+// extensions folder, as install does.
+func installBuiltinAgents(t *testing.T, p paths.Paths) {
+	t.Helper()
+	for _, id := range []string{"builtin.claude", "builtin.codex"} {
+		for _, name := range []string{"extension.json", "mark.svg"} {
+			data, err := os.ReadFile(filepath.Join("..", "..", "extensions", id, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeTestFile(t, filepath.Join(p.ExtensionsDir, id, name), data)
+		}
+	}
+}
+
+func writeTestFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDetailsAreReadOnTheirKindsAtMostEvery5s(t *testing.T) {
 	type step struct {
-		kind  event.Kind
+		kind  event.Kind // "" steps the daemon with no new event
 		atMs  int64
 		reads int // reads so far after this step
 	}
 	tests := []struct {
-		name  string
-		steps []step
+		name   string
+		source string
+		steps  []step
 	}{
-		{"a new turn reads at once", []step{{event.KindStarted, 1_000, 1}}},
-		{"tool steps inside 30 s do not read again", []step{
-			{event.KindStarted, 1_000, 1}, {event.KindToolIntent, 5_000, 1}, {event.KindToolIntent, 30_999, 1},
+		{"a new turn reads at once", "claude", []step{{event.KindStarted, 1_000, 1}}},
+		{"claude reads on started, finished and ended only", "claude", []step{
+			{event.KindStarted, 1_000, 1}, {event.KindToolIntent, 10_000, 1}, {event.KindFinished, 20_000, 2},
 		}},
-		{"a tool step 30 s after the last read reads", []step{
-			{event.KindStarted, 1_000, 1}, {event.KindToolIntent, 31_000, 2},
+		{"codex also reads on tool steps (its read_on)", "codex", []step{
+			{event.KindStarted, 1_000, 1}, {event.KindToolIntent, 7_000, 2},
 		}},
-		{"the end of a turn always reads", []step{
-			{event.KindStarted, 1_000, 1}, {event.KindFinished, 2_000, 2},
+		{"a read inside 5 s waits, and is not lost", "claude", []step{
+			{event.KindStarted, 1_000, 1}, {event.KindFinished, 3_000, 1}, {"", 5_999, 1}, {"", 6_000, 2}, {"", 20_000, 2},
 		}},
-		{"status line details never read", []step{
+		{"status line details never read", "claude", []step{
 			{event.KindStarted, 1_000, 1}, {event.KindInfo, 60_000, 1},
+		}},
+		{"a source without an agent reads on the default kinds", "jira", []step{
+			{event.KindStarted, 1_000, 1}, {event.KindToolIntent, 60_000, 1},
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d, p := newTestDaemon(t)
+			installBuiltinAgents(t, p)
 			reader := &fakeDetails{}
 			d.Details = reader
 			for _, current := range tt.steps {
-				spoolEvent(t, p, "codex", "s1", current.kind, current.atMs)
+				if current.kind != "" {
+					spoolEvent(t, p, tt.source, "s1", current.kind, current.atMs)
+				}
 				d.Step(current.atMs, false)
 				if len(reader.reads) != current.reads {
-					t.Fatalf("after %s at %d: %d reads, want %d", current.kind, current.atMs, len(reader.reads), current.reads)
+					t.Fatalf("after %q at %d: %d reads, want %d", current.kind, current.atMs, len(reader.reads), current.reads)
 				}
 			}
+			if wantDetails := tt.source != "jira"; (reader.details[0] != nil) != wantDetails {
+				t.Errorf("details given = %v, want %v", reader.details[0] != nil, wantDetails)
+			}
 		})
+	}
+}
+
+func TestEventNameWinsOverDetailsName(t *testing.T) {
+	d, p := newTestDaemon(t)
+	d.Details = &fakeDetails{answer: state.Details{Name: "From the transcript"}}
+	spoolEvent(t, p, "claude", "s1", event.KindStarted, 1_000)
+	info := event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: event.KindInfo, AtMs: 1_100, Name: "From the status line"}
+	if err := spool.Write(p.SpoolDir, info); err != nil {
+		t.Fatal(err)
+	}
+
+	d.Step(1_100, false)
+
+	if cards := readStateFile(t, p).Cards; len(cards) != 1 || cards[0].Name != "From the status line" {
+		t.Errorf("cards = %+v", cards)
 	}
 }
 

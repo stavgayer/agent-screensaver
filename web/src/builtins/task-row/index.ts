@@ -1,6 +1,5 @@
 import type { Card, ComponentExt, ViewState } from "../../api.ts";
 import { taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere, type TaskContext, type TaskTone } from "./logic.ts";
-import { SOURCE_MARK_STYLE } from "./marks.ts";
 
 // Lines that answer, from across the room: what state (in words and color) and which
 // agent, what task (the conversation name or the prompt), how full the context is,
@@ -48,7 +47,8 @@ const STYLE = `
 @container task (max-width: 26vmin) { .task .source { display: none; } }
 .task .where > .background { color: var(--accent, #00e07a); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .task.working .mark { animation: none; } }
-${SOURCE_MARK_STYLE}
+.task .source-mark { flex: none; width: 1.1em; height: 1.1em; object-fit: contain; }
+.task .source-dot { flex: none; width: 0.55em; height: 0.55em; margin: 0 0.275em; border-radius: 50%; background: currentColor; opacity: 0.7; }
 `;
 
 // Drawn marks instead of text glyphs, which each font draws differently. Working is a
@@ -67,21 +67,34 @@ function line(className: string, text: string): HTMLElement {
   return element;
 }
 
-function topLine(card: Card, nowMs: number): HTMLElement {
+function topLine(card: Card, state: ViewState): HTMLElement {
   const element = document.createElement("div");
   element.className = "top";
-  element.append(statusLine(card, nowMs), sourceLabel(card));
+  element.append(statusLine(card, state.nowMs), sourceLabel(card, state));
   return element;
 }
 
-/** The agent: its drawn mark and its name. A theme can replace the mark (marks.ts). */
-function sourceLabel(card: Card): HTMLElement {
-  const source = taskSource(card);
+/**
+ * The agent: the mark of its extension and its name, or a neutral dot and the source
+ * name for a source without one. The mark is an <img>, so an SVG can run no code and
+ * load nothing (the service checked it too).
+ */
+function sourceLabel(card: Card, state: ViewState): HTMLElement {
+  const source = taskSource(card, state.agents);
   const element = document.createElement("span");
   element.className = "source";
-  element.dataset.source = source.mark;
-  const mark = document.createElement("span");
-  mark.className = "source-mark";
+  element.dataset.source = card.source;
+  let mark: HTMLElement;
+  if (source.markUrl === undefined) {
+    mark = document.createElement("span");
+    mark.className = "source-dot";
+  } else {
+    const image = document.createElement("img");
+    image.className = "source-mark";
+    image.src = source.markUrl;
+    image.alt = "";
+    mark = image;
+  }
   mark.setAttribute("aria-hidden", "true");
   const name = document.createElement("span");
   name.className = "source-name";
@@ -149,12 +162,12 @@ function whereLine(card: Card): HTMLElement {
   return element;
 }
 
-function createTask(card: Card, nowMs: number): HTMLElement {
+function createTask(card: Card, state: ViewState): HTMLElement {
   const element = document.createElement("div");
-  element.className = `task ${taskStatus(card, nowMs).tone}`;
+  element.className = `task ${taskStatus(card, state.nowMs).tone}`;
   const heading = line("heading", taskHeading(card));
   heading.dir = "auto";
-  element.append(topLine(card, nowMs), heading);
+  element.append(topLine(card, state), heading);
   const context = taskContext(card);
   if (context !== undefined) element.append(contextLine(context));
   element.append(whereLine(card));
@@ -175,10 +188,10 @@ function createTaskRow(): ComponentExt {
 
   function update(state: ViewState): void {
     const cards = taskCards(state.cards);
-    const key = JSON.stringify(cards.map((card) => [card.source, card.session, taskStatus(card, state.nowMs), taskSource(card), taskHeading(card), taskContext(card), taskWhere(card)]));
+    const key = JSON.stringify(cards.map((card) => [card.source, card.session, taskStatus(card, state.nowMs), taskSource(card, state.agents), taskHeading(card), taskContext(card), taskWhere(card)]));
     if (key === lastKey) return;
     lastKey = key;
-    row?.replaceChildren(...cards.map((card) => createTask(card, state.nowMs)));
+    row?.replaceChildren(...cards.map((card) => createTask(card, state)));
   }
 
   function unmount(): void {
