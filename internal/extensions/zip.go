@@ -112,20 +112,24 @@ func copyFolder(src, dest string) error {
 		case entry.IsDir():
 			return os.MkdirAll(target, 0o755)
 		case entry.Type().IsRegular():
-			return copyFile(path, target)
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			return copyFile(path, target, info.Mode())
 		default:
 			return fmt.Errorf("%q is a symlink or special file, which is not allowed", relative)
 		}
 	})
 }
 
-func copyFile(src, dest string) error {
+func copyFile(src, dest string, mode fs.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	return writeNewFile(dest, in, maxZipBytes)
+	return writeNewFile(dest, in, maxZipBytes, mode)
 }
 
 // unzip extracts archive into dest. Every entry is checked before anything
@@ -207,12 +211,12 @@ func extractEntry(file *zip.File, dest string, budget int64) (int64, error) {
 		return 0, err
 	}
 	defer in.Close()
-	return budgetedWrite(target, in, budget)
+	return budgetedWrite(target, in, budget, file.Mode())
 }
 
-func budgetedWrite(target string, in io.Reader, budget int64) (int64, error) {
+func budgetedWrite(target string, in io.Reader, budget int64, mode fs.FileMode) (int64, error) {
 	counter := &countingReader{reader: in}
-	if err := writeNewFile(target, counter, budget); err != nil {
+	if err := writeNewFile(target, counter, budget, mode); err != nil {
 		return 0, err
 	}
 	return counter.count, nil
@@ -231,12 +235,18 @@ func (c *countingReader) Read(p []byte) (int, error) {
 
 // writeNewFile creates target (failing if it exists, so duplicate names in an
 // archive are caught) and copies at most limit bytes. Archive headers can lie
-// about sizes, so the limit is enforced on the bytes actually read.
-func writeNewFile(target string, in io.Reader, limit int64) error {
+// about sizes, so the limit is enforced on the bytes actually read. Of the
+// source mode only the execute bit is kept, so an agent's converter program
+// still runs; no other bit (setuid, group write) is ever copied.
+func writeNewFile(target string, in io.Reader, limit int64, source fs.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	mode := fs.FileMode(0o644)
+	if source&0o111 != 0 {
+		mode = 0o755
+	}
+	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
 		return err
 	}

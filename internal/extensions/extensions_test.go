@@ -437,3 +437,37 @@ func TestAllBuiltinManifestsAreValid(t *testing.T) {
 		t.Fatalf("%s holds no extensions", builtDir)
 	}
 }
+
+// An agent's converter program must stay executable after install, from a
+// folder and from a zip; other files get no execute bit.
+func TestInstallKeepsTheExecuteBit(t *testing.T) {
+	folder := t.TempDir()
+	copyTestFolder(t, validDir, folder)
+	writeFile(t, filepath.Join(folder, "convert"), "#!/bin/sh\n")
+	if err := os.Chmod(filepath.Join(folder, "convert"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	archive := writeZip(t, []zipEntry{
+		{name: "extension.json", content: manifestJSON(t, "acme.zipped", "1.0.0")},
+		{name: "main.js", content: "//"},
+		{name: "convert", content: "#!/bin/sh\n", mode: 0o755},
+	})
+	for name, source := range map[string]string{"folder": folder, "zip": archive} {
+		t.Run(name, func(t *testing.T) {
+			extDir := t.TempDir()
+			manifest, err := InstallFrom(source, extDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for file, want := range map[string]os.FileMode{"convert": 0o755, "extension.json": 0o644} {
+				info, err := os.Stat(filepath.Join(extDir, manifest.ID, file))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := info.Mode().Perm(); got != want {
+					t.Errorf("%s mode = %v, want %v", file, got, want)
+				}
+			}
+		})
+	}
+}
