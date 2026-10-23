@@ -2,7 +2,7 @@
 
 Goal: choose where the clock, the cards and your own widgets go on the screen.
 
-A layout is data. It has no code. Sample: [examples/acme.compact](examples/acme.compact). The built-in layout is `extensions/builtin.spotlight/extension.json`. Reference: [extensions.md](extensions.md#layouts).
+A layout is data. It has no code. Sample: [examples/acme.compact](examples/acme.compact). The built-in layout is `extensions/builtin.spotlight/extension.json`. Reference: [extensions.md](../extensions.md#layouts).
 
 Before you start: the components you want to place are installed (`agent-screensaver ext list`). The built-in ones are `builtin.clock`, `builtin.limit-rings`, `builtin.task-row` and `builtin.approval-card`. To write your own, see [add-a-widget.md](add-a-widget.md).
 

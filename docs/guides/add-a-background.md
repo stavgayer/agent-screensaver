@@ -28,6 +28,7 @@ acme.drift/
   "options": {
     "color": { "type": "color", "default": "#6cc5b9", "label": "Color" },
     "count": { "type": "number", "default": 60, "min": 5, "max": 300, "label": "Dots" },
+    "speed": { "type": "number", "default": 1, "min": 0.2, "max": 4, "label": "Speed" },
     "fps": { "type": "number", "default": 20, "min": 1, "max": 60, "label": "Frames per second" }
   }
 }
