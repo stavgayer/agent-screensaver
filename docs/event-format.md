@@ -150,7 +150,7 @@ Limits of the estimate:
 - Anthropic does not publish how its limits weigh tokens or models. The weights above are price ratios, and the ratio is learned again from each new pair of exact readings.
 - Without a known reset time the service guesses when a window ended, so the first minutes of a new window can be off.
 
-The service also shows the limits of its last run as soon as it starts (they are read back from `state.json`), so the rings are not empty after a restart.
+The service also shows the limits of its last run as soon as it starts (they are read back from `state.json`), so the rings are not empty after a restart. They stay until the first read of the transcripts is done, which takes some seconds for a large history.
 
 ## Rules for writers
 

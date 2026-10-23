@@ -68,7 +68,9 @@ type Reading struct {
 type Result struct {
 	Readings []Reading
 	// CatchingUp is true while the first read of the transcripts is not
-	// done: call Estimate again soon. Only exact readings are given then.
+	// done: call Estimate again soon. No readings are given then, so what
+	// is on screen (the limits of the last run) stays until the estimate
+	// can count every token.
 	CatchingUp bool
 }
 
@@ -124,16 +126,16 @@ func (e *Estimator) Estimate(nowMs int64) (Result, error) {
 		problems = append(problems, err)
 		anchors = append(anchors, found...)
 	}
+	result := Result{CatchingUp: !caughtUp}
 	if caughtUp {
 		// Ratios need the tokens between anchors, so anchors are folded in
 		// only once the transcripts are read.
 		e.advance(anchors, nowMs)
 		e.observed = nil
-	}
-	result := Result{CatchingUp: !caughtUp}
-	for _, window := range limitWindows {
-		if reading, ok := e.reading(window, anchors, caughtUp, nowMs); ok {
-			result.Readings = append(result.Readings, reading)
+		for _, window := range limitWindows {
+			if reading, ok := e.reading(window, nowMs); ok {
+				result.Readings = append(result.Readings, reading)
+			}
 		}
 	}
 	if e.dirty && nowMs-e.savedMs >= saveEveryMs {
@@ -190,12 +192,9 @@ func (c *Calibration) add(anchor Anchor, window limitWindow, tally *Tally) {
 
 // reading gives the window's current reading: the estimate when a ratio is
 // known and tokens were used after the latest anchor, else that anchor.
-func (e *Estimator) reading(window limitWindow, pending []Anchor, caughtUp bool, nowMs int64) (Reading, bool) {
+func (e *Estimator) reading(window limitWindow, nowMs int64) (Reading, bool) {
 	calibration := e.calibration(window.name)
 	latest := calibration.Latest
-	if !caughtUp {
-		latest = newest(latest, pending, window.name)
-	}
 	if latest == nil {
 		return Reading{}, false
 	}
@@ -203,7 +202,7 @@ func (e *Estimator) reading(window limitWindow, pending []Anchor, caughtUp bool,
 		LimitReading: event.LimitReading{Window: window.name, UsedPercent: latest.Percent, ResetsAt: copyInt64(latest.ResetsAt)},
 		AtMs:         latest.AtMs,
 	}
-	if !caughtUp || calibration.PercentPerToken <= 0 {
+	if calibration.PercentPerToken <= 0 {
 		return exact, true
 	}
 	from, basePercent, resetsAt := latest.AtMs, latest.Percent, copyInt64(latest.ResetsAt)
@@ -307,15 +306,6 @@ func samePeriod(earlier, later Anchor, lengthMs int64) bool {
 func insideWindow(atMs, resetsAtS, lengthMs int64) bool {
 	end := resetsAtS * 1000
 	return atMs < end && atMs >= end-lengthMs
-}
-
-func newest(latest *Anchor, anchors []Anchor, window event.Window) *Anchor {
-	for index := range anchors {
-		if anchors[index].Window == window && (latest == nil || anchors[index].AtMs > latest.AtMs) {
-			latest = &anchors[index]
-		}
-	}
-	return latest
 }
 
 func windowOf(name event.Window) (limitWindow, bool) {

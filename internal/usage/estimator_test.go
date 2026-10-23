@@ -235,8 +235,9 @@ func TestObservedReadingIsTheNewestAnchor(t *testing.T) {
 	}
 }
 
-// While the first read of a large history is not done, only exact readings
-// are given, and ratios are learned once it is.
+// While the first read of a large history is not done, nothing is given
+// (the screen keeps the limits of the last run), and ratios are learned
+// once it is done.
 func TestEstimateWhileCatchingUp(t *testing.T) {
 	setup := newEstimator(t, use{at10 + 10*minuteMs, 1000}, use{at10 + 20*minuteMs, 1000}, use{at11 + 10*minuteMs, 1000})
 	setup.estimator.scanBudget = 300 // about one line per call
@@ -246,8 +247,8 @@ func TestEstimateWhileCatchingUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !first.CatchingUp || !reflect.DeepEqual(first.Readings, []Reading{exact(event.FiveHour, 30, 0, at11)}) {
-		t.Fatalf("first = %+v, want catching up with the newest anchor", first)
+	if !first.CatchingUp || first.Readings != nil {
+		t.Fatalf("first = %+v, want catching up with no readings", first)
 	}
 	var last Result
 	for range 10 {
