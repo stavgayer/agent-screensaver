@@ -355,6 +355,8 @@ input[type="color"] { width: 44px; height: 24px; padding: 0; border: 0; backgrou
   justify-items: end;
 }
 .connection-controls .button { width: 100%; white-space: nowrap; }
+/* Holds a button's column when a row has no such button. */
+.connection-spacer { display: block; width: 100%; min-height: 1px; }
 .row-warning { color: var(--notice-ink); font-size: 12px; }
 .nowrap { white-space: nowrap; }
 

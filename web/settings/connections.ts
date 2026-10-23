@@ -21,6 +21,8 @@ export interface Connection {
   found: boolean;
   hooks_added: boolean;
   hooks_changed: boolean;
+  /** The hooks are in place, but the status line runs the user's own command. */
+  statusline_own: boolean;
   /** Converter and plugin file lines of the add plan. */
   warnings: string[];
 }
@@ -45,6 +47,7 @@ export interface ConnectionRow {
 }
 
 export const CHANGED_TEXT = "Hooks were changed outside agent-screensaver";
+export const STATUSLINE_TEXT = "Status line points to your own command";
 
 export function connectionRows(list: Connection[], nowMs: number): ConnectionRow[] {
   return list.map((connection) => ({
@@ -55,7 +58,7 @@ export function connectionRows(list: Connection[], nowMs: number): ConnectionRow
     badge: connection.builtin ? "built in" : `from ${connection.id} ${connection.version}`,
     stateText: stateText(connection, nowMs),
     lastEvent: connection.last_event_ms === null ? "no events yet" : `last event ${ago(connection.last_event_ms, nowMs)}`,
-    changed: connection.hooks_changed ? CHANGED_TEXT : null,
+    changed: connection.hooks_changed ? CHANGED_TEXT : connection.statusline_own ? STATUSLINE_TEXT : null,
     hook: hookButton(connection),
     power: powerButton(connection),
   }));
@@ -83,12 +86,14 @@ function stateText(connection: Connection, nowMs: number): string {
 
 /**
  * Remove when our hooks are in place; Add when the tool is here and they
- * are missing or were changed. An Off row keeps its hook button: off only
+ * are missing or were changed, or the status line was pointed elsewhere
+ * (adding them again puts ours back and saves the user's command). An Off row keeps its hook button: off only
  * silences the agent. A tool that is not on this Mac gets none, unless an
  * older install left hooks that can still be removed.
  */
 function hookButton(connection: Connection): ConnectionRow["hook"] {
-  if (connection.hooks_added && !connection.hooks_changed) return { action: "remove", label: "Remove hooks" };
+  const intact = !connection.hooks_changed && !connection.statusline_own;
+  if (connection.hooks_added && intact) return { action: "remove", label: "Remove hooks" };
   if (connection.found) return { action: "add", label: "Add hooks" };
   if (connection.hooks_added) return { action: "remove", label: "Remove hooks" };
   return null;
@@ -138,4 +143,17 @@ export function planDialog(name: string, action: HookAction, plan: Plan): PlanDi
 /** Go's message when the plan changed between showing and applying (settings.ErrPlanChanged). */
 export function isPlanChanged(message: string): boolean {
   return message.includes("the plan changed");
+}
+
+/** The element ids of one row's controls, as the page names them. */
+export const hookButtonId = (id: string): string => `hook-${id}`;
+export const powerButtonId = (id: string): string => `power-${id}`;
+
+/**
+ * Where focus goes when the plan sheet closes: back to the button that
+ * opened it, else (the row is gone or lost that button) the row's other
+ * button, else the install button, so focus never falls to the page body.
+ */
+export function focusAfterPlan(id: string, exists: (elementId: string) => boolean): string | undefined {
+  return [hookButtonId(id), powerButtonId(id), "install-agent"].find(exists);
 }

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { CHANGED_TEXT, connectionRows, isPlanChanged, planDialog, type Connection, type Plan } from "../settings/connections.ts";
+import { CHANGED_TEXT, STATUSLINE_TEXT, connectionRows, focusAfterPlan, isPlanChanged, planDialog, type Connection, type Plan } from "../settings/connections.ts";
 
 const MINUTE = 60_000;
 const NOW = 1_000 * MINUTE;
@@ -18,6 +18,7 @@ function connection(overrides: Partial<Connection>): Connection {
     found: true,
     hooks_added: true,
     hooks_changed: false,
+    statusline_own: false,
     warnings: [],
     ...overrides,
   };
@@ -67,6 +68,16 @@ describe("connectionRows", () => {
     assert.deepEqual(row.hook, { action: "add", label: "Add hooks" });
   });
 
+  it("a user-owned status line says so and offers Add hooks", () => {
+    const row = rowOf({ state: "idle", statusline_own: true });
+    assert.equal(row.changed, STATUSLINE_TEXT);
+    assert.deepEqual(row.hook, { action: "add", label: "Add hooks" });
+  });
+
+  it("changed hooks win over the status line text", () => {
+    assert.equal(rowOf({ hooks_changed: true, statusline_own: true }).changed, CHANGED_TEXT);
+  });
+
   it("off row offers Turn on and keeps hook buttons", () => {
     const row = rowOf({ state: "off", last_event_ms: NOW - MINUTE });
     assert.equal(row.stateText, "Off");
@@ -110,5 +121,18 @@ describe("planDialog", () => {
   it("knows Go's stale plan error", () => {
     assert.equal(isPlanChanged("the plan changed since it was shown; look at the new plan"), true);
     assert.equal(isPlanChanged("Cursor is not on this Mac"), false);
+  });
+});
+
+describe("focusAfterPlan", () => {
+  it("returns to the button that opened the sheet", () => {
+    const ids = new Set(["hook-builtin.cursor", "power-builtin.cursor", "install-agent"]);
+    assert.equal(focusAfterPlan("builtin.cursor", (id) => ids.has(id)), "hook-builtin.cursor");
+  });
+
+  it("falls back to the row's other button, then the install button", () => {
+    assert.equal(focusAfterPlan("builtin.cursor", (id) => id === "power-builtin.cursor" || id === "install-agent"), "power-builtin.cursor");
+    assert.equal(focusAfterPlan("acme.gone", (id) => id === "install-agent"), "install-agent");
+    assert.equal(focusAfterPlan("acme.gone", () => false), undefined);
   });
 });

@@ -2,7 +2,7 @@ import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
 import { withProject, withoutProject } from "./projects.ts";
 import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning } from "./preview-url.ts";
-import { connectionRows, isPlanChanged, planDialog, type Connection, type ConnectionRow, type HookAction, type Plan } from "./connections.ts";
+import { connectionRows, focusAfterPlan, hookButtonId, isPlanChanged, planDialog, powerButtonId, type Connection, type ConnectionRow, type HookAction, type Plan } from "./connections.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
 interface Snapshot {
@@ -388,8 +388,8 @@ function markImage(row: ConnectionRow): HTMLElement {
 }
 
 function connectionRow(row: ConnectionRow): HTMLElement {
-  const hookId = `hook-${row.id}`;
-  const powerId = `power-${row.id}`;
+  const hookId = hookButtonId(row.id);
+  const powerId = powerButtonId(row.id);
   const hook = row.hook === null
     ? h("span", { class: "connection-spacer" })
     : button(row.hook.label, () => void openPlan(row, (row.hook as { action: HookAction }).action), "plain", hookId);
@@ -445,7 +445,7 @@ function connectionsView(): Node[] {
 
 /** Shows the plan Go computed. Nothing changes until the confirm button is pressed. */
 async function openPlan(row: ConnectionRow, action: HookAction, notice?: string): Promise<void> {
-  const source = `hook-${row.id}`;
+  const source = hookButtonId(row.id);
   errors = {};
   let plan: Plan;
   try {
@@ -462,10 +462,7 @@ async function openPlan(row: ConnectionRow, action: HookAction, notice?: string)
 function showPlanDialog(row: ConnectionRow, action: HookAction, plan: Plan, notice?: string): void {
   const content = planDialog(row.name, action, plan);
   const dialog = h("dialog", { class: "plan-dialog", "aria-labelledby": "plan-title" });
-  const close = () => {
-    dialog.close();
-    dialog.remove();
-  };
+  const close = () => dialog.close();
   const cancel = button("Cancel", close, "plain", "plan-cancel");
   const confirm = button(content.confirmLabel, () => void applyPlan(row, action, plan, dialog, close), "primary", "plan-confirm");
   const parts: Array<Node | null> = [
@@ -478,7 +475,13 @@ function showPlanDialog(row: ConnectionRow, action: HookAction, plan: Plan, noti
     h("div", { class: "plan-buttons" }, cancel, confirm),
   ];
   dialog.append(...parts.filter((part): part is Node => part !== null));
-  dialog.addEventListener("close", () => dialog.remove());
+  // Cancel, Escape and confirm all end here. Focus goes back to the row,
+  // now and after the redraw that follows a change.
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+    focusAfterClose = row.id;
+    restoreFocus();
+  });
   document.body.append(dialog);
   dialog.showModal();
   cancel.focus();
@@ -502,10 +505,21 @@ async function applyPlan(row: ConnectionRow, action: HookAction, plan: Plan, dia
       await openPlan(row, action, "A file changed while this plan was open. This is the new plan.");
       return;
     }
-    errors[`hook-${row.id}`] = message;
+    errors[hookButtonId(row.id)] = message;
     showStatus("Not saved", "error");
   }
   await refresh();
+}
+
+/** The agent whose plan sheet just closed: the next draw puts focus back on its row. */
+let focusAfterClose: string | undefined;
+
+function restoreFocus(): void {
+  if (focusAfterClose === undefined || document.querySelector("dialog[open]") !== null) return;
+  const target = focusAfterPlan(focusAfterClose, (id) => document.getElementById(id) !== null);
+  if (target === undefined) return; // the view is not drawn yet; the next draw tries again
+  document.getElementById(target)?.focus();
+  focusAfterClose = undefined;
 }
 
 /** Reads the agents again every few seconds while the Connections view is open and visible. */
@@ -712,6 +726,7 @@ function render(): void {
   connectionsPoll.sync();
   content.scrollTop = scroll;
   if (focusedId) document.getElementById(focusedId)?.focus();
+  else restoreFocus();
 }
 
 /**
