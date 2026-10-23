@@ -2,7 +2,7 @@
 
 A macOS screen saver that shows what your AI agents are doing. You start a long task in Claude Code, Codex or Cursor and walk away. When you come back, you see at a glance from across the room if an agent needs you, which tasks finished, which are still running and for how long, and how much of your usage limits is left. The screen saver shows the time anyway while you are away, so it is the right place to show this too.
 
-Supported agents: Claude Code, Codex and Cursor are built in. Usage limits are shown for Claude Code and Codex only; Cursor shows task status. You can add other agents yourself, see [docs/agents.md](docs/agents.md).
+Supported agents: Claude Code, Codex and Cursor are built in. Usage limits are shown for Claude Code and Codex only: Cursor keeps its usage on its own server. Cursor cards show working (with the current command) and done, but never "waiting for approval", because Cursor does not tell us when it will really ask you. You can add other agents yourself, see [docs/agents.md](docs/agents.md).
 
 ## Requirements
 
