@@ -2,7 +2,7 @@
 
 This page tells you how to write an extension for agent-screensaver and how to install it.
 
-## The five types
+## The six types
 
 | Type | What it does | Has a manifest |
 |---|---|---|
@@ -10,6 +10,7 @@ This page tells you how to write an extension for agent-screensaver and how to i
 | Component | Draws one piece of the screen, such as a clock or a card row. | yes |
 | Layout | Says where components go on the screen. It is data only. | yes |
 | Theme | Picks a background, a layout and style values. | yes |
+| Agent | Teaches the service one coding agent: its mark, how its hook payloads become events, how to add its hooks, where to read card details. See [agents.md](agents.md). | yes |
 | Source | Sends cards and limits into the service. | no |
 
 A source is not an extension folder. It is any program that sends events. See [event-format.md](event-format.md).
@@ -33,7 +34,7 @@ acme.rain/
 | `id` | string | yes | Unique name, like `acme.rain`. See the rules below. |
 | `name` | string | no | Name shown to people. |
 | `version` | string | no | Your version, for example `1.0.0`. |
-| `type` | string | yes | `background`, `component`, `layout` or `theme`. |
+| `type` | string | yes | `background`, `component`, `layout`, `theme` or `agent`. |
 | `api` | number | yes | The API version you need. It must be `1`. |
 | `entry` | string | background, component | The JavaScript file to load. |
 | `options` | object | no | Settings people can change. See below. |
@@ -252,12 +253,7 @@ Your extension does not need to do anything. A component stays mounted and keeps
 
 ## The task row's agent marks
 
-Each card of `builtin.task-row` shows a small drawn mark and the name of its agent. The marks are our own shapes, not the products' logos. A theme can change them through its `style` values:
-
-| Style value | Meaning |
-|---|---|
-| `--source-color` | The color of every mark. The default is the card's muted white. |
-| `--mark-claude`, `--mark-codex`, `--mark-cursor`, `--mark-other` | A CSS image used as the mask of that mark, for example `url("data:image/svg+xml,...")`. Only its shape counts: it is painted in `--source-color`. `--mark-other` is used for any agent without its own mark. |
+Each card of `builtin.task-row` shows the mark and the name of its agent, from the agent extension ([agents.md](agents.md)). The project ships no company logos: the built-in marks are letter tiles of our own. You can put your own icon for any agent in `marks/<source>.svg` in the data folder; see "The mark" in [agents.md](agents.md). A card whose source has no agent extension shows a neutral dot and the source name.
 
 ## The Apple aerials background
 

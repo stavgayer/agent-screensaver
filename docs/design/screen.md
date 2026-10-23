@@ -180,7 +180,7 @@ The owner asked each card to say which agent it is, the conversation's name, whe
 
 Four lines, top to bottom:
 
-1. **State and agent.** The 6.2 state line ("Working · 24m", "Done · 3m ago", ...) on the left. On the right, a small drawn mark and the product name in muted white: a speech bubble for Claude, a terminal prompt for Codex, a pointer for Cursor, a ring for any other agent. The marks are our own shapes, not the products' logos (their brand terms do not allow them). A theme can recolor them (`--source-color`) or replace each shape (`--mark-claude`, `--mark-codex`, `--mark-cursor`, `--mark-other`, see docs/extensions.md).
+1. **State and agent.** The 6.2 state line ("Working · 24m", "Done · 3m ago", ...) on the left. On the right, the agent's mark and its name in muted white. The mark comes from the agent extension: a letter tile of our own ("C" for Claude Code, "X" for Codex), never a product logo. A user can put their own icon in `marks/<source>.svg` in the data folder (docs/agents.md). A source without an agent extension shows a neutral dot and its name.
 2. **What.** The conversation name when the agent has one (Claude `/rename` or its own title, the Codex thread name), else the prompt title, else the project.
 3. **Context.** "Context", a thin bar whose fill is the true share of the window, and the percent. The fill is muted white; from 80% the fill and the percent take the attention color, because Claude Code compacts the conversation near the end of the window. No bar when the agent does not say.
 4. **Where.** Project · model · branch, then "N in background" in the accent.

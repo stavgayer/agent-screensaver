@@ -50,7 +50,9 @@ Two sessions with the same `source` and different `session` values are two cards
 
 ## Kinds
 
-| Kind | Meaning | Claude Code hook | Codex hook |
+The built-in agent extensions map each tool's hooks to these kinds: `extensions/builtin.claude/extension.json` and `extensions/builtin.codex/extension.json` ([agents.md](agents.md)). The table shows what they say.
+
+| Kind | Meaning | `builtin.claude` | `builtin.codex` |
 |---|---|---|---|
 | `started` | A task started. | `UserPromptSubmit` | `UserPromptSubmit` |
 | `tool_intent` | A tool is about to run. It tells the service what a later approval is for. | `PreToolUse` | `PreToolUse` |
@@ -69,14 +71,14 @@ A card can show a conversation name, the model, how full the context window is a
 
 | Detail | Claude Code | Codex |
 |---|---|---|
-| Name | 1. `session_name` in the status line input (set with `/rename`). 2. The last `custom-title` entry in the transcript, else the last `ai-title` entry, of the same session. 3. `session_title` in a hook payload. | The last `thread_name` of the thread in `~/.codex/session_index.jsonl` (`$CODEX_HOME` when set). Codex writes it about 5 seconds into the first turn. |
+| Name | 1. `session_name` in the status line input (set with `/rename`). 2. The last `custom-title` entry in the transcript, else the last `ai-title` entry, of the same session. 3. `session_title` in a hook payload. | The last `thread_name` of the thread in `~/.codex/session_index.jsonl`. Codex writes it about 5 seconds into the first turn. |
 | Model | `model.display_name` in the status line input, made short (`Opus 5.5 (1M context)` becomes `Opus 5.5`); `message.model` of the last answer in the transcript (the desktop app runs no status line); `model` in a hook payload. | `model` in the hook payload. |
 | Context | 1. `context_window.used_percentage` in the status line input. 2. The last answer in the transcript: its input, cache read and cache write tokens, divided by the window size. The transcript does not say the window size, so: `[1m]` or `(1M context)` in the model name means 1,000,000 tokens; a turn larger than 200,000 tokens means 1,000,000; else the largest size the status line gave for the same model (`context_window.context_window_size`, kept in `context-windows.json` in the data folder; the `[1m]` marker is dropped from the model id); else Haiku and other `claude-` models have 200,000. Opus and Sonnet can run with either window, so with nothing learned they show no bar rather than a wrong one. Any other model name means no bar. |
 | Branch | `.git/HEAD` in the session's folder or a folder above it (a worktree's `.git` file is followed). A detached head shows the short commit. | Same. |
 
 When no name is known, the card shows the title made from the prompt, then the project.
 
-The hooks only copy the paths: they must exit fast. The service reads the files, and only the last 256 KB of a log. It reads a session at the start and at the end of each turn, and at most every 30 seconds in between. The Claude Code status line runs on every turn of a terminal session, so it keeps the name, model and context fresh there; Claude Code's desktop app does not run it.
+Where to read is declared in each agent extension (`agent.details`, see [agents.md](agents.md)). The hooks only copy the paths: they must exit fast. The service reads the files, and only the last 256 KB of a log. It reads a card after the event kinds its agent names (Claude Code: the start and the end of a turn and the end of the session; Codex: also each tool step), at most once every 5 seconds. The Claude Code status line runs on every turn of a terminal session, so it keeps the name, model and context fresh there; Claude Code's desktop app does not run it.
 
 In privacy mode the name and the branch are left out of `state.json`, like the title.
 

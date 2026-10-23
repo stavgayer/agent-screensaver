@@ -72,4 +72,5 @@ It builds a universal binary and the screen saver, and writes `dist/agent-screen
 ## More
 
 - [Writing extensions](docs/extensions.md)
+- [Agent extensions](docs/agents.md): teach agent-screensaver a new coding agent. The project ships no company logos; you may add your own icon for any agent.
 - [Event format](docs/event-format.md)
