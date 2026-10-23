@@ -22,6 +22,8 @@ type Paths struct {
 	InstallRecord string
 	// UsageFile keeps what the Claude limits estimate learned.
 	UsageFile string
+	// ContextSizesFile keeps the context window size of each model.
+	ContextSizesFile string
 
 	// AerialClonesDir holds APFS clones of the downloaded aerials, because
 	// the saver's web view can only load files inside DataDir.
@@ -36,15 +38,16 @@ func ForHome(home string) Paths {
 	dataDir := filepath.Join(home, "Library", "Application Support", "agent-screensaver")
 	mediaDir := filepath.Join(dataDir, "media")
 	return Paths{
-		DataDir:       dataDir,
-		SpoolDir:      filepath.Join(dataDir, "spool"),
-		StateFile:     filepath.Join(dataDir, "state.json"),
-		ConfigFile:    filepath.Join(dataDir, "config.json"),
-		ExtensionsDir: filepath.Join(dataDir, "extensions"),
-		RuntimeDir:    filepath.Join(dataDir, "runtime"),
-		MediaDir:      mediaDir,
-		InstallRecord: filepath.Join(dataDir, "install-record.json"),
-		UsageFile:     filepath.Join(dataDir, "claude-usage.json"),
+		DataDir:          dataDir,
+		SpoolDir:         filepath.Join(dataDir, "spool"),
+		StateFile:        filepath.Join(dataDir, "state.json"),
+		ConfigFile:       filepath.Join(dataDir, "config.json"),
+		ExtensionsDir:    filepath.Join(dataDir, "extensions"),
+		RuntimeDir:       filepath.Join(dataDir, "runtime"),
+		MediaDir:         mediaDir,
+		InstallRecord:    filepath.Join(dataDir, "install-record.json"),
+		UsageFile:        filepath.Join(dataDir, "claude-usage.json"),
+		ContextSizesFile: filepath.Join(dataDir, "context-windows.json"),
 
 		AerialClonesDir: filepath.Join(mediaDir, "aerials"),
 		Aerials:         aerials.LocationsForHome(home),

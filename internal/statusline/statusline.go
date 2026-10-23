@@ -38,7 +38,8 @@ type input struct {
 	} `json:"workspace"`
 	ContextWindow struct {
 		// UsedPercentage is null before the first message.
-		UsedPercentage *float64 `json:"used_percentage"`
+		UsedPercentage    *float64 `json:"used_percentage"`
+		ContextWindowSize int      `json:"context_window_size"`
 	} `json:"context_window"`
 	RateLimits struct {
 		FiveHour *window `json:"five_hour"`
@@ -94,8 +95,12 @@ func InfoEvent(data []byte, nowMs int64) (event.Event, bool) {
 		Project:    projectName(parsed),
 		Name:       text.ShortTitle(parsed.SessionName),
 		Model:      text.ShortModel(model),
+		ModelID:    parsed.Model.ID,
 		Cwd:        currentDir(parsed),
 		Transcript: parsed.TranscriptPath,
+	}
+	if size := parsed.ContextWindow.ContextWindowSize; size > 0 && info.ModelID != "" {
+		info.ContextWindow = size
 	}
 	if used := parsed.ContextWindow.UsedPercentage; used != nil {
 		clamped := min(max(*used, 0), 100)

@@ -32,6 +32,9 @@ type Reader struct {
 	CodexSessionIndex string
 	// Home is where the search for a git folder stops going up.
 	Home string
+	// ContextSizes holds the window sizes learned from the status line;
+	// nil means none.
+	ContextSizes *ContextSizes
 }
 
 // Read returns what the session's files say. Empty fields mean "not found".
@@ -45,7 +48,7 @@ func (r Reader) Read(card state.Card) state.Details {
 		details.Model = ClaudeModel(card.Transcript)
 		// The status line says how full the context is, but only in the
 		// terminal; its value wins over this one (state.SetDetails).
-		details.ContextPercent = ClaudeContext(card.Transcript)
+		details.ContextPercent = ClaudeContext(card.Transcript, r.ContextSizes)
 	case "codex":
 		details.Name = CodexName(r.CodexSessionIndex, card.Session)
 		details.ContextPercent = CodexContext(card.Transcript)
@@ -111,9 +114,11 @@ func ClaudeModel(transcript string) string {
 }
 
 // Claude context window sizes, in tokens. The transcript does not say the
-// window size, so it comes from the model name: a "[1m]" or "(1M context)"
-// marker means the 1M window, any other Claude model has the default one.
-// A turn larger than the default window can only fit the 1M window.
+// window size. In order: a "[1m]" or "(1M context)" marker in the model
+// name means the 1M window; a size learned from the status line for the
+// model (ContextSizes); a turn larger than the default window can only fit
+// the 1M window; a model that has a 1M choice is unknown (better no bar
+// than one five times too full); any other Claude model has the default.
 const (
 	defaultClaudeContext = 200_000
 	millionContext       = 1_000_000
@@ -125,11 +130,15 @@ const claudeModelPrefix = "claude-"
 
 var millionMarkers = []string{"[1m]", "(1M context)"}
 
+// millionChoiceModels are the model families that can run with the 1M
+// window, so the default size cannot be assumed for them.
+var millionChoiceModels = []string{"claude-opus-", "claude-sonnet-"}
+
 // ClaudeContext returns how full the context window is, in whole percent,
 // from the last answer in a Claude transcript: the input, cache read and
 // cache write tokens of that turn over the window size. nil means unknown,
-// for example when the model is not a known Claude model.
-func ClaudeContext(transcript string) *float64 {
+// for example when the model is not a known Claude model. sizes may be nil.
+func ClaudeContext(transcript string, sizes *ContextSizes) *float64 {
 	var found *float64
 	eachLastLine(transcript, func(line []byte) bool {
 		if !bytes.Contains(line, []byte(`"usage"`)) {
@@ -155,7 +164,7 @@ func ClaudeContext(transcript string) *float64 {
 			// Not a real call (a local error line): look further back.
 			return true
 		}
-		if window, ok := contextWindow(entry.Message.Model, used); ok {
+		if window, ok := contextWindow(entry.Message.Model, used, sizes); ok {
 			percent := math.Round(min(used/window*100, 100))
 			found = &percent
 		}
@@ -165,8 +174,8 @@ func ClaudeContext(transcript string) *float64 {
 }
 
 // contextWindow returns the window size of a model for a turn of used
-// tokens, and false when the model is unknown.
-func contextWindow(model string, used float64) (float64, bool) {
+// tokens, and false when it is not known.
+func contextWindow(model string, used float64, sizes *ContextSizes) (float64, bool) {
 	for _, marker := range millionMarkers {
 		if strings.Contains(model, marker) {
 			return millionContext, true
@@ -177,6 +186,14 @@ func contextWindow(model string, used float64) (float64, bool) {
 	}
 	if used > defaultClaudeContext {
 		return millionContext, true
+	}
+	if learned, ok := sizes.size(model); ok {
+		return float64(learned), true
+	}
+	for _, family := range millionChoiceModels {
+		if strings.HasPrefix(model, family) {
+			return 0, false
+		}
 	}
 	return defaultClaudeContext, true
 }

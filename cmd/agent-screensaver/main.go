@@ -136,7 +136,13 @@ func runDaemon(args []string, stderr io.Writer) int {
 	service := daemon.New(p)
 	service.Cloner = platform.NewFileCloner()
 	service.Estimator = usage.NewForMac(os.DirFS(home), p.UsageFile)
-	service.Details = sessioninfo.Reader{CodexSessionIndex: filepath.Join(codexHome(home), "session_index.jsonl"), Home: home}
+	contextSizes, err := sessioninfo.LoadContextSizes(p.ContextSizesFile)
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver daemon: %v\n", err)
+	}
+	service.ContextSizes = contextSizes
+	service.Details = sessioninfo.Reader{CodexSessionIndex: filepath.Join(codexHome(home), "session_index.jsonl"), Home: home,
+		ContextSizes: contextSizes}
 	providers := limits.All(limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob)), os.Environ())
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.

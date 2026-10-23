@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"reflect"
 	"testing"
 
 	"agent-screensaver/internal/event"
@@ -94,5 +95,31 @@ func TestNoDetailsReaderReadsNothing(t *testing.T) {
 	spoolEvent(t, p, "claude", "s1", event.KindStarted, 1_000)
 	if result := d.Step(1_000, false); !result.StateWritten {
 		t.Fatal("state file not written")
+	}
+}
+
+type fakeLearner struct{ learned map[string]int }
+
+func (f *fakeLearner) Learn(modelID string, tokens int) error {
+	f.learned[modelID] = tokens
+	return nil
+}
+
+func TestStatusLineWindowSizesAreLearned(t *testing.T) {
+	d, p := newTestDaemon(t)
+	learner := &fakeLearner{learned: map[string]int{}}
+	d.ContextSizes = learner
+	info := event.Event{V: event.Version, Source: "claude", Session: "s1", Kind: event.KindInfo, AtMs: 1_000,
+		Model: "Opus 5.5", ModelID: "claude-opus-5-5[1m]", ContextWindow: 1_000_000}
+	noSize := event.Event{V: event.Version, Source: "claude", Session: "s2", Kind: event.KindInfo, AtMs: 1_000,
+		Model: "Sonnet 5.5", ModelID: "claude-sonnet-5-5"}
+	for _, incoming := range []event.Event{info, noSize} {
+		if err := spool.Write(p.SpoolDir, incoming); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.Step(1_000, false)
+	if want := map[string]int{"claude-opus-5-5[1m]": 1_000_000}; !reflect.DeepEqual(learner.learned, want) {
+		t.Errorf("learned %v, want %v", learner.learned, want)
 	}
 }

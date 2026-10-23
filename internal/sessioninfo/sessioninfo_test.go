@@ -2,6 +2,7 @@ package sessioninfo
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,24 +61,28 @@ func TestClaudeModel(t *testing.T) {
 }
 
 func TestClaudeContext(t *testing.T) {
+	learned := &ContextSizes{sizes: map[string]int{"claude-opus-5-5": 1_000_000}}
 	tests := []struct {
 		name       string
 		transcript string
+		sizes      *ContextSizes
 		want       *float64
 	}{
-		// 3 + 2,000 + 18,000 tokens of the last turn in a 200,000 window.
-		{"last turn against the default window", fixture("claude_transcript.jsonl"), percent(10)},
+		// 3 + 2,000 + 18,000 tokens of the last turn; the status line said
+		// this model's window is 1,000,000.
+		{"the learned window of the model", fixture("claude_transcript.jsonl"), learned, percent(2)},
 		// 150,000 tokens in a 1,000,000 window.
-		{"the 1M marker", fixture("claude_context_1m.jsonl"), percent(15)},
+		{"the 1M marker", fixture("claude_context_1m.jsonl"), nil, percent(15)},
 		// 450,000 tokens cannot fit 200,000, so the window is the 1M one;
 		// the synthetic error line after it is not a real turn.
-		{"more than the default window means 1M", fixture("claude_context_over_default.jsonl"), percent(45)},
-		{"unknown model hides the bar", fixture("claude_context_unknown_model.jsonl"), nil},
-		{"missing file", fixture("missing.jsonl"), nil},
+		{"more than the default window means 1M", fixture("claude_context_over_default.jsonl"), nil, percent(45)},
+		{"nothing learned and the model has a 1M choice: no bar", fixture("claude_transcript.jsonl"), nil, nil},
+		{"unknown model hides the bar", fixture("claude_context_unknown_model.jsonl"), nil, nil},
+		{"missing file", fixture("missing.jsonl"), nil, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ClaudeContext(tt.transcript)
+			got := ClaudeContext(tt.transcript, tt.sizes)
 			if !equalPercent(got, tt.want) {
 				t.Errorf("ClaudeContext = %v, want %v", show(got), show(tt.want))
 			}
@@ -86,26 +91,60 @@ func TestClaudeContext(t *testing.T) {
 }
 
 func TestContextWindow(t *testing.T) {
+	learned := &ContextSizes{sizes: map[string]int{"claude-sonnet-5-5": 200_000}}
 	tests := []struct {
 		model  string
 		used   float64
 		want   float64
 		wantOK bool
 	}{
-		{"claude-opus-5-5", 1000, 200_000, true},
 		{"claude-opus-5-5[1m]", 1000, 1_000_000, true},
 		{"Opus 5.5 (1M context)", 1000, 1_000_000, true},
-		{"claude-sonnet-5-5", 250_000, 1_000_000, true},
+		{"claude-sonnet-5-5", 1000, 200_000, true},      // learned
+		{"claude-sonnet-5-5", 250_000, 1_000_000, true}, // larger than learned: only 1M holds it
+		{"claude-opus-5-5", 250_000, 1_000_000, true},
+		{"claude-opus-5-5", 1000, 0, false}, // could be 200k or 1M: no bar
+		{"claude-haiku-5-5", 1000, 200_000, true},
 		{"<synthetic>", 1000, 0, false},
 		{"", 1000, 0, false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.model, func(t *testing.T) {
-			got, ok := contextWindow(tt.model, tt.used)
+		t.Run(fmt.Sprintf("%s %v", tt.model, tt.used), func(t *testing.T) {
+			got, ok := contextWindow(tt.model, tt.used, learned)
 			if got != tt.want || ok != tt.wantOK {
 				t.Errorf("contextWindow(%q, %v) = %v, %v; want %v, %v", tt.model, tt.used, got, ok, tt.want, tt.wantOK)
 			}
 		})
+	}
+}
+
+func TestContextSizesLearnAndPersist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "context-windows.json")
+	sizes, err := LoadContextSizes(path)
+	if err != nil {
+		t.Fatalf("load without a file: %v", err)
+	}
+	if err := sizes.Learn("claude-opus-5-5[1m]", 1_000_000); err != nil {
+		t.Fatal(err)
+	}
+	if err := sizes.Learn("", 5); err != nil { // nothing to learn
+		t.Fatal(err)
+	}
+	again, err := LoadContextSizes(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size, ok := again.size("claude-opus-5-5"); !ok || size != 1_000_000 {
+		t.Errorf("after reload: %v, %v; want 1,000,000 for the model without its marker", size, ok)
+	}
+	if _, ok := again.size(""); ok {
+		t.Error("an empty model was learned")
+	}
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if broken, err := LoadContextSizes(path); err == nil || broken == nil {
+		t.Errorf("broken file: %v, %v; want an error and an empty store", broken, err)
 	}
 }
 
@@ -212,7 +251,8 @@ func TestReaderPicksBySource(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "repo", ".git", "HEAD"), "ref: refs/heads/main\n")
 	cwd := filepath.Join(root, "repo")
-	reader := Reader{CodexSessionIndex: fixture("codex_session_index.jsonl"), Home: root}
+	reader := Reader{CodexSessionIndex: fixture("codex_session_index.jsonl"), Home: root,
+		ContextSizes: &ContextSizes{sizes: map[string]int{"claude-opus-5-5": 200_000}}}
 
 	tests := []struct {
 		name string

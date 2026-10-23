@@ -16,7 +16,23 @@ type DetailsReader interface {
 	Read(card state.Card) state.Details
 }
 
+// ContextLearner remembers each model's context window size, which the
+// status line says, for sessions whose files do not.
+type ContextLearner interface {
+	Learn(modelID string, tokens int) error
+}
+
 type cardKey struct{ source, session string }
+
+// learnContextWindow passes on the window size an info event carries.
+func (d *Daemon) learnContextWindow(incoming event.Event) {
+	if d.ContextSizes == nil || incoming.Kind != event.KindInfo || incoming.ModelID == "" || incoming.ContextWindow <= 0 {
+		return
+	}
+	if err := d.ContextSizes.Learn(incoming.ModelID, incoming.ContextWindow); err != nil {
+		d.Logf("learn context window: %v", err)
+	}
+}
 
 // noteDetailsDue marks a card whose files should be read after this drain.
 func (d *Daemon) noteDetailsDue(incoming event.Event, nowMs int64) {

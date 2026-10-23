@@ -32,6 +32,8 @@ Any program can be a source. To be one, write one JSON file with one event into 
 | `name` | string | no | The conversation name your tool shows, for example one the user set. It is shown instead of the title. |
 | `model` | string | no | A short model name, for example `Opus 5.5` or `gpt-5.6`. |
 | `context_percent` | number | no | How full the context window is, from 0 to 100. |
+| `model_id` | string | no | The model's full id, for example `claude-opus-5-5[1m]`. Used with the `info` kind. |
+| `context_window` | number | no | The model's context window in tokens. Used with the `info` kind. The service learns each model's window from it (see "Card details"). |
 | `cwd` | string | no | The session's folder. The service reads the git branch there. It is never shown. |
 | `transcript` | string | no | The session's log file. The service reads the conversation name or the context fullness there (see below). It is never shown. |
 
@@ -57,7 +59,7 @@ Two sessions with the same `source` and different `session` values are two cards
 | `finished` | The task finished. | `Stop` | `Stop` |
 | `ended` | The session closed. | `SessionEnd` | `SessionEnd` |
 | `limits` | New usage limit numbers. It is not about one task. | status line | `codex app-server` |
-| `info` | New details of a session: `name`, `model`, `context_percent`. It never makes a card and never changes the card's state or time. | status line | not used |
+| `info` | New details of a session: `name`, `model`, `context_percent`, `model_id`, `context_window`. It never makes a card and never changes the card's state or time. | status line | not used |
 
 A field that an event leaves out keeps the value the card has.
 
@@ -69,7 +71,7 @@ A card can show a conversation name, the model, how full the context window is a
 |---|---|---|
 | Name | 1. `session_name` in the status line input (set with `/rename`). 2. The last `custom-title` entry in the transcript, else the last `ai-title` entry, of the same session. 3. `session_title` in a hook payload. | The last `thread_name` of the thread in `~/.codex/session_index.jsonl` (`$CODEX_HOME` when set). Codex writes it about 5 seconds into the first turn. |
 | Model | `model.display_name` in the status line input, made short (`Opus 5.5 (1M context)` becomes `Opus 5.5`); `message.model` of the last answer in the transcript (the desktop app runs no status line); `model` in a hook payload. | `model` in the hook payload. |
-| Context | 1. `context_window.used_percentage` in the status line input. 2. The last answer in the transcript: its input, cache read and cache write tokens, divided by the window size. The transcript does not say the window size, so it comes from the model name: `[1m]` or `(1M context)` in it means 1,000,000 tokens; any other `claude-` model has 200,000, unless the turn is already larger, which only the 1,000,000 window can hold. Any other model name means no bar. | The last `token_count` event in the rollout file: `last_token_usage.total_tokens` divided by `model_context_window`. The running total (`total_token_usage`) counts every call of the thread, so it is not used. No window size means no bar. |
+| Context | 1. `context_window.used_percentage` in the status line input. 2. The last answer in the transcript: its input, cache read and cache write tokens, divided by the window size. The transcript does not say the window size, so: `[1m]` or `(1M context)` in the model name means 1,000,000 tokens; a turn larger than 200,000 tokens means 1,000,000; else the size the status line last gave for the same model (`context_window.context_window_size`, kept in `context-windows.json` in the data folder; the `[1m]` marker is dropped from the model id); else Haiku and other `claude-` models have 200,000. Opus and Sonnet can run with either window, so with nothing learned they show no bar rather than a wrong one. Any other model name means no bar. |
 | Branch | `.git/HEAD` in the session's folder or a folder above it (a worktree's `.git` file is followed). A detached head shows the short commit. | Same. |
 
 When no name is known, the card shows the title made from the prompt, then the project.

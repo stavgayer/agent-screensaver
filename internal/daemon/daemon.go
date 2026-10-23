@@ -72,6 +72,8 @@ type Daemon struct {
 	// Details reads card details from the sessions' files. Without one,
 	// cards show only what the events carry.
 	Details DetailsReader
+	// ContextSizes learns context window sizes from the status line.
+	ContextSizes ContextLearner
 	// Estimator keeps one source's limits live between exact readings.
 	// Without one, limits change only when a reading arrives.
 	Estimator LimitEstimator
@@ -191,6 +193,7 @@ func (d *Daemon) drainSpool(nowMs int64) bool {
 		}
 		d.state.Apply(incoming)
 		d.observeLimits(incoming)
+		d.learnContextWindow(incoming)
 		d.noteDetailsDue(incoming, nowMs)
 		if incoming.Kind == event.KindFinished && slices.Contains(d.sources, incoming.Source) {
 			d.finished[incoming.Source] = true

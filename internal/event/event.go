@@ -87,6 +87,11 @@ type Event struct {
 	// ContextPercent is how full the context window is, 0 to 100. nil
 	// means the source did not say.
 	ContextPercent *float64 `json:"context_percent,omitempty"`
+	// ModelID is the model's full id, for example "claude-opus-5-5[1m]",
+	// and ContextWindow its context window in tokens. The service learns
+	// window sizes from them for sessions that do not say (the desktop app).
+	ModelID       string `json:"model_id,omitempty"`
+	ContextWindow int    `json:"context_window,omitempty"`
 	// Cwd and Transcript tell the service where to look for more details
 	// (the git branch, the conversation name). They are never shown.
 	Cwd        string `json:"cwd,omitempty"`
@@ -118,6 +123,9 @@ func (e Event) validate() error {
 	}
 	if e.Background != nil && *e.Background < 0 {
 		return fmt.Errorf("background is %d, must not be negative", *e.Background)
+	}
+	if e.ContextWindow < 0 {
+		return fmt.Errorf("context_window is %d, must not be negative", e.ContextWindow)
 	}
 	if e.ContextPercent != nil && (*e.ContextPercent < 0 || *e.ContextPercent > 100) {
 		return fmt.Errorf("context_percent is %v, must be 0 to 100", *e.ContextPercent)
