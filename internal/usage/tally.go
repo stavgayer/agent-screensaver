@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"slices"
 	"time"
 )
 
@@ -132,6 +133,30 @@ func (t *Tally) Between(fromMs, toMs int64) float64 {
 		}
 	}
 	return total
+}
+
+// windowStart returns when the window open at nowMs began, given that none
+// was open at closedAtMs. A window opens at the first call after the last
+// one closed and stays open for lengthMs, which is how Claude's limit
+// windows work. It reports false when no window is open at nowMs.
+func (t *Tally) windowStart(closedAtMs, lengthMs, nowMs int64) (int64, bool) {
+	var times []int64
+	for _, found := range t.calls {
+		if found.atMs > closedAtMs && found.atMs <= nowMs {
+			times = append(times, found.atMs)
+		}
+	}
+	if len(times) == 0 {
+		return 0, false
+	}
+	slices.Sort(times)
+	start := times[0]
+	for _, at := range times[1:] {
+		if at >= start+lengthMs {
+			start = at
+		}
+	}
+	return start, nowMs < start+lengthMs
 }
 
 func (t *Tally) forgetBefore(sinceMs int64) {
