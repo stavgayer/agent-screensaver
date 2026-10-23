@@ -21,6 +21,8 @@ type LimitEstimator interface {
 	Observe(readings []event.LimitReading, atMs int64)
 	// Estimate returns the current readings.
 	Estimate(nowMs int64) (usage.Result, error)
+	// Flush saves what it learned; called when the service stops.
+	Flush() error
 }
 
 // observeLimits hands the exact readings of the estimator's source to it.
@@ -48,10 +50,7 @@ func (d *Daemon) estimateLimits(nowMs int64) bool {
 	d.reportEstimateError(err)
 	before := slices.Clone(d.state.Limits)
 	for _, reading := range result.Readings {
-		d.state.Apply(event.Event{
-			V: event.Version, Source: d.Estimator.Source(), Session: "estimate", Kind: event.KindLimits,
-			AtMs: reading.AtMs, Limits: []event.LimitReading{reading.LimitReading},
-		})
+		d.state.ReplaceLimit(d.Estimator.Source(), reading.LimitReading, reading.AtMs)
 	}
 	return !reflect.DeepEqual(before, d.state.Limits)
 }

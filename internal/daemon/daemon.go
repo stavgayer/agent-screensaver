@@ -281,6 +281,11 @@ func Run(ctx context.Context, d *Daemon, w platform.SaverWatcher, s platform.Sou
 	for {
 		select {
 		case <-ctx.Done():
+			if d.Estimator != nil {
+				if err := d.Estimator.Flush(); err != nil {
+					d.Logf("save %s limits calibration: %v", d.Estimator.Source(), err)
+				}
+			}
 			return nil
 		case read := <-loop.results:
 			loop.finishRead(read)

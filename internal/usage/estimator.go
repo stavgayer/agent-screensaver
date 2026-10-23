@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"slices"
 
@@ -183,11 +184,23 @@ func (c *Calibration) add(anchor Anchor, window limitWindow, tally *Tally) {
 		return // keep the base until the rise is big enough to trust
 	}
 	if tokens := tally.Between(base.AtMs, anchor.AtMs); tokens > 0 {
-		c.PercentPerToken = rise / tokens
+		c.PercentPerToken = boundedRatio(rise/tokens, c.PercentPerToken)
 	}
 	// With no tokens the rise came from use the transcripts do not show
 	// (claude.ai chat, Cowork, another computer): no ratio to learn.
 	c.Base = &anchor
+}
+
+// maxRatioChange bounds how much one pair of readings may change the ratio,
+// so one pair with much use the transcripts do not show (claude.ai chat,
+// Cowork) cannot send the ring to 100.
+const maxRatioChange = 2
+
+func boundedRatio(next, previous float64) float64 {
+	if previous <= 0 {
+		return next
+	}
+	return min(max(next, previous/maxRatioChange), previous*maxRatioChange)
 }
 
 // reading gives the window's current reading: the estimate when a ratio is
@@ -202,9 +215,6 @@ func (e *Estimator) reading(window limitWindow, nowMs int64) (Reading, bool) {
 		LimitReading: event.LimitReading{Window: window.name, UsedPercent: latest.Percent, ResetsAt: copyInt64(latest.ResetsAt)},
 		AtMs:         latest.AtMs,
 	}
-	if calibration.PercentPerToken <= 0 {
-		return exact, true
-	}
 	from, basePercent, resetsAt := latest.AtMs, latest.Percent, copyInt64(latest.ResetsAt)
 	closedAtMs, closed := int64(0), false
 	switch {
@@ -214,6 +224,12 @@ func (e *Estimator) reading(window limitWindow, nowMs int64) (Reading, bool) {
 		// The window of the reading closed one length after it at the
 		// latest; calls before that point may count a little too much.
 		closedAtMs, closed = latest.AtMs+window.lengthMs, true
+		// The old reading is given with the end it surely had, so the ring
+		// says Reset instead of showing it as current.
+		exact.ResetsAt = int64Pointer(closedAtMs / 1000)
+	}
+	if calibration.PercentPerToken <= 0 {
+		return exact, true
 	}
 	if closed {
 		// Count from zero in the window open now. Its end is not known
@@ -269,8 +285,50 @@ func (e *Estimator) load() error {
 	if saved.Version != storeVersion {
 		return nil // an unknown format: start over
 	}
-	e.windows = saved.Windows
+	e.windows = map[event.Window]*Calibration{}
+	for name, calibration := range saved.Windows {
+		if window, ok := windowOf(name); ok && calibration != nil {
+			e.windows[name] = calibration.sane(window)
+		}
+	}
 	return nil
+}
+
+// sane keeps a loaded calibration inside the values this code writes: a
+// hand-edited or damaged file must not show a wrong ring.
+func (c *Calibration) sane(window limitWindow) *Calibration {
+	clean := &Calibration{Latest: saneAnchor(c.Latest, window), Base: saneAnchor(c.Base, window)}
+	if c.PercentPerToken > 0 && !math.IsInf(c.PercentPerToken, 0) {
+		clean.PercentPerToken = c.PercentPerToken
+	}
+	if clean.Latest != nil && clean.Latest.ResetsAt != nil {
+		clean.ResetsAt = copyInt64(clean.Latest.ResetsAt)
+	}
+	return clean
+}
+
+// saneAnchor keeps the percent in 0..100 and drops an end that is not
+// within one window length after the reading.
+func saneAnchor(anchor *Anchor, window limitWindow) *Anchor {
+	if anchor == nil {
+		return nil
+	}
+	clean := *anchor
+	clean.Window = window.name
+	clean.Percent = min(max(clean.Percent, 0), 100)
+	if clean.ResetsAt != nil && !insideWindow(clean.AtMs, *clean.ResetsAt, window.lengthMs) {
+		clean.ResetsAt = nil
+	}
+	return &clean
+}
+
+// Flush saves the calibration now if it changed; the service calls it when
+// it stops, so the last minute is not lost.
+func (e *Estimator) Flush() error {
+	if !e.dirty {
+		return nil
+	}
+	return e.save()
 }
 
 func (e *Estimator) save() error {
@@ -315,6 +373,8 @@ func windowOf(name event.Window) (limitWindow, bool) {
 	}
 	return limitWindows[index], true
 }
+
+func int64Pointer(value int64) *int64 { return &value }
 
 func copyInt64(value *int64) *int64 {
 	if value == nil {

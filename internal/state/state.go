@@ -294,6 +294,23 @@ func (s *State) applyLimits(incoming event.Event) {
 	}
 }
 
+// ReplaceLimit sets one limit of a source exactly as given, time included.
+// The service uses it for a source whose readings one estimator keeps:
+// that reading is the newest truth, even when it was taken before the
+// estimate it replaces.
+func (s *State) ReplaceLimit(source string, reading event.LimitReading, atMs int64) {
+	index := slices.IndexFunc(s.Limits, func(limit Limit) bool {
+		return limit.Source == source && limit.Window == reading.Window
+	})
+	replaced := Limit{Source: source, Window: reading.Window, UsedPercent: reading.UsedPercent,
+		ResetsAt: copyInt64(reading.ResetsAt), UpdatedAtMs: atMs, Estimated: reading.Estimated}
+	if index < 0 {
+		s.Limits = append(s.Limits, replaced)
+		return
+	}
+	s.Limits[index] = replaced
+}
+
 func (s *State) findCard(source, session string) int {
 	return slices.IndexFunc(s.Cards, func(card Card) bool {
 		return card.Source == source && card.Session == session

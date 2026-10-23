@@ -639,3 +639,18 @@ func TestSetDetailsUnknownCard(t *testing.T) {
 		t.Error("SetDetails on a missing card reported a change")
 	}
 }
+
+func TestReplaceLimit(t *testing.T) {
+	var current State
+	current.Apply(event.Event{V: 1, Source: "claude", Session: "statusline", Kind: event.KindLimits, AtMs: 5000,
+		Limits: []event.LimitReading{{Window: event.FiveHour, UsedPercent: 40, Estimated: true}}})
+	current.ReplaceLimit("claude", event.LimitReading{Window: event.FiveHour, UsedPercent: 30}, 1000)
+	current.ReplaceLimit("claude", event.LimitReading{Window: event.Week, UsedPercent: 9}, 2000)
+	want := []Limit{
+		{Source: "claude", Window: event.FiveHour, UsedPercent: 30, UpdatedAtMs: 1000},
+		{Source: "claude", Window: event.Week, UsedPercent: 9, UpdatedAtMs: 2000},
+	}
+	if !reflect.DeepEqual(current.Limits, want) {
+		t.Errorf("limits =\n %+v\nwant\n %+v", current.Limits, want)
+	}
+}

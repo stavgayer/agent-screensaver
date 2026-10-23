@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,11 +149,30 @@ func TestEstimate(t *testing.T) {
 			want:    []Reading{estimated(event.FiveHour, 2, 0, at10+13*hourMs)},
 		},
 		{
-			name:    "no call in a window open now: the old anchor stays",
+			// The window surely closed by 15:15: the old reading is given
+			// with that end, so the ring says Reset instead of 20%.
+			name:    "no call in a window open now: the old anchor with the end it surely had",
 			uses:    []use{{at10 + 10*minuteMs, 1000}, {at10 + 6*hourMs, 5000}},
 			anchors: []Anchor{anchor(event.FiveHour, 10, at10), anchor(event.FiveHour, 20, at10+15*minuteMs)},
 			nowMs:   at10 + 12*hourMs,
-			want:    []Reading{exact(event.FiveHour, 20, 0, at10+15*minuteMs)},
+			want:    []Reading{exact(event.FiveHour, 20, at10+5*hourMs+15*minuteMs, at10+15*minuteMs)},
+		},
+		{
+			name:    "no ratio and the window surely closed: the end it surely had",
+			anchors: []Anchor{anchor(event.FiveHour, 20, at10)},
+			nowMs:   at10 + 6*hourMs,
+			want:    []Reading{exact(event.FiveHour, 20, at10+5*hourMs, at10)},
+		},
+		{
+			// 10 points over 1,000 tokens is 0.01; then 10 -> 30 over only
+			// 100 tokens (use the transcripts do not show) would be 0.2,
+			// but a ratio may at most double: 0.02.
+			name: "a ratio may change by at most a factor of two per pair",
+			uses: []use{{at10 + 10*minuteMs, 1000}, {at10 + 40*minuteMs, 100}, {at11 + 10*minuteMs, 100}},
+			anchors: []Anchor{anchor(event.FiveHour, 0, at10), anchor(event.FiveHour, 10, at10+30*minuteMs),
+				anchor(event.FiveHour, 30, at11)},
+			nowMs: at11 + 30*minuteMs,
+			want:  []Reading{estimated(event.FiveHour, 32, 0, at11+30*minuteMs)},
 		},
 		{
 			name:    "after a reset with no ratio the old anchor stays, so the ring says Reset",
@@ -325,6 +345,47 @@ func TestEstimateReportsSourceErrorsAndUsesTheRest(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result.Readings, []Reading{exact(event.Week, 50, 0, at10)}) {
 		t.Errorf("readings = %s", show(result.Readings))
+	}
+}
+
+func TestLoadedCalibrationIsKeptSane(t *testing.T) {
+	setup := newEstimator(t)
+	saved := `{"version":1,"windows":{"5h":{"latest":{"window":"5h","percent":250,"resets_at":99999999999,"at_ms":` +
+		fmt.Sprint(at10) + `},"percent_per_token":-3}}}`
+	if err := os.MkdirAll(filepath.Dir(setup.estimator.StoreFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(setup.estimator.StoreFile, []byte(saved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := setup.estimator.Estimate(at10 + minuteMs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Percent kept in 0..100, an end far past one window length dropped,
+	// a negative ratio forgotten.
+	want := []Reading{exact(event.FiveHour, 100, 0, at10)}
+	if !reflect.DeepEqual(result.Readings, want) {
+		t.Errorf("readings = %s, want %s", show(result.Readings), show(want))
+	}
+}
+
+func TestFlushSavesAtOnce(t *testing.T) {
+	setup := newEstimator(t)
+	setup.source.anchors = []Anchor{anchor(event.Week, 50, at10)}
+	if _, err := setup.estimator.Estimate(at10 + minuteMs); err != nil {
+		t.Fatal(err)
+	}
+	setup.source.anchors = append(setup.source.anchors, anchor(event.Week, 51, at10+2*minuteMs))
+	if _, err := setup.estimator.Estimate(at10 + 3*minuteMs - 59_000); err != nil {
+		t.Fatal(err)
+	}
+	if err := setup.estimator.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(setup.estimator.StoreFile)
+	if err != nil || !strings.Contains(string(data), `"percent":51`) {
+		t.Errorf("after Flush the file holds %s (%v), want the newest reading", data, err)
 	}
 }
 

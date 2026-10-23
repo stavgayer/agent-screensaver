@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -23,9 +24,15 @@ type fakeEstimator struct {
 	estimates []int64 // the times Estimate was called
 	result    usage.Result
 	err       error
+	flushes   int
 }
 
 func (f *fakeEstimator) Source() string { return "claude" }
+
+func (f *fakeEstimator) Flush() error {
+	f.flushes++
+	return nil
+}
 
 func (f *fakeEstimator) Observe(readings []event.LimitReading, atMs int64) {
 	f.observed = append(f.observed, observation{readings, atMs})
@@ -135,5 +142,36 @@ func TestLimitsOfTheLastRunAreShownAtStart(t *testing.T) {
 	d.Step(1_000, false)
 	if got := readStateFile(t, p).Limits; !reflect.DeepEqual(got, before) {
 		t.Errorf("limits = %+v, want %+v", got, before)
+	}
+}
+
+// The estimator speaks for its source: an exact reading it gives after an
+// estimate replaces it with its own time, so an old number never looks new.
+func TestAnExactReadingAfterAnEstimateKeepsItsOwnTime(t *testing.T) {
+	d, p := newTestDaemon(t)
+	estimator := &fakeEstimator{result: usage.Result{Readings: []usage.Reading{estimatedReading(event.FiveHour, 40, 2_000)}}}
+	d.Estimator = estimator
+	d.Step(2_000, false)
+	resets := int64(5)
+	estimator.result = usage.Result{Readings: []usage.Reading{
+		{LimitReading: event.LimitReading{Window: event.FiveHour, UsedPercent: 30, ResetsAt: &resets}, AtMs: 1_000}}}
+	d.Step(12_000, false)
+	want := []state.Limit{{Source: "claude", Window: event.FiveHour, UsedPercent: 30, ResetsAt: &resets, UpdatedAtMs: 1_000}}
+	if got := readStateFile(t, p).Limits; !reflect.DeepEqual(got, want) {
+		t.Errorf("limits =\n %+v\nwant\n %+v", got, want)
+	}
+}
+
+func TestEstimatorIsFlushedWhenTheServiceStops(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	estimator := &fakeEstimator{}
+	d.Estimator = estimator
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := Run(ctx, d, &fakeWatcher{}, &fakeSound{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if estimator.flushes != 1 {
+		t.Errorf("flushed %d times, want once", estimator.flushes)
 	}
 }
