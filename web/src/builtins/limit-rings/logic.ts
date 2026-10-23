@@ -1,5 +1,5 @@
 import type { Limit } from "../../api.ts";
-import { displayName, formatResetIn, formatResetLabel } from "../../format.ts";
+import { displayName, formatCountdown, formatResetLabel, localUtcOffsetMinutes } from "../../format.ts";
 
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
@@ -49,24 +49,24 @@ export interface RingView {
   center: string;
   /** First caption line, for example "Claude 5h". */
   name: string;
-  /** Second caption line: the reset time, the age when stale, and "est." for an estimate. Empty when there is nothing to add. */
+  /** Second caption line: the reset time ("4h 12m", "Mon 09:00", "Reset"), the age when stale, and "est." for an estimate. Empty when the reset time is unknown and there is nothing else to add. */
   detail: string;
 }
 
 /**
  * What one ring shows. A reading taken before its window reset says nothing about
  * the new window, so its percent is never shown as current: the ring is empty and
- * says "Reset" until a newer reading comes.
+ * its caption says "Reset" until a newer reading comes. Every other ring says when
+ * it resets: a countdown to the minute, or the day and time when it is more than
+ * 24 hours away. `offsetAt` gives the local UTC offset at an instant.
  */
-export function ringView(limit: Limit, nowMs: number): RingView {
+export function ringView(limit: Limit, nowMs: number, offsetAt: (atMs: number) => number = localUtcOffsetMinutes): RingView {
   const name = `${displayName(limit.source)} ${limit.window}`;
   if (limit.resets_at !== undefined && nowMs >= limit.resets_at * 1000) {
-    return { look: "reset", percent: 0, center: "Reset", name, detail: "" };
+    return { look: "reset", percent: 0, center: "0%", name, detail: formatCountdown(0) };
   }
   const percent = ringPercent(limit.used_percent);
-  const details: string[] = [];
-  if (limit.window === "5h") details.push(formatResetIn(limit.resets_at, nowMs));
-  if (limit.window === "plan") details.push(formatResetLabel(limit.resets_at, nowMs));
+  const details = [formatResetLabel(limit.resets_at, nowMs, offsetAt)];
   const ageMs = nowMs - limit.updated_at_ms;
   const stale = ageMs > STALE_AFTER_MS[limit.window];
   if (stale) details.push(`${shortAge(ageMs)} ago`);
@@ -81,9 +81,9 @@ function shortAge(ms: number): string {
   return `${Math.floor(ms / MS_PER_DAY)}d`;
 }
 
-/** The caption on one line: "Claude 5h · 1h40m", "Codex plan · resets 3 Nov". */
-export function ringCaption(limit: Limit, nowMs: number): string {
-  const { name, detail } = ringView(limit, nowMs);
+/** The caption on one line: "Claude 5h · 1h 40m", "Codex plan · Mon 09:00". */
+export function ringCaption(limit: Limit, nowMs: number, offsetAt?: (atMs: number) => number): string {
+  const { name, detail } = ringView(limit, nowMs, offsetAt);
   return detail === "" ? name : `${name} · ${detail}`;
 }
 

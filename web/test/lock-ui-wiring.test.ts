@@ -5,6 +5,7 @@ import { LOCK_UI_CLASS } from "../src/overlay.ts";
 
 /** Loads the real runtime with just enough of a page for its top-level code. */
 async function loadRuntime() {
+  const intervalDelays: number[] = [];
   const classes = new Set<string>();
   const documentElement = {
     classList: {
@@ -19,15 +20,25 @@ async function loadRuntime() {
   const realSetInterval = globals.setInterval;
   globals.window = globals;
   globals.document = { documentElement };
-  globals.setInterval = () => 0; // the service-line check must not keep the test alive
+  globals.setInterval = (_callback: unknown, delayMs: number) => {
+    intervalDelays.push(delayMs); // the timers must not keep the test alive
+    return 0;
+  };
   try {
     await import("../src/runtime.ts");
   } finally {
     globals.setInterval = realSetInterval;
   }
   const api = (globals.window as { agentScreensaver: { setLockUI(shown: unknown): void } }).agentScreensaver;
-  return { api, classes };
+  return { api, classes, intervalDelays };
 }
+
+describe("minute tick", () => {
+  it("runtime_updates_components_every_minute_for_countdowns", async () => {
+    const { intervalDelays } = await loadRuntime();
+    assert.ok(intervalDelays.includes(60_000), `intervals: ${intervalDelays.join(", ")}`);
+  });
+});
 
 describe("lock screen wiring", () => {
   it("runtime_exports_setLockUI_and_it_toggles_the_class", async () => {

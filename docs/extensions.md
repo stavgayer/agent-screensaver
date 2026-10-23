@@ -235,11 +235,14 @@ export interface ComponentExt {
 export type CreateExtension = () => BackgroundExt | ComponentExt;
 ```
 
-A limit is the last reading the service got, and it can be old. Between exact Claude readings the service estimates the Claude limits from local token use (`docs/event-format.md`, "Live Claude limits"); such a limit has `estimated: true`, and the built-in rings add "est." to its caption. The built-in rings never show an old number as the current one:
+A limit is the last reading the service got, and it can be old. Between exact Claude readings the service estimates the Claude limits from local token use (`docs/event-format.md`, "Live Claude limits"); such a limit has `estimated: true`, and the built-in rings add "est." to its caption. The service also works out the reset time of the Claude windows when no exact one is known: the 5h window opens at the first call after the previous window ended and lasts 5 hours, and the week rolls forward from the last exact reset time by whole weeks. An exact `resets_at` (status line, `/usage` cache) always wins. A Claude week that never had an exact reset time stays without one.
 
-- When `nowMs` is at or after `resets_at`, the window has reset since the reading. The ring is empty and says "Reset" until a newer reading arrives.
+The built-in rings never show an old number as the current one. The caption under each ring has two lines: the name ("Claude 5h"), then the reset time, then the age when stale and "est." for an estimate, for example "4h 12m · est.".
+
+- Reset time: more than 24 hours away it is the local day and time, for example "Mon 09:00" (English short weekday, 24-hour clock, no locale data). Within 24 hours (24 hours exactly included) it is a countdown to the minute, rounded down: "4h 12m", under an hour "47m", under a minute "under 1m". A limit with no `resets_at` shows no reset time.
+- When `nowMs` is at or after `resets_at`, the window has reset since the reading. The ring is empty and its caption says "Reset" until a newer reading arrives.
 - When the reading is older than 30 minutes (5h window) or 6 hours (week and plan windows), the ring is dimmed and its caption adds the age, for example "20h ago".
-- Otherwise the ring shows the reading as it is.
+- The runtime gives every component a new `nowMs` once a minute, and whenever the state changes, so countdowns move without a new state file. Components must take the time from `state.nowMs`, never from the clock.
 
 Components that show limits should follow the same rule.
 

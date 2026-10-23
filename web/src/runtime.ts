@@ -18,6 +18,8 @@ import {
 } from "./plan.ts";
 
 const SERVICE_LINE_CHECK_MS = 10_000;
+/** Components get a new `nowMs` every minute, so countdowns move between state writes. */
+const CLOCK_TICK_MS = 60_000;
 const MOVE_DURATION_MS = 400;
 const BACKGROUND_KEY = "background";
 
@@ -223,6 +225,12 @@ async function reconcile(): Promise<void> {
   keeper.updateAll(components, toViewState(state, display, Date.now()));
 }
 
+/** Gives every component the time now. The page is the one place that reads the clock. */
+function tickClock(): void {
+  if (latest === undefined) return;
+  keeper.updateAll(components, toViewState(latest.state, latest.display, Date.now()));
+}
+
 /** Parts of the page that follow the state directly, with no loading involved. */
 function applyChrome(state: StateFile, display: Display): void {
   document.body.className = `mode-${screenMode(state.cards, display)}`;
@@ -256,3 +264,7 @@ window.agentScreensaver = Object.freeze({
 
 // The daemon rewrites state every 30 s; a stopped one must show the line without a new setState.
 setInterval(refreshServiceLine, SERVICE_LINE_CHECK_MS);
+// Countdowns show whole minutes: one update a minute keeps them true with no per-frame work.
+setInterval(() => {
+  queue = queue.then(tickClock).catch((err) => logFailure("tickClock", err));
+}, CLOCK_TICK_MS);

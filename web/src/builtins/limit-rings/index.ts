@@ -3,8 +3,8 @@ import { ringLevel } from "../../format.ts";
 import { orderLimits, ringView } from "./logic.ts";
 
 // Captions are two short lines that never wrap: the name, then the reset time in a quieter tone.
-// An old reading dims its ring and says its age; after a reset the ring is empty and says so,
-// so an old number is never read as the current one.
+// The second line says when the ring resets, to the minute. An old reading dims its ring and says its age;
+// after a reset the ring is empty and the line says "Reset", so an old number is never read as the current one.
 const STYLE = `
 .rings { display: flex; justify-content: flex-end; align-items: flex-start; gap: 3vmin; }
 .ring-item { display: flex; flex-direction: column; align-items: center; text-align: center; white-space: nowrap; }
@@ -14,7 +14,6 @@ const STYLE = `
 .ring.warn { --ring: #e0c000; }
 .ring.high { --ring: #ff5040; }
 .ring.stale { opacity: 0.45; }
-.ring.reset .inner { font-size: 1.7vmin; font-weight: 500; color: rgba(255, 255, 255, 0.8); letter-spacing: 0; }
 .ring .inner { width: 80%; height: 80%; border-radius: 50%; background: #000; display: grid; place-items: center; }
 .ring-name { margin-top: 1.2vmin; font-size: 1.9vmin; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
 .ring-detail { margin-top: 0.3vmin; font-size: 1.7vmin; color: rgba(255, 255, 255, 0.68); font-variant-numeric: tabular-nums; }

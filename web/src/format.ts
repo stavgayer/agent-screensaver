@@ -25,31 +25,47 @@ export function formatDuration(ms: number): string {
   return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 
+/** Minutes east of UTC at one instant in the local time zone, so a summer or winter date uses its own offset. */
+export function localUtcOffsetMinutes(atMs: number): number {
+  return -new Date(atMs).getTimezoneOffset();
+}
+
 /**
- * Time until a limit resets, for example "1h40m". `resetsAtS` is in seconds.
- * Rounds up so a ring never shows "0m" before the reset.
+ * Time left to a reset, to the minute and rounded down: "4h 12m", "47m", "under 1m".
+ * At or past the reset it is "Reset".
  */
-export function formatResetIn(resetsAtS: number | undefined, nowMs: number): string {
-  if (resetsAtS === undefined) return "";
-  const remainingMs = resetsAtS * 1000 - nowMs;
-  if (remainingMs <= 0) return "reset, waiting for new data";
-  const minutes = Math.ceil(remainingMs / MS_PER_MINUTE);
+export function formatCountdown(remainingMs: number): string {
+  if (remainingMs <= 0) return "Reset";
+  const minutes = Math.floor(remainingMs / MS_PER_MINUTE);
+  if (minutes < 1) return "under 1m";
   if (minutes < MINUTES_PER_HOUR) return `${minutes}m`;
-  const hours = Math.floor(minutes / MINUTES_PER_HOUR);
-  const rest = minutes % MINUTES_PER_HOUR;
-  return rest === 0 ? `${hours}h` : `${hours}h${rest}m`;
+  return `${Math.floor(minutes / MINUTES_PER_HOUR)}h ${minutes % MINUTES_PER_HOUR}m`;
 }
 
-/** Reset date, for example "resets 3 Nov", in the local time zone. `resetsAtS` is in seconds. */
-export function formatResetDate(resetsAtS: number): string {
-  const date = new Date(resetsAtS * 1000);
-  return `resets ${date.getDate()} ${MONTHS[date.getMonth()].slice(0, 3)}`;
+/**
+ * English short weekday and 24-hour time, "Mon 09:00", at a given UTC offset.
+ * Built by hand so it never depends on locale data; the offset is passed in so the
+ * result does not depend on the machine's time zone.
+ */
+export function formatDayTime(atMs: number, utcOffsetMinutes: number): string {
+  const shifted = new Date(atMs + utcOffsetMinutes * MS_PER_MINUTE);
+  return `${WEEKDAYS[shifted.getUTCDay()].slice(0, 3)} ${pad2(shifted.getUTCHours())}:${pad2(shifted.getUTCMinutes())}`;
 }
 
-/** Reset label for a ring: a countdown, or the date once the reset is more than 24 hours away. */
-export function formatResetLabel(resetsAtS: number | undefined, nowMs: number): string {
+/**
+ * Reset label for a ring. Within 24 hours, or at 24 hours exactly, it is the countdown.
+ * Further away it is the day and time in local time. `resetsAtS` is in seconds;
+ * `offsetAt` gives the local UTC offset at the reset instant.
+ */
+export function formatResetLabel(
+  resetsAtS: number | undefined,
+  nowMs: number,
+  offsetAt: (atMs: number) => number = localUtcOffsetMinutes,
+): string {
   if (resetsAtS === undefined) return "";
-  return resetsAtS * 1000 - nowMs > MS_PER_DAY ? formatResetDate(resetsAtS) : formatResetIn(resetsAtS, nowMs);
+  const resetsAtMs = resetsAtS * 1000;
+  const remainingMs = resetsAtMs - nowMs;
+  return remainingMs > MS_PER_DAY ? formatDayTime(resetsAtMs, offsetAt(resetsAtMs)) : formatCountdown(remainingMs);
 }
 
 export function ringLevel(pct: number): "ok" | "warn" | "high" {
