@@ -54,6 +54,19 @@ func TestDesktopHistoryAnchors(t *testing.T) {
 				{Window: event.Week, Percent: 43, AtMs: at11},
 			},
 		},
+		{
+			name: "only the org of the newest sample counts",
+			fsys: fstest.MapFS{"plan-usage-history.json": {Data: []byte(`{"samples":[` +
+				`{"t":1,"org":"org-a","u":{"fh":10}},` +
+				`{"t":2,"org":"org-b","u":{"fh":90,"sd":90}},` +
+				`{"t":3,"org":"org-a","u":{"sd":40}},` +
+				`{"t":4,"org":null,"u":{"fh":70}},` +
+				`{"t":5,"org":"org-a","u":{"xu":0}}]}`)}},
+			want: []Anchor{
+				{Window: event.FiveHour, Percent: 10, AtMs: 1},
+				{Window: event.Week, Percent: 40, AtMs: 3},
+			},
+		},
 		{name: "no desktop app means no anchors", fsys: fstest.MapFS{}},
 		{
 			name:    "a broken file is an error",

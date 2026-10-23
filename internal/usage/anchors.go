@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"slices"
 	"time"
 
 	"agent-screensaver/internal/event"
@@ -60,8 +61,9 @@ func MacSources(home fs.FS) []AnchorSource {
 }
 
 // DesktopHistory reads the plan usage samples the Claude desktop app keeps:
-// {"samples":[{"t": ms, "u": {"fh": 5h percent, "sd": week percent}}]}.
-// Samples have no reset time.
+// {"samples":[{"t": ms, "org": id, "u": {"fh": 5h percent, "sd": week percent}}]}.
+// Samples have no reset time. Only samples of the organization named by
+// the newest sample that names one are used.
 type DesktopHistory struct {
 	FS    fs.FS
 	Path  string
@@ -76,8 +78,9 @@ func (h *DesktopHistory) Anchors() ([]Anchor, error) {
 func parseDesktopHistory(data []byte) ([]Anchor, error) {
 	var history struct {
 		Samples []struct {
-			T int64 `json:"t"`
-			U struct {
+			T   int64   `json:"t"`
+			Org *string `json:"org"`
+			U   struct {
 				FiveHour *float64 `json:"fh"`
 				Week     *float64 `json:"sd"`
 			} `json:"u"`
@@ -86,8 +89,20 @@ func parseDesktopHistory(data []byte) ([]Anchor, error) {
 	if err := json.Unmarshal(data, &history); err != nil {
 		return nil, fmt.Errorf("decode desktop usage history: %w", err)
 	}
+	// The app can be signed in to more than one organization, each with
+	// its own limits. The newest sample says which one is in use now.
+	var org *string
+	for _, sample := range slices.Backward(history.Samples) {
+		if sample.Org != nil {
+			org = sample.Org
+			break
+		}
+	}
 	var anchors []Anchor
 	for _, sample := range history.Samples {
+		if org != nil && (sample.Org == nil || *sample.Org != *org) {
+			continue
+		}
 		anchors = appendAnchor(anchors, event.FiveHour, sample.U.FiveHour, nil, sample.T)
 		anchors = appendAnchor(anchors, event.Week, sample.U.Week, nil, sample.T)
 	}
