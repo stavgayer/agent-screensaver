@@ -152,6 +152,16 @@ describe("approval labels", () => {
 });
 
 describe("orderLimits", () => {
+  const ORDER = ["claude", "codex"];
+  it("follows the installed agents' order from the state", () => {
+    const ordered = orderLimits([limit("claude", "5h"), limit("codex", "5h")], ["codex", "claude"]);
+    assert.deepEqual(ordered.map((entry) => entry.source), ["codex", "claude"]);
+  });
+  it("without agents every source is sorted by name", () => {
+    const ordered = orderLimits([limit("codex", "5h"), limit("aider", "5h")], []);
+    assert.deepEqual(ordered.map((entry) => entry.source), ["aider", "codex"]);
+  });
+
   it("rings_order_claude_then_codex", () => {
     const shuffled = [
       limit("codex", "week"),
@@ -160,7 +170,7 @@ describe("orderLimits", () => {
       limit("claude", "5h"),
     ];
     assert.deepEqual(
-      orderLimits(shuffled).map((entry) => `${entry.source} ${entry.window}`),
+      orderLimits(shuffled, ORDER).map((entry) => `${entry.source} ${entry.window}`),
       ["claude 5h", "claude week", "codex 5h", "codex week"],
     );
   });
@@ -168,19 +178,19 @@ describe("orderLimits", () => {
   it("rings_order_includes_plan_after_week", () => {
     const shuffled = [limit("codex", "plan"), limit("claude", "plan"), limit("claude", "week"), limit("claude", "5h")];
     assert.deepEqual(
-      orderLimits(shuffled).map((entry) => `${entry.source} ${entry.window}`),
+      orderLimits(shuffled, ORDER).map((entry) => `${entry.source} ${entry.window}`),
       ["claude 5h", "claude week", "claude plan", "codex plan"],
     );
   });
 
   it("puts unknown sources after Claude and Codex, sorted by name", () => {
-    const ordered = orderLimits([limit("zed", "5h"), limit("aider", "week"), limit("codex", "5h"), limit("claude", "5h")]);
+    const ordered = orderLimits([limit("zed", "5h"), limit("aider", "week"), limit("codex", "5h"), limit("claude", "5h")], ORDER);
     assert.deepEqual(ordered.map((entry) => entry.source), ["claude", "codex", "aider", "zed"]);
   });
 
   it("does not change its input", () => {
     const input = [limit("codex", "5h"), limit("claude", "5h")];
-    orderLimits(input);
+    orderLimits(input, ORDER);
     assert.equal(input[0].source, "codex");
   });
 });

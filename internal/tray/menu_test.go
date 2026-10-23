@@ -8,6 +8,7 @@ import (
 	"agent-screensaver/internal/event"
 	"agent-screensaver/internal/state"
 	"agent-screensaver/internal/statefile"
+	"agent-screensaver/internal/view"
 )
 
 func approvalCard(source, project string, sinceMs int64) state.Card {
@@ -105,6 +106,22 @@ func TestBuildMenu(t *testing.T) {
 				plain("Claude 62% · resets in 1h40m"),
 				plain("Codex week 55%"),
 				plain("Codex plan 20% · resets in 1h40m"),
+			},
+			wantSound: true,
+		},
+		{
+			name: "limits follow the installed agents' order",
+			file: statefile.StateFile{View: view.View{AgentOrder: []string{"codex", "claude"}}, Limits: []state.Limit{
+				limit("aider", event.Week, 10, 0),
+				limit("claude", event.Week, 30, 0),
+				limit("codex", event.Week, 55, 0),
+			}},
+			cfg: soundOn,
+			wantInfo: []Item{
+				plain("All quiet"),
+				plain("Codex week 55%"),
+				plain("Claude week 30%"),
+				plain("Aider week 10%"),
 			},
 			wantSound: true,
 		},

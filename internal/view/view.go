@@ -44,6 +44,9 @@ type View struct {
 	// Agents names each agent and its mark, by event source. A card whose
 	// source is not here shows a neutral dot and the source name.
 	Agents map[string]AgentView `json:"agents"`
+	// AgentOrder lists the agents' sources, built-ins first, in the order
+	// limits and rows show them.
+	AgentOrder []string `json:"agent_order"`
 }
 
 // AgentView is how a card shows its agent.
@@ -156,7 +159,18 @@ func emptyView(cfg config.Config) View {
 		Privacy:    cfg.Privacy,
 		MaxFPS:     maxFPS,
 		Agents:     map[string]AgentView{},
+		AgentOrder: []string{},
 	}
+}
+
+// AgentOrder is the sources of the agents in the order they were loaded:
+// built-ins first, each group by folder name.
+func AgentOrder(installed []agents.Agent) []string {
+	order := make([]string, 0, len(installed))
+	for _, agent := range installed {
+		order = append(order, agent.Source)
+	}
+	return order
 }
 
 // AgentViews names the agents and their marks. A user's own mark,

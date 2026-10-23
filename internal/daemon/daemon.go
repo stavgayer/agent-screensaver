@@ -252,6 +252,7 @@ func (d *Daemon) refreshView(nowMs int64) bool {
 	d.aerialClones = clones
 	d.view = view.Resolve(d.cfg, d.installed, clones)
 	d.view.Agents = view.AgentViews(d.agents, d.paths.MarksDir)
+	d.view.AgentOrder = view.AgentOrder(d.agents)
 	return true
 }
 

@@ -30,6 +30,7 @@ export interface StateFile {
     max_fps: number;
     /** Left out by a service from before agent extensions. */
     agents?: Record<string, AgentInfo>;
+    agent_order?: string[];
   };
 }
 
@@ -132,6 +133,7 @@ export function toViewState(state: StateFile, display: "main" | "secondary", now
     mode: screenMode(state.cards, display),
     cards: state.cards,
     agents: state.view.agents ?? {},
+    agentOrder: state.view.agent_order ?? [],
     limits: state.limits,
     nowMs,
     serviceOk: state.service_ok,

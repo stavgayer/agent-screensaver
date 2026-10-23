@@ -58,7 +58,7 @@ function createLimitRings(): ComponentExt {
   }
 
   function update(state: ViewState): void {
-    const ordered = orderLimits(state.limits);
+    const ordered = orderLimits(state.limits, state.agentOrder);
     // Rebuild only when something visible changed.
     const key = JSON.stringify(ordered.map((limit) => ringView(limit, state.nowMs)));
     if (key === lastKey) return;

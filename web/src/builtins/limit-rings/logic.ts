@@ -4,16 +4,17 @@ import { displayName, formatResetIn, formatResetLabel } from "../../format.ts";
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
-const SOURCE_ORDER = ["claude", "codex"];
 const WINDOW_ORDER: Limit["window"][] = ["5h", "week", "plan"];
 
-/** Known sources first in a fixed order, then the others by name. Windows: 5h, week, plan. */
-function sourceRank(source: string): number {
-  const known = SOURCE_ORDER.indexOf(source);
-  return known === -1 ? SOURCE_ORDER.length : known;
-}
-
-export function orderLimits(limits: Limit[]): Limit[] {
+/**
+ * The installed agents' sources first, in the service's order (built-ins first), then
+ * the others by name. Windows: 5h, week, plan.
+ */
+export function orderLimits(limits: Limit[], agentOrder: readonly string[]): Limit[] {
+  const sourceRank = (source: string): number => {
+    const known = agentOrder.indexOf(source);
+    return known === -1 ? agentOrder.length : known;
+  };
   return [...limits].sort(
     (a, b) =>
       sourceRank(a.source) - sourceRank(b.source) ||

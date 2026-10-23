@@ -62,7 +62,7 @@ func BuildMenu(f statefile.StateFile, cfg config.Config, nowMs int64) Model {
 	running := cardsOfKind(f.Cards, state.KindRunning)
 
 	items := []Item{text(summaryLine(len(waiting), len(running)))}
-	for _, reading := range orderLimits(f.Limits) {
+	for _, reading := range orderLimits(f.Limits, f.View.AgentOrder) {
 		items = append(items, text(limitLine(reading, nowMs)))
 	}
 	for _, card := range waiting {
@@ -182,27 +182,25 @@ func wholePercent(used float64) int {
 	return int(math.Min(100, math.Max(0, math.Round(used))))
 }
 
-// orderLimits puts claude first, then codex, then other sources by name; each
-// source lists 5h, week, plan. Same order as the limit rings.
-func orderLimits(limits []state.Limit) []state.Limit {
+// orderLimits lists the sources in the installed agents' order (built-ins
+// first), then other sources by name; each source lists 5h, week, plan. Same
+// order as the limit rings.
+func orderLimits(limits []state.Limit, agentOrder []string) []state.Limit {
+	rank := func(source string) int {
+		if index := slices.Index(agentOrder, source); index >= 0 {
+			return index
+		}
+		return len(agentOrder)
+	}
 	sorted := slices.Clone(limits)
 	slices.SortStableFunc(sorted, func(a, b state.Limit) int {
 		return cmp.Or(
-			cmp.Compare(sourceRank(a.Source), sourceRank(b.Source)),
+			cmp.Compare(rank(a.Source), rank(b.Source)),
 			cmp.Compare(a.Source, b.Source),
 			cmp.Compare(windowRank(a.Window), windowRank(b.Window)),
 		)
 	})
 	return sorted
-}
-
-var knownSources = []string{"claude", "codex"}
-
-func sourceRank(source string) int {
-	if rank := slices.Index(knownSources, source); rank >= 0 {
-		return rank
-	}
-	return len(knownSources)
 }
 
 var windowOrder = []event.Window{event.FiveHour, event.Week, event.Plan}

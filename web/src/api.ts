@@ -50,6 +50,8 @@ export interface ViewState {
   cards: Card[];
   /** The installed agents by card source. A card whose source is not here has no agent extension. */
   agents: Readonly<Record<string, AgentInfo>>;
+  /** The installed agents' sources, built-ins first: the order limits are shown in. */
+  agentOrder: readonly string[];
   limits: Limit[];
   nowMs: number;
   serviceOk: boolean;

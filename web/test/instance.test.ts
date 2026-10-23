@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { ViewState } from "../src/api.ts";
 import { createKeeper, type Instance } from "../src/instance.ts";
 
-const view: ViewState = { mode: "idle", cards: [], agents: {}, limits: [], nowMs: 0, serviceOk: true, display: "main" };
+const view: ViewState = { mode: "idle", cards: [], agents: {}, agentOrder: [], limits: [], nowMs: 0, serviceOk: true, display: "main" };
 
 function fakeItem(key: string, behaviour: { update?: () => void; stop?: () => void } = {}) {
   const calls = { removed: 0, stopped: 0, updated: 0 };
