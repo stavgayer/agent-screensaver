@@ -1,14 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"agent-screensaver/internal/cli"
 	"agent-screensaver/internal/install"
 	"agent-screensaver/internal/platform"
 )
@@ -92,24 +91,7 @@ func (s setup) uninstall(args []string) int {
 
 // confirm prints the plan and asks to proceed, unless yes is set.
 func (s setup) confirm(plan []install.PlannedStep, yes bool) bool {
-	fmt.Fprintln(s.stdout, "This will:")
-	for _, step := range plan {
-		if step.Warning {
-			fmt.Fprintf(s.stdout, "  ! WARNING: %s\n", step.Description)
-			continue
-		}
-		fmt.Fprintf(s.stdout, "  - %s\n", step.Description)
-	}
-	if yes {
-		return true
-	}
-	fmt.Fprint(s.stdout, "Proceed? [y/N] ")
-	answer, _ := bufio.NewReader(s.stdin).ReadString('\n')
-	if strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes") {
-		return true
-	}
-	fmt.Fprintln(s.stdout, "Cancelled. Nothing was changed.")
-	return false
+	return cli.Confirm(plan, yes, s.stdin, s.stdout)
 }
 
 // printInstalled tells what is left to do: the agents' own notes (for

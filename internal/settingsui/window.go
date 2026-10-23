@@ -15,6 +15,7 @@ import (
 
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
+	"agent-screensaver/internal/install"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 	"agent-screensaver/internal/settings"
@@ -37,6 +38,10 @@ type Service interface {
 	InstallExtension(path string) (extensions.Manifest, error)
 	RemoveExtension(id string) error
 	Notice(extID string) string
+	Connections(nowMs int64) ([]settings.Connection, error)
+	SetAgentOn(id string, on bool) error
+	PlanAgentHooks(id string, add bool) ([]install.PlannedStep, string, error)
+	ApplyAgentHooks(id string, add bool, hash string) error
 }
 
 // pickResult answers a call that shows a file dialog first.
@@ -112,7 +117,56 @@ func (b *bridge) methods() map[string]method {
 		}),
 		"notice": withParams(func(p struct{ Extension string }) (any, error) { return b.svc.Notice(p.Extension), nil }),
 		"state":  func(json.RawMessage) (any, error) { return b.state() },
+		// The Connections tab. The page sends agent ids, choices and the
+		// plan hash it showed, never a path or a command: those come from
+		// the manifest and the install record, in Go.
+		"connections": withParams(func(struct{}) (any, error) { return b.svc.Connections(b.now()) }),
+		"setAgentOn": withParams(func(p struct {
+			ID string
+			On bool
+		}) (any, error) {
+			return nil, b.svc.SetAgentOn(p.ID, p.On)
+		}),
+		"planAgentHooks": withParams(b.planAgentHooks),
+		"applyAgentHooks": withParams(func(p struct {
+			ID   string
+			Add  bool
+			Hash string
+		}) (any, error) {
+			return nil, b.svc.ApplyAgentHooks(p.ID, p.Add, p.Hash)
+		}),
 	}
+}
+
+// planResult is a hook plan as the page shows it: every line, the hash the
+// apply call must carry, and the lines that need the user's trust.
+type planResult struct {
+	Steps    []planLine `json:"steps"`
+	Hash     string     `json:"hash"`
+	Warnings []string   `json:"warnings"`
+}
+
+type planLine struct {
+	Text    string `json:"text"`
+	Warning bool   `json:"warning"`
+}
+
+func (b *bridge) planAgentHooks(p struct {
+	ID  string
+	Add bool
+}) (any, error) {
+	plan, hash, err := b.svc.PlanAgentHooks(p.ID, p.Add)
+	if err != nil {
+		return nil, err
+	}
+	result := planResult{Steps: make([]planLine, 0, len(plan)), Hash: hash, Warnings: []string{}}
+	for _, step := range plan {
+		result.Steps = append(result.Steps, planLine{Text: step.Description, Warning: step.Warning})
+	}
+	if p.Add {
+		result.Warnings = settings.TrustWarnings(plan)
+	}
+	return result, nil
 }
 
 type optionParams struct {

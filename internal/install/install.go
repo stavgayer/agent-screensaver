@@ -140,13 +140,7 @@ func PlanUninstall(home string) ([]PlannedStep, error) {
 	}
 	var steps []PlannedStep
 	for _, entry := range record.Agents {
-		if entry.File != "" {
-			path, _ := expandHome(home, entry.File)
-			steps = append(steps, PlannedStep{Name: "hooks-" + entry.Source, Description: "Remove our " + entry.Source + " hooks from " + path})
-		}
-		for _, file := range entry.Files {
-			steps = append(steps, PlannedStep{Name: "hooks-" + entry.Source, Description: "Remove our copied file " + file.Path})
-		}
+		steps = append(steps, PlanRemoveAgent(home, entry)...)
 	}
 	for _, label := range record.Services {
 		steps = append(steps, PlannedStep{Name: "service", Description: "Stop and remove the launch agent " + label})

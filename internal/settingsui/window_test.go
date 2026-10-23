@@ -11,6 +11,7 @@ import (
 
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
+	"agent-screensaver/internal/install"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 	"agent-screensaver/internal/settings"
@@ -78,6 +79,38 @@ func (f *fakeService) RemoveExtension(id string) error { return f.record("Remove
 func (f *fakeService) Notice(extID string) string {
 	_ = f.record("Notice " + extID)
 	return "notice for " + extID
+}
+
+func (f *fakeService) Connections(nowMs int64) ([]settings.Connection, error) {
+	clock := "now"
+	if nowMs <= 0 {
+		clock = "no clock"
+	}
+	return []settings.Connection{{ID: "builtin.claude", State: settings.StateIdle}}, f.record("Connections " + clock)
+}
+func (f *fakeService) SetAgentOn(id string, on bool) error {
+	return f.record("SetAgentOn " + id + " " + yesNo(on))
+}
+
+// fakePlan is the plan every PlanAgentHooks call returns: a header and one
+// converter warning.
+var fakePlan = []install.PlannedStep{
+	{Name: "hooks-acme", Description: "Add hooks for Acme (from acme.agent 1.0.0)", Warning: true},
+	{Name: "hooks-acme", Description: "acme.agent runs its own program bin/convert on each Acme event", Warning: true},
+}
+
+func (f *fakeService) PlanAgentHooks(id string, add bool) ([]install.PlannedStep, string, error) {
+	return fakePlan, "hash-1", f.record("PlanAgentHooks " + id + " " + addRemove(add))
+}
+func (f *fakeService) ApplyAgentHooks(id string, add bool, hash string) error {
+	return f.record("ApplyAgentHooks " + id + " " + addRemove(add) + " " + hash)
+}
+
+func addRemove(add bool) string {
+	if add {
+		return "add"
+	}
+	return "remove"
 }
 
 func yesNo(on bool) string {
@@ -169,6 +202,17 @@ func TestOpenCallsTheService(t *testing.T) {
 		{"install with the picker", "installExtension", `{}`, "/tmp/rain.zip", "InstallExtension /tmp/rain.zip", pickResult{Manifest: &extensions.Manifest{ID: "acme.rain"}}},
 		{"remove", "removeExtension", `{"id":"acme.rain"}`, "", "RemoveExtension acme.rain", nil},
 		{"notice", "notice", `{"extension":"builtin.aerials"}`, "", "Notice builtin.aerials", "notice for builtin.aerials"},
+		{"connections", "connections", `{}`, "", "Connections now", []settings.Connection{{ID: "builtin.claude", State: settings.StateIdle}}},
+		{"turn an agent off", "setAgentOn", `{"id":"builtin.codex","on":false}`, "", "SetAgentOn builtin.codex off", nil},
+		{"plan adding hooks", "planAgentHooks", `{"id":"acme.agent","add":true}`, "", "PlanAgentHooks acme.agent add", planResult{
+			Steps: []planLine{
+				{Text: "Add hooks for Acme (from acme.agent 1.0.0)", Warning: true},
+				{Text: "acme.agent runs its own program bin/convert on each Acme event", Warning: true},
+			},
+			Hash:     "hash-1",
+			Warnings: []string{"acme.agent runs its own program bin/convert on each Acme event"},
+		}},
+		{"apply removing hooks", "applyAgentHooks", `{"id":"builtin.cursor","add":false,"hash":"hash-1"}`, "", "ApplyAgentHooks builtin.cursor remove hash-1", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -346,5 +390,52 @@ func TestNoCallsWhileTheDialogIsOpen(t *testing.T) {
 	want := []string{"InstallExtension /tmp/rain.zip", "SetPrivacy on"} // calls work again once it closes
 	if !reflect.DeepEqual(service.changes(), want) {
 		t.Fatalf("changes = %q, want %q", service.changes(), want)
+	}
+}
+
+func TestBridgeAgentMethodsTakeIdsOnly(t *testing.T) {
+	tests := []struct{ method, params string }{
+		{"setAgentOn", `{"id":"builtin.codex","on":false,"path":"/Users/me/.ssh/config"}`},
+		{"planAgentHooks", `{"id":"builtin.cursor","add":true,"path":"/Users/me/.zshrc"}`},
+		{"applyAgentHooks", `{"id":"builtin.cursor","add":true,"hash":"hash-1","file":"/Users/me/.zshrc"}`},
+		{"applyAgentHooks", `{"id":"builtin.cursor","add":true,"hash":"hash-1","command":"rm -rf ~"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.params, func(t *testing.T) {
+			service := &fakeService{}
+			window := &fakeWindow{calls: []call{{tt.method, tt.params}}}
+			if err := Open(testPaths(t), service, &fakePicker{}, window); err != nil {
+				t.Fatal(err)
+			}
+			if window.errs[0] == nil || !strings.Contains(window.errs[0].Error(), "unknown field") {
+				t.Fatalf("error = %v, want the extra field refused", window.errs[0])
+			}
+			if len(service.calls) != 0 {
+				t.Fatalf("service calls = %q, want none: a path must have no effect", service.calls)
+			}
+		})
+	}
+}
+
+func TestBridgeRefusesWhilePicking(t *testing.T) {
+	for _, nested := range []call{
+		{"applyAgentHooks", `{"id":"builtin.cursor","add":true,"hash":"hash-1"}`},
+		{"setAgentOn", `{"id":"builtin.codex","on":false}`},
+		{"planAgentHooks", `{"id":"builtin.cursor","add":true}`},
+	} {
+		t.Run(nested.method, func(t *testing.T) {
+			service := &fakeService{}
+			window := &fakeWindow{calls: []call{{"installExtension", `{}`}}}
+			picker := &fakePicker{path: "/tmp/acme.zip", window: window, nested: &nested}
+			if err := Open(testPaths(t), service, picker, window); err != nil {
+				t.Fatal(err)
+			}
+			if picker.nestedErr == nil || !strings.Contains(picker.nestedErr.Error(), "file dialog is open") {
+				t.Fatalf("nested call error = %v, want a refusal", picker.nestedErr)
+			}
+			if want := []string{"InstallExtension /tmp/acme.zip"}; !reflect.DeepEqual(service.changes(), want) {
+				t.Fatalf("changes = %q, want %q", service.changes(), want)
+			}
+		})
 	}
 }

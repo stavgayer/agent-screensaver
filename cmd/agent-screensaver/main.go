@@ -29,7 +29,7 @@ import (
 // subcommands lists every subcommand, in the order shown in the usage text.
 var subcommands = []string{
 	"hook", "statusline", "daemon", "install", "uninstall", "theme",
-	"background", "option", "privacy", "sound", "fps", "ext", "tray", "settings",
+	"background", "option", "privacy", "sound", "fps", "ext", "agent", "tray", "settings",
 }
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -61,6 +61,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runTray(args[1:], stderr)
 	case "settings":
 		return runSettingsWindow(args[1:], stderr)
+	case "agent":
+		return runAgent(args[1:], os.Stdin, stdout, stderr)
 	}
 	if cli.IsSettingsCommand(name) {
 		return runSettings(name, args[1:], stdout, stderr)
@@ -116,6 +118,17 @@ func runSettings(name string, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return cli.Settings(name, args, stdout, stderr, paths.ForHome(home))
+}
+
+// runAgent runs an `agent` command (the CLI side of the Connections tab)
+// against the real home.
+func runAgent(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-screensaver agent: %v\n", err)
+		return 1
+	}
+	return cli.Agent(args, stdin, stdout, stderr, paths.ForHome(home), time.Now().UnixMilli())
 }
 
 // runDaemon runs the service until SIGINT or SIGTERM. It logs to stderr,
