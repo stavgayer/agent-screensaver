@@ -49,7 +49,7 @@ export interface RingView {
   center: string;
   /** First caption line, for example "Claude 5h". */
   name: string;
-  /** Second caption line: the reset time ("4h 12m", "Mon 09:00", "Reset"), the age when stale, and "est." for an estimate. Empty when the reset time is unknown and there is nothing else to add. */
+  /** Second caption line: the reset time ("4h 12m", "Mon 09:00", "1 Nov 02:00", "Reset"), the age when stale, and "est." for an estimate. Empty when the reset time is unknown and there is nothing else to add. */
   detail: string;
 }
 
@@ -57,8 +57,8 @@ export interface RingView {
  * What one ring shows. A reading taken before its window reset says nothing about
  * the new window, so its percent is never shown as current: the ring is empty and
  * its caption says "Reset" until a newer reading comes. Every other ring says when
- * it resets: a countdown to the minute, or the day and time when it is more than
- * 24 hours away. `offsetAt` gives the local UTC offset at an instant.
+ * it resets: a countdown to the minute within 24 hours, the day and time within 6
+ * days, else the date (see formatResetLabel). `offsetAt` gives the local UTC offset at an instant.
  */
 export function ringView(limit: Limit, nowMs: number, offsetAt: (atMs: number) => number = localUtcOffsetMinutes): RingView {
   const name = `${displayName(limit.source)} ${limit.window}`;
@@ -66,11 +66,13 @@ export function ringView(limit: Limit, nowMs: number, offsetAt: (atMs: number) =
     return { look: "reset", percent: 0, center: "0%", name, detail: formatCountdown(0) };
   }
   const percent = ringPercent(limit.used_percent);
-  const details = [formatResetLabel(limit.resets_at, nowMs, offsetAt)];
   const ageMs = nowMs - limit.updated_at_ms;
   const stale = ageMs > STALE_AFTER_MS[limit.window];
-  if (stale) details.push(`${shortAge(ageMs)} ago`);
-  if (limit.estimated === true) details.push(ESTIMATE_MARK);
+  const more: string[] = [];
+  if (stale) more.push(`${shortAge(ageMs)} ago`);
+  if (limit.estimated === true) more.push(ESTIMATE_MARK);
+  // A far date drops its time when more follows, so the caption stays short.
+  const details = [formatResetLabel(limit.resets_at, nowMs, offsetAt, { short: more.length > 0 }), ...more];
   return { look: stale ? "stale" : "fresh", percent, center: `${percent}%`, name, detail: details.filter((part) => part !== "").join(" · ") };
 }
 

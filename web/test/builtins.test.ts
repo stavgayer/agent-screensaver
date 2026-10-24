@@ -231,8 +231,12 @@ describe("ringCaption", () => {
     assert.equal(caption(limit("claude", "week")), "Claude week");
   });
 
-  it("a plan ring far from its reset shows the day and time", () => {
-    assert.equal(caption(limit("codex", "plan", { resets_at: inS(13 * DAY_MS) })), "Codex plan · Sat 17:46");
+  it("a plan ring up to 6 days from its reset shows the day and time", () => {
+    assert.equal(caption(limit("codex", "plan", { resets_at: inS(6 * DAY_MS) })), "Codex plan · Sat 17:46");
+  });
+
+  it("a plan ring more than 6 days from its reset shows the date, so it is not read as this week", () => {
+    assert.equal(caption(limit("codex", "plan", { resets_at: inS(13 * DAY_MS) })), "Codex plan · 9 May 17:46");
   });
 
   it("a plan ring within a day shows the countdown", () => {
@@ -246,7 +250,7 @@ describe("ringCaption", () => {
 
   it("the day and time follow the offset passed in", () => {
     const plus3 = (): number => 180;
-    assert.equal(ringCaption(limit("codex", "plan", { resets_at: inS(13 * DAY_MS) }), NOW_MS, plus3), "Codex plan · Sat 20:46");
+    assert.equal(ringCaption(limit("codex", "plan", { resets_at: inS(13 * DAY_MS) }), NOW_MS, plus3), "Codex plan · 9 May 20:46");
   });
 });
 
@@ -289,6 +293,12 @@ describe("ringView", () => {
       { look: "fresh", percent: 61, center: "61%", name: "Claude week", detail: "est." }],
     ["an old estimate is stale too", limit("claude", "5h", { updated_at_ms: NOW_MS - 31 * MINUTE_MS, estimated: true }),
       { look: "stale", percent: 10, center: "10%", name: "Claude 5h", detail: "31m ago · est." }],
+    ["a far reset with more to say leaves the time out", limit("codex", "plan", { used_percent: 19, resets_at: inS(8 * DAY_MS), estimated: true }),
+      { look: "fresh", percent: 19, center: "19%", name: "Codex plan", detail: "4 May · est." }],
+    ["a far reset of a stale reading leaves the time out", limit("codex", "plan", { resets_at: inS(8 * DAY_MS), updated_at_ms: NOW_MS - 7 * HOUR_MS }),
+      { look: "stale", percent: 10, center: "10%", name: "Codex plan", detail: "4 May · 7h ago" }],
+    ["a near reset with more to say keeps the day and time", limit("claude", "week", { resets_at: inS(2 * DAY_MS), estimated: true }),
+      { look: "fresh", percent: 10, center: "10%", name: "Claude week", detail: "Tue 17:46 · est." }],
     ["under a minute to the reset", limit("claude", "5h", { resets_at: inS(20_000) }),
       { look: "fresh", percent: 10, center: "10%", name: "Claude 5h", detail: "under 1m" }],
   ];

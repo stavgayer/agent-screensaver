@@ -52,20 +52,37 @@ export function formatDayTime(atMs: number, utcOffsetMinutes: number): string {
   return `${WEEKDAYS[shifted.getUTCDay()].slice(0, 3)} ${pad2(shifted.getUTCHours())}:${pad2(shifted.getUTCMinutes())}`;
 }
 
+/** English day and short month, "1 Nov", at a given UTC offset. Built by hand, like formatDayTime. */
+export function formatDayMonth(atMs: number, utcOffsetMinutes: number): string {
+  const shifted = new Date(atMs + utcOffsetMinutes * MS_PER_MINUTE);
+  return `${shifted.getUTCDate()} ${MONTHS[shifted.getUTCMonth()].slice(0, 3)}`;
+}
+
+/** A weekday names one day only within the coming week; further away it would read as this week. */
+const WEEKDAY_WITHIN_MS = 6 * MS_PER_DAY;
+
 /**
- * Reset label for a ring. Within 24 hours, or at 24 hours exactly, it is the countdown.
- * Further away it is the day and time in local time. `resetsAtS` is in seconds;
- * `offsetAt` gives the local UTC offset at the reset instant.
+ * Reset label for a ring, in local time. Within 24 hours (24 hours exactly included)
+ * it is the countdown, within 6 days the weekday and time ("Mon 09:00"), further away
+ * the date and time ("1 Nov 02:00"), or the date only ("1 Nov") when `short` is set
+ * because the caption has more to say. `resetsAtS` is in seconds; `offsetAt` gives
+ * the local UTC offset at the reset instant.
  */
 export function formatResetLabel(
   resetsAtS: number | undefined,
   nowMs: number,
   offsetAt: (atMs: number) => number = localUtcOffsetMinutes,
+  { short = false }: { short?: boolean } = {},
 ): string {
   if (resetsAtS === undefined) return "";
   const resetsAtMs = resetsAtS * 1000;
   const remainingMs = resetsAtMs - nowMs;
-  return remainingMs > MS_PER_DAY ? formatDayTime(resetsAtMs, offsetAt(resetsAtMs)) : formatCountdown(remainingMs);
+  if (remainingMs <= MS_PER_DAY) return formatCountdown(remainingMs);
+  const offset = offsetAt(resetsAtMs);
+  const dayTime = formatDayTime(resetsAtMs, offset);
+  if (remainingMs <= WEEKDAY_WITHIN_MS) return dayTime;
+  const date = formatDayMonth(resetsAtMs, offset);
+  return short ? date : `${date} ${dayTime.slice(4)}`;
 }
 
 export function ringLevel(pct: number): "ok" | "warn" | "high" {

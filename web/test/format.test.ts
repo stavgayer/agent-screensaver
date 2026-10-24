@@ -6,6 +6,7 @@ import {
   formatDuration,
   formatCountdown,
   formatDayTime,
+  formatDayMonth,
   formatResetLabel,
   ringLevel,
 } from "../src/format.ts";
@@ -77,11 +78,29 @@ describe("formatResetLabel", () => {
     ["exactly 24 hours is still a countdown", inS(DAY_MS), "24h 0m"],
     ["a second past 24 hours is a day and time", inS(DAY_MS + 1_000), "Sat 07:00"],
     ["days away is a day and time", inS(3 * DAY_MS + 2 * HOUR_MS), "Mon 09:00"],
+    ["exactly 6 days away is still a day and time", inS(6 * DAY_MS), "Thu 07:00"],
+    // A weekday a week or more away reads as this week: Codex showed "Sun 02:00" for a reset 8 days away.
+    ["more than 6 days away is the date and time", inS(6 * DAY_MS + MINUTE_MS), "29 Oct 07:01"],
+    ["8 days away is the date and time", Date.UTC(2026, 9, 31, 23, 0) / 1000, "31 Oct 23:00"],
     ["due is Reset", inS(0), "Reset"],
   ];
   for (const [name, resetsAtS, want] of cases) {
     it(name, () => assert.equal(formatResetLabel(resetsAtS, nowMs, utc), want));
   }
+
+  it("a far date leaves the time out when the caption has no room", () => {
+    assert.equal(formatResetLabel(Date.UTC(2026, 10, 1, 0, 0) / 1000, nowMs, utc, { short: true }), "1 Nov");
+  });
+
+  it("a near reset is the same with or without room", () => {
+    assert.equal(formatResetLabel(inS(3 * DAY_MS + 2 * HOUR_MS), nowMs, utc, { short: true }), "Mon 09:00");
+    assert.equal(formatResetLabel(inS(4 * HOUR_MS), nowMs, utc, { short: true }), "4h 0m");
+  });
+
+  it("the date follows the offset of the reset instant", () => {
+    // 31 Oct 23:00 UTC is 1 Nov 02:00 three hours east of UTC.
+    assert.equal(formatResetLabel(Date.UTC(2026, 9, 31, 23, 0) / 1000, nowMs, () => 180), "1 Nov 02:00");
+  });
 
   it("uses the UTC offset of the reset instant, not of now (the clocks change in between)", () => {
     // The clocks go back one hour at changeMs: now is on summer time, the reset is after the change.
@@ -90,6 +109,18 @@ describe("formatResetLabel", () => {
     const resetsAtMs = Date.UTC(2026, 9, 26, 7, 0);
     assert.equal(formatResetLabel(resetsAtMs / 1000, nowMs, offsetAt), "Mon 09:00");
   });
+});
+
+describe("formatDayMonth", () => {
+  const cases: Array<[string, number, number, string]> = [
+    ["utc", Date.UTC(2026, 10, 1, 9, 0), 0, "1 Nov"],
+    ["two-digit day", Date.UTC(2026, 11, 25, 9, 0), 0, "25 Dec"],
+    ["east of utc can move to the next day and month", Date.UTC(2026, 9, 31, 23, 0), 180, "1 Nov"],
+    ["west of utc can move to the day before", Date.UTC(2027, 0, 1, 2, 0), -300, "31 Dec"],
+  ];
+  for (const [name, atMs, offset, want] of cases) {
+    it(name, () => assert.equal(formatDayMonth(atMs, offset), want));
+  }
 });
 
 describe("ringLevel", () => {
