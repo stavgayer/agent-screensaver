@@ -24,7 +24,7 @@ const testMark = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><c
 const cursorLike = `{
   "event": {"arg": "event"},
   "session": "conversation_id",
-  "reply": {"default": "empty_object", "events": {"beforeShellExecution": "ask"}},
+  "reply": {"default": "none", "events": {"beforeShellExecution": "empty_object"}},
   "rules": [
     {"on": "beforeShellExecution", "kind": "approval", "set": {"title": {"path": "command", "as": "short_title"}}},
     {"on": "stop", "kind": "finished"}
@@ -138,21 +138,19 @@ func TestReply(t *testing.T) {
 	}{
 		{name: "reply none prints nothing", hooks: `{"event":"e","session":"id","rules":[{"kind":"finished"}]}`,
 			payload: `{"e":"stop","id":"s1"}`, wantOutput: "", wantEvents: 1},
-		{name: "empty_object prints {}", hooks: cursorLike, payload: `{"conversation_id":"s1"}`,
-			args: []string{"--event", "stop"}, wantOutput: "{}\n", wantEvents: 1},
-		{name: "per-event ask prints ask for that event", hooks: cursorLike,
+		{name: "per-event empty_object prints {} for that event", hooks: cursorLike,
 			payload: `{"conversation_id":"s1","command":"rm -rf build"}`, args: []string{"--event", "beforeShellExecution"},
-			wantOutput: `{"permission":"ask"}` + "\n", wantEvents: 1},
+			wantOutput: "{}\n", wantEvents: 1},
 		{name: "the default for an event without its own reply", hooks: cursorLike, payload: `{"conversation_id":"s1"}`,
-			args: []string{"--event", "afterShellExecution"}, wantOutput: "{}\n"},
+			args: []string{"--event", "stop"}, wantOutput: "", wantEvents: 1},
 		{name: "reply comes from --event even when the payload is invalid JSON", hooks: cursorLike, payload: `{oops`,
-			args: []string{"--event", "beforeShellExecution"}, wantOutput: `{"permission":"ask"}` + "\n"},
+			args: []string{"--event", "beforeShellExecution"}, wantOutput: "{}\n"},
 		{name: "reply printed when the agent is off", hooks: cursorLike, off: true,
 			payload: `{"conversation_id":"s1"}`, args: []string{"--event", "beforeShellExecution"},
-			wantOutput: `{"permission":"ask"}` + "\n"},
+			wantOutput: "{}\n"},
 		{name: "reply printed when the converter times out", script: sleeper,
-			hooks:   `{"event":{"arg":"event"},"reply":{"default":"ask"},"converter":{"run":"bin/convert","timeout_ms":100}}`,
-			payload: `{}`, args: []string{"--event", "x"}, wantOutput: `{"permission":"ask"}` + "\n"},
+			hooks:   `{"event":{"arg":"event"},"reply":{"default":"empty_object"},"converter":{"run":"bin/convert","timeout_ms":100}}`,
+			payload: `{}`, args: []string{"--event", "x"}, wantOutput: "{}\n"},
 		// Cursor waits for the user when any hook says ask, so ours says nothing.
 		{name: "cursor beforeShellExecution prints nothing", builtin: "builtin.cursor",
 			payload: `{"conversation_id":"c1","hook_event_name":"beforeShellExecution","command":"npm run migrate"}`,
@@ -206,7 +204,8 @@ func TestHookReplyWhenTheManifestCannotBeRead(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"ask from the command", []string{"--event", "beforeShellExecution", "--reply", "ask"}, `{"permission":"ask"}` + "\n"},
+		// Older installs wrote --reply ask; the engine no longer answers ask.
+		{"an old ask from the command prints nothing", []string{"--event", "beforeShellExecution", "--reply", "ask"}, ""},
 		{"empty_object from the command", []string{"--reply", "empty_object"}, "{}\n"},
 		{"no reply in the command prints nothing", nil, ""},
 		{"a reply that is not one of ours prints nothing", []string{"--reply", "allow"}, ""},

@@ -28,7 +28,7 @@ func hookCommand(bin, source, eventArg, reply string) string {
 		command += " --event " + eventArg // CheckRecipe allows only safe event names
 	}
 	if reply != "" && reply != agents.ReplyNone {
-		command += " --reply " + reply // one of the three fixed reply names
+		command += " --reply " + reply // one of the fixed reply names
 	}
 	return command
 }
@@ -89,7 +89,8 @@ func newWorkspace(home, recordBin string) *workspace {
 // ownCommand matches the commands install writes: the hook command with an
 // optional --event and --reply, and the status line command with an optional
 // --tool. A record that lists anything else (an edited record) cannot make
-// uninstall remove a command of the user's.
+// uninstall remove a command of the user's. "--reply ask" is no longer
+// written, but uninstall still knows it so older installs come out clean.
 func ownCommand(bin, source, command string) bool {
 	quoted := regexp.QuoteMeta(shellQuote(bin))
 	hook := `^` + quoted + ` hook --tool ` + regexp.QuoteMeta(source) +

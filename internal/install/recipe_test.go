@@ -92,21 +92,52 @@ func TestEventWithReplyGetsEventArg(t *testing.T) {
 	// The built-in Cursor agent has no reply of its own any more; the engine
 	// still supports one.
 	agent := cursorAgent(t)
-	agent.Hooks.Reply = agents.Reply{Events: map[string]string{"beforeShellExecution": agents.ReplyAsk}}
+	agent.Hooks.Reply = agents.Reply{Events: map[string]string{"beforeShellExecution": agents.ReplyEmptyObject}}
 	addAgent(t, home, agent, &rec)
 
 	file := readJSON(t, cursorPath(home))
-	ask := shellQuote(testBin) + " hook --tool cursor --event beforeShellExecution --reply ask"
+	withReply := shellQuote(testBin) + " hook --tool cursor --event beforeShellExecution --reply empty_object"
 	plain := shellQuote(testBin) + " hook --tool cursor"
-	if got := flatCommands(t, file, "beforeShellExecution"); !slices.Equal(got, []string{ask}) {
-		t.Errorf("beforeShellExecution = %v, want [%s]", got, ask)
+	if got := flatCommands(t, file, "beforeShellExecution"); !slices.Equal(got, []string{withReply}) {
+		t.Errorf("beforeShellExecution = %v, want [%s]", got, withReply)
 	}
 	if got := flatCommands(t, file, "stop"); !slices.Equal(got, []string{plain}) {
 		t.Errorf("stop = %v, want [%s]", got, plain)
 	}
 	entry, _ := rec.agentRecord("builtin.cursor")
-	if !slices.Contains(entry.Commands, ask) || !slices.Contains(entry.Commands, plain) {
+	if !slices.Contains(entry.Commands, withReply) || !slices.Contains(entry.Commands, plain) {
 		t.Errorf("record commands = %v", entry.Commands)
+	}
+}
+
+// Older installs answered Cursor's permission hooks with --reply ask. The
+// engine no longer writes it, but uninstall must still take it out.
+func TestUninstallRemovesOldReplyAskCommand(t *testing.T) {
+	home := t.TempDir()
+	rec := Record{Version: RecordVersion}
+	agent := cursorAgent(t)
+	addAgent(t, home, agent, &rec)
+	plain := shellQuote(testBin) + " hook --tool cursor"
+	old := plain + " --event beforeShellExecution --reply ask"
+	data := mustRead(t, cursorPath(home))
+	at := bytes.Index(data, []byte(`"beforeShellExecution"`))
+	if at < 0 {
+		t.Fatalf("install wrote no beforeShellExecution:\n%s", data)
+	}
+	edited := append(slices.Clone(data[:at]), bytes.Replace(data[at:], []byte(jsonEscaped(plain)+`"`), []byte(jsonEscaped(old)+`"`), 1)...)
+	writeFile(t, cursorPath(home), edited)
+	for index := range rec.Agents {
+		if rec.Agents[index].ID == agent.ID {
+			rec.Agents[index].Commands = append(rec.Agents[index].Commands, old)
+		}
+	}
+
+	if err := RemoveAgentHooks(home, agent, &rec); err != nil {
+		t.Fatal(err)
+	}
+
+	if after, err := os.ReadFile(cursorPath(home)); err == nil && bytes.Contains(after, []byte("hook --tool cursor")) {
+		t.Errorf("an old command is left:\n%s", after)
 	}
 }
 

@@ -112,9 +112,8 @@ Some tools read our hook's answer. `reply` says what our hook prints. It is one 
 |---|---|
 | `none` | Nothing. This is the default. |
 | `empty_object` | `{}` |
-| `ask` | `{"permission":"ask"}`: let the tool ask the user, as it would without us. |
 
-No other value is accepted. A manifest can never make our hook allow or deny an action. Our hook prints the reply first, before it reads the payload. It also prints it when the payload is invalid, when the agent is off, and when a converter fails. An event with a reply of its own gets `--event <name>` in its command, so the reply never depends on the payload.
+No other value is accepted. A manifest can never make our hook answer a tool's permission question: not allow, not deny, and not ask. (An earlier `ask` reply was removed: Cursor 3.27 obeyed it and waited for an approval the user had never asked for. See decision 0006.) Commands written by an older install can still carry `--reply ask`; our hook prints nothing for it. Our hook prints the reply first, before it reads the payload. It also prints it when the payload is invalid, when the agent is off, and when a converter fails. An event with a reply of its own gets `--event <name>` in its command, so the reply never depends on the payload.
 
 ## Converter programs
 

@@ -152,8 +152,12 @@ func TestValidateAgentManifest(t *testing.T) {
 		{name: "reply of any other value", builtin: "builtin.claude", mutate: func(agent map[string]any) {
 			object(agent, "hooks")["reply"] = map[string]any{"default": `{"permission":"allow"}`}
 		}, wantErr: "reply"},
-		{name: "reply ask is allowed", builtin: "builtin.claude", mutate: func(agent map[string]any) {
+		{name: "reply ask", builtin: "builtin.claude", mutate: func(agent map[string]any) {
 			object(agent, "hooks")["reply"] = map[string]any{"default": "empty_object", "events": map[string]any{"PermissionRequest": "ask"}}
+		}, wantErr: "reply"},
+		{name: "default reply ask", builtin: "builtin.claude", mutate: func(agent map[string]any) { object(agent, "hooks")["reply"] = "ask" }, wantErr: "reply"},
+		{name: "per-event empty_object is allowed", builtin: "builtin.claude", mutate: func(agent map[string]any) {
+			object(agent, "hooks")["reply"] = map[string]any{"default": "none", "events": map[string]any{"PermissionRequest": "empty_object"}}
 		}},
 		{name: "on in a status line rule", builtin: "builtin.claude", mutate: func(agent map[string]any) {
 			list(object(agent, "statusline"), "rules")[0].(map[string]any)["on"] = "x"

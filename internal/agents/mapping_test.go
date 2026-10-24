@@ -246,7 +246,7 @@ func TestStatuslineMapping(t *testing.T) {
 }
 
 func TestReplyText(t *testing.T) {
-	reply := Reply{Default: ReplyEmptyObject, Events: map[string]string{"beforeShellExecution": ReplyAsk}}
+	reply := Reply{Default: ReplyNone, Events: map[string]string{"beforeShellExecution": ReplyEmptyObject}}
 	tests := []struct {
 		name     string
 		reply    Reply
@@ -255,8 +255,8 @@ func TestReplyText(t *testing.T) {
 	}{
 		{"none prints nothing", Reply{}, "", ""},
 		{"empty_object prints {}", Reply{Default: ReplyEmptyObject}, "", "{}\n"},
-		{"per-event ask for that event", reply, "beforeShellExecution", `{"permission":"ask"}` + "\n"},
-		{"the default for other events", reply, "stop", "{}\n"},
+		{"per-event empty_object for that event", reply, "beforeShellExecution", "{}\n"},
+		{"the default for other events", reply, "stop", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -270,6 +270,11 @@ func TestReplyText(t *testing.T) {
 	}
 	if strings.Contains(reply.Text("x"), "allow") {
 		t.Error("a reply allowed an action")
+	}
+	for _, old := range []string{"ask", "allow", "deny"} {
+		if text, valid := ReplyText(old); valid || text != "" {
+			t.Errorf("ReplyText(%q) = %q, %v; want nothing and invalid", old, text, valid)
+		}
 	}
 }
 

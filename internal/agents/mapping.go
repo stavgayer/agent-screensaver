@@ -583,18 +583,18 @@ func (s *eventSource) UnmarshalJSON(data []byte) error {
 }
 
 // The replies our hook may print. Nothing else is accepted, so a manifest
-// can never make our hook allow or deny an action.
+// can never make our hook answer a tool's permission question: not allow,
+// not deny, and not ask (Cursor 3.27 obeyed an "ask" and waited for an
+// approval the user had never asked for, decision 0006).
 const (
 	ReplyNone        = "none"
 	ReplyEmptyObject = "empty_object"
-	ReplyAsk         = "ask"
 )
 
 var replyText = map[string]string{
 	"":               "",
 	ReplyNone:        "",
 	ReplyEmptyObject: "{}\n",
-	ReplyAsk:         `{"permission":"ask"}` + "\n",
 }
 
 // Reply is what our hook prints on stdout: Default for every event, or the
@@ -615,18 +615,18 @@ func (r *Reply) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("reply: %w", err)
 	}
 	if r.Default != "" && !validReply(r.Default) {
-		return fmt.Errorf("reply %q is not one of none, empty_object, ask", r.Default)
+		return fmt.Errorf("reply %q is not one of none, empty_object", r.Default)
 	}
 	for eventName, reply := range r.Events {
 		if !validReply(reply) {
-			return fmt.Errorf("reply %q of %s is not one of none, empty_object, ask", reply, eventName)
+			return fmt.Errorf("reply %q of %s is not one of none, empty_object", reply, eventName)
 		}
 	}
 	return nil
 }
 
 func validReply(reply string) bool {
-	return reply == ReplyNone || reply == ReplyEmptyObject || reply == ReplyAsk
+	return reply == ReplyNone || reply == ReplyEmptyObject
 }
 
 // Text is what our hook prints for an event named by --event ("" when the
@@ -647,7 +647,8 @@ func (r Reply) For(eventName string) string {
 }
 
 // ReplyText is what our hook prints for a reply name. It reports false for
-// a name that is not a reply, so a broken value prints nothing.
+// a name that is not a reply, so a broken value prints nothing. That covers
+// "ask" from commands written by older installs.
 func ReplyText(reply string) (string, bool) {
 	if reply != "" && !validReply(reply) {
 		return "", false

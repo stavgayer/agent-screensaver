@@ -109,7 +109,7 @@ Some tools read what our hook prints. `reply` says what it prints:
 "reply": { "events": { "before_tool": "empty_object" } }
 ```
 
-The only replies are `none` (default), `empty_object` (`{}`) and `ask` (`{"permission":"ask"}`, which lets the tool ask the user as it would without us). A manifest can never make our hook allow or deny an action. Any other value is refused when you install.
+The only replies are `none` (default) and `empty_object` (`{}`). A manifest can never make our hook answer a permission question: not allow, not deny, and not ask. A tool that reads an "ask" answer can obey it and stop to wait for the user, even when the user set it to run without asking. Any other value is refused when you install.
 
 ## 6. Write the install recipe
 
@@ -241,7 +241,7 @@ A converter is code you ask the user to trust. The plan shows a warning line for
 | A source another agent already uses | `agent source "quill" is already used by ...` |
 | A mark with a script, a link or a `url(` | `mark holds a <script> element` |
 | An unknown field | `agent.hooks: json: unknown field "rulez"` |
-| A reply that is not `none`, `empty_object` or `ask` | `reply "allow" is not one of ...` |
+| A reply that is not `none` or `empty_object` (for example `allow`, `deny` or `ask`) | `reply "ask" is not one of ...` |
 | A hook file format that is not `json` | `toml is not supported yet` |
 
 The rules exist so that an agent extension can never block your tool, edit your shell, or read your keys. They are the same for the built-in agents.

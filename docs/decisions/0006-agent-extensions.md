@@ -64,7 +64,7 @@ The full rules are in spec §7d "Safety rules for recipes". In short:
 
 - **The command is ours.** A manifest never sets the command a tool runs. The engine always writes `'<bin>' hook --tool <source>`. So a manifest alone cannot make a tool run a stranger's program.
 - **Writes are narrow.** Only our handler inside `hooks.<event>` of the declared file, the `new_file` keys when we create the file, the declared status line key, and declared plugin files that do not exist yet. Only under the user's home, never in a deny list (shell start files, `~/.ssh`, LaunchAgents, our data dir and others), and the hook file must be `.json`.
-- **No decisions for the user.** Our hook prints only a fixed reply from the manifest: nothing, `{}`, or `{"permission": "ask"}`. The engine refuses any other reply, so our hook never allows or denies a tool action. It prints the reply first, also on errors. Handler keys that could make our hook block a tool (`failClosed`) are refused.
+- **No decisions for the user.** Our hook prints only a fixed reply from the manifest: nothing or `{}`. The engine refuses any other reply, so our hook never allows, denies or asks for a tool action (see the last addendum). It prints the reply first, also on errors. Handler keys that could make our hook block a tool (`failClosed`) are refused.
 - **The user sees everything first.** A converter or a plugin file from an outside extension is allowed only after a clear warning in the plan and the user's explicit confirmation.
 - **The plan is the contract.** Install shows a plan: each file, event, command, copied file and converter, and whether it is built in or from outside. Nothing is written before the user confirms, in the CLI or in the settings window.
 - **Exact removal.** A version 2 install record lists what was written per agent, with hashes of copied files. Uninstall removes only that.
@@ -104,3 +104,9 @@ The live test (Task 6.5, Cursor 3.26.16, "Run Everything" mode) showed that Curs
 ## Addendum (2026-10-24, later): Cursor gets no reply
 
 Cursor 3.27.12 does honor our "ask" in "Run Everything" mode. Its hooks log showed `beforeShellExecution` answered `{"permission": "ask"}` by our hook, then no step for 49 minutes, while the card said "Working" and the owner thought the chat was done. As this decision planned, the "ask" goes: `builtin.cursor` has no `reply`, so our hook prints nothing to Cursor (its log shows "produced no output" as normal for every other step), and Cursor decides alone. The two events stay `tool_intent`. Commands written by an older install still carry `--reply ask`; that flag is used only when the manifest cannot be read, and the next install of Cursor writes the commands without it.
+
+## Addendum (2026-10-24, owner decision): the engine has no "ask" reply
+
+The engine now allows only the replies `none` and `empty_object`. A manifest with `ask` (or `allow`, `deny`, or any other value) is refused when it is checked. Why: Cursor 3.27 obeys an "ask" answer and waits for the user, also in "Run Everything" mode, where the user chose to never be asked. So "ask" does not mean "as it would without us": it is our hook deciding for the user, which the safety rules forbid. No built-in used it any more, and an outside author who followed the old guide could make their users' tools stop and wait without anyone noticing.
+
+Old installs stay safe. Uninstall still knows commands that carry `--reply ask` and removes them. Our hook still accepts the flag and prints nothing for it.
