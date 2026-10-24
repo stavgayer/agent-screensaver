@@ -1,9 +1,9 @@
 package agents
 
 import (
-	"slices"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
