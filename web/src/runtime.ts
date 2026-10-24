@@ -4,6 +4,7 @@ import { createFrameScheduler, requestedFps, type FrameScheduler } from "./frame
 import { createKeeper, type Instance } from "./instance.ts";
 import { screenMode } from "./mode.ts";
 import { setLockUI } from "./overlay.ts";
+import { startMinuteTick } from "./tick.ts";
 import {
   backgroundSignature,
   cssVariables,
@@ -18,8 +19,6 @@ import {
 } from "./plan.ts";
 
 const SERVICE_LINE_CHECK_MS = 10_000;
-/** Components get a new `nowMs` every minute, so countdowns move between state writes. */
-const CLOCK_TICK_MS = 60_000;
 const MOVE_DURATION_MS = 400;
 const BACKGROUND_KEY = "background";
 
@@ -264,7 +263,12 @@ window.agentScreensaver = Object.freeze({
 
 // The daemon rewrites state every 30 s; a stopped one must show the line without a new setState.
 setInterval(refreshServiceLine, SERVICE_LINE_CHECK_MS);
-// Countdowns show whole minutes: one update a minute keeps them true with no per-frame work.
-setInterval(() => {
-  queue = queue.then(tickClock).catch((err) => logFailure("tickClock", err));
-}, CLOCK_TICK_MS);
+// Countdowns show whole minutes: one update on each minute of the clock keeps
+// them true, and between state writes, with no per-frame work.
+startMinuteTick(
+  () => {
+    queue = queue.then(tickClock).catch((err) => logFailure("tickClock", err));
+  },
+  Date.now,
+  (callback, delayMs) => setTimeout(callback, delayMs),
+);

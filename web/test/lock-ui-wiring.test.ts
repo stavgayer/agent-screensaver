@@ -6,6 +6,7 @@ import { LOCK_UI_CLASS } from "../src/overlay.ts";
 /** Loads the real runtime with just enough of a page for its top-level code. */
 async function loadRuntime() {
   const intervalDelays: number[] = [];
+  const timeouts: { callback: () => void; delayMs: number }[] = [];
   const classes = new Set<string>();
   const documentElement = {
     classList: {
@@ -18,25 +19,42 @@ async function loadRuntime() {
   };
   const globals = globalThis as Record<string, unknown>;
   const realSetInterval = globals.setInterval;
+  const realSetTimeout = globals.setTimeout;
   globals.window = globals;
   globals.document = { documentElement };
   globals.setInterval = (_callback: unknown, delayMs: number) => {
     intervalDelays.push(delayMs); // the timers must not keep the test alive
     return 0;
   };
+  globals.setTimeout = (callback: () => void, delayMs: number) => {
+    timeouts.push({ callback, delayMs }); // kept, not run, so the test controls time
+    return 0;
+  };
   try {
     await import("../src/runtime.ts");
   } finally {
     globals.setInterval = realSetInterval;
+    globals.setTimeout = realSetTimeout;
   }
   const api = (globals.window as { agentScreensaver: { setLockUI(shown: unknown): void } }).agentScreensaver;
-  return { api, classes, intervalDelays };
+  return { api, classes, intervalDelays, timeouts };
 }
 
 describe("minute tick", () => {
-  it("runtime_updates_components_every_minute_for_countdowns", async () => {
-    const { intervalDelays } = await loadRuntime();
-    assert.ok(intervalDelays.includes(60_000), `intervals: ${intervalDelays.join(", ")}`);
+  it("runtime_updates_components_on_each_minute_for_countdowns", async () => {
+    const { timeouts } = await loadRuntime();
+    assert.equal(timeouts.length, 1, "one minute timer");
+    assert.ok(timeouts[0].delayMs > 0 && timeouts[0].delayMs <= 61_000, `delay ${timeouts[0].delayMs}`);
+    // Firing it runs the tick (with no state yet it only waits) and sets the next one.
+    const realSetTimeout = globalThis.setTimeout;
+    const next: number[] = [];
+    (globalThis as Record<string, unknown>).setTimeout = (_callback: unknown, delayMs: number) => next.push(delayMs);
+    try {
+      timeouts[0].callback();
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    assert.equal(next.length, 1, "the next minute timer");
   });
 });
 
