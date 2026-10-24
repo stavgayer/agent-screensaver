@@ -1,0 +1,29 @@
+# Known limits
+
+These are the limits of version 1 that you can see or that change how you use it. Each one is known and was left as it is on purpose, or for a later version.
+
+## Agents and hooks
+
+- **Reinstalling an outside agent does not ask again.** When you install a new version of an agent extension that you did not get with agent-screensaver, its new converter program or plugin files take the place of the old ones, and its hooks stay. The first install asks you to confirm; an upgrade does not. Read what changed before you install a new version.
+- **Edited settings files get two-space indents.** When agent-screensaver adds or removes its hooks in a file such as `~/.claude/settings.json`, it writes the file back with two spaces per level. The keys, their order and every value it did not touch stay the same. Uninstall gives the file back with the same content, in the same two-space layout.
+- **A converter can time out on its first run.** macOS checks a new program the first time it starts, which can take up to a second. The first event of an agent with a converter can be lost. Later events are not affected.
+- **`codex exec` runs show no card.** Codex sends no transcript for them, and the built-in Codex agent ignores events without a transcript.
+- **Cursor has no usage ring and no approval cards.** Cursor keeps its usage on its server only, and it does not tell a hook whether it will ask you. See [agents.md](agents.md), "Known limits".
+
+## Cards
+
+- **Ignored projects match the exact folder name.** Upper and lower case count: `My-App` does not hide `my-app`.
+- **A long Claude session can lose its name after a restart.** The name is read from the last 256 KB of the session's transcript. If the service restarts during a long session, the card shows the prompt until the name is written near the end of the transcript again.
+
+## Extensions
+
+- **A zip with one top folder cannot be installed.** Finder's Compress on a folder makes such a zip. The install then fails with `read manifest: ... extension.json: no such file or directory`. Make the zip from the files inside the folder, so `extension.json` is at the top of the zip.
+
+## Screen and menu bar
+
+- **A second display was not tested on a real Mac.** It should show only the background and the clock.
+- **The menu bar icon can hide behind the notch.** See the README, "Settings", for how to open the settings window directly.
+
+## Files
+
+- **`daemon.log` has no size limit.** It is in the data folder. The service writes a line only when something changes, so it grows slowly. You can delete it at any time.
