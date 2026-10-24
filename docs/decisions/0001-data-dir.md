@@ -26,7 +26,7 @@ Other checks:
 | Check | Result |
 | --- | --- |
 | `NSHomeDirectory()` inside the sandbox | The container path, not the real home |
-| Real home from `getpwuid(getuid()).pw_dir` | `/Users/you` (correct) |
+| Real home from `getpwuid(getuid()).pw_dir` | `/Users/<name>` (correct) |
 | Aerial `entries.json` read | OK |
 | Aerial `.mov` open | NONE (no `.mov` was downloaded at test time) |
 

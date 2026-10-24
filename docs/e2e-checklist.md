@@ -10,7 +10,7 @@ Run this on a real Mac after installing the release zip. Tick each box only afte
 - [ ] Claude Max and Codex rings match `/usage` (Claude) and `/status` (Codex) within 1%.
 - [ ] Mac locks: the password is asked when you come back.
 - [ ] After the saver stops: no `WebContent` process of ours and no `legacyScreenSaver` left after 10 seconds.
-- [ ] CPU while showing Matrix stays near the spike's ~6.5% of one core.
+- [ ] CPU while showing Matrix stays near the spike's ~6.5% of one core, all processes together ("Spike results", section 8 of [the design](superpowers/specs/2026-10-20-agent-screensaver-design.md); [decision 0002](decisions/0002-video-cost.md) says how to measure).
 - [ ] Second display shows only the background and the clock.
 - [ ] Existing status line still prints the same as before install.
 - [ ] Menu bar icon changes when an agent waits; menu lines match the screen saver.

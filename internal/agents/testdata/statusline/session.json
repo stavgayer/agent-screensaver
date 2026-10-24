@@ -2,7 +2,7 @@
   "session_id": "abc123",
   "transcript_path": "/Users/dev/.claude/projects/-Users-dev-work-my-project/abc123.jsonl",
   "cwd": "/Users/dev/work/my-project",
-  "scratchpad_dir": "/private/tmp/claude-501/-Users-dev-work-my-project/abc123/scratchpad",
+  "scratchpad_dir": "/tmp/claude-501/-Users-dev-work-my-project/abc123/scratchpad",
   "effort": {"level": "medium"},
   "session_name": "Login fix",
   "model": {"id": "claude-opus-5-5[1m]", "display_name": "Opus 5.5 (1M context)"},

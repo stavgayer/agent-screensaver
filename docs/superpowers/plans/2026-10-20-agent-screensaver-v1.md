@@ -725,7 +725,7 @@ Only if Task 0.2 showed the saver can read the aerials folder. If not, skip this
 
 ## Phase 6b: Agent extensions (owner decision 22/10/2026; gate: every task gate below, then Task 6.7 passes)
 
-Spec §7d and `docs/decisions/0006-agent-extensions.md`. Tasks 6.2 (background count) and 6.3 (richer cards) are briefed in `.superpowers/sdd/2026-10-20-agent-screensaver-v1/task-6.2-brief.md` and `task-6.3-brief.md`. Task 6.4 starts only after Task 6.3 is merged and reviewed: it moves the 6.3 readers (status line `session_name`, context and model; transcript titles; Codex session index and rollout context) into manifests, and 6.3 changes the same packages (`agents`, `event`, `state`, `statusline`, `cli`). The order is strict: 6.4 → 6.5 → 6.6 → 6.7 (shared files, no parallel writers).
+Spec §7d and `docs/decisions/0006-agent-extensions.md`. Tasks 6.2 (background count) and 6.3 (richer cards) are briefed in the working notes of the build (not committed). Task 6.4 starts only after Task 6.3 is merged and reviewed: it moves the 6.3 readers (status line `session_name`, context and model; transcript titles; Codex session index and rollout context) into manifests, and 6.3 changes the same packages (`agents`, `event`, `state`, `statusline`, `cli`). The order is strict: 6.4 → 6.5 → 6.6 → 6.7 (shared files, no parallel writers).
 
 Rules for every task in this phase:
 

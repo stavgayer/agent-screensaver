@@ -112,9 +112,9 @@ One line per change. Every animation still has a `prefers-reduced-motion` path, 
 
 Taken with the saver harness (a scratchpad copy that takes the window size from `AGS_W`/`AGS_H`), from `web/dev/state-idle.json` and `state-attention.json` with live times. Not committed.
 
-- Before: `<scratchpad>/shots/before-idle-1512x982.png`, `<scratchpad>/shots/before-idle-1024x768.png`, `<scratchpad>/shots/before-attention-1512x982.png`, `<scratchpad>/shots/before-attention-1024x768.png`
-- After: `<scratchpad>/shots/after-idle-1512x982.png`, `<scratchpad>/shots/after-idle-1024x768.png`, `<scratchpad>/shots/after-attention-1512x982.png`, `<scratchpad>/shots/after-attention-1024x768.png`
-- Worst case (Hebrew title, long title, long request, +1 more, four rings with stale data): `<scratchpad>/shots/after-state-stress-1512x982.png`, `<scratchpad>/shots/after-state-stress-1024x768.png`
+- Before: not committed.
+- After: not committed.
+- Worst case (Hebrew title, long title, long request, +1 more, four rings with stale data): not committed.
 
 ## The Calm theme
 
@@ -167,10 +167,10 @@ The approval card in the center is unchanged.
 
 Saver harness, live times, Default (Matrix) and Calm (a real aerial). Not committed.
 
-- Before: `<scratchpad>/t62/shots/before-idle-default-1512x982.png`, `<scratchpad>/t62/shots/before-idle-default-1024x768.png`, `<scratchpad>/t62/shots/before-attention-default-1512x982.png`, `<scratchpad>/t62/shots/before-attention-default-1024x768.png`, `<scratchpad>/t62/shots/before-idle-calm-1512x982.png`, `<scratchpad>/t62/shots/before-idle-calm-1024x768.png`, `<scratchpad>/t62/shots/before-attention-calm-1512x982.png`, `<scratchpad>/t62/shots/before-attention-calm-1024x768.png`
+- Before: not committed.
 - After: the same names with `after-` in place of `before-`.
-- Worst case (Hebrew title and project, long title, long project, no activity, check the terminal, 12 in background, four cards): `<scratchpad>/t62/shots/after-state-stress-default-1512x982.png`, `<scratchpad>/t62/shots/after-state-stress-default-1024x768.png`, `<scratchpad>/t62/shots/after-state-stress-calm-1512x982.png`, `<scratchpad>/t62/shots/after-state-stress-calm-1024x768.png`
-- Settings, General, Ignored projects (scratch copy of the page with a stub bridge): `<scratchpad>/t62/shots/settings-ignored-projects.jpg`
+- Worst case (Hebrew title and project, long title, long project, no activity, check the terminal, 12 in background, four cards): not committed.
+- Settings, General, Ignored projects (scratch copy of the page with a stub bridge): not committed.
 
 ## Richer task cards (23 October)
 
@@ -189,7 +189,7 @@ The last line sits at the bottom of the card, so a card without a context bar st
 
 ### Hierarchy and narrow cards
 
-The state and the name stay the two big lines (2.2vmin and 2.6vmin). Everything added is small (1.7 to 1.9vmin) and quiet: color is only on the state, the high context bar and the background count. When the last line is too long, the branch gives way first, then the model, and the project last. Narrow cards drop words in this order: under 40vmin the branch; under 33vmin the model, the word "Context" and the agent's name (the mark stays); under 26vmin the mark too. The state and the count are never cut for them. Checked with four cards at 1024x768: every state line fits.
+The state and the name stay the two big lines (2.2vmin and 2.6vmin). Everything added is small (1.7 to 1.9vmin) and quiet: color is only on the state, the high context bar and the background count. When the last line is too long, the branch gives way first, then the project shortens to a few letters, and the model last (24 October, see below). Narrow cards drop words in this order: under 40vmin the branch and the agent's name (its mark stays), and the project when the card has background jobs; under 33vmin the word "Context"; under 26vmin the state's own small mark. The agent's mark, the state, the model and the count are never dropped. Checked with four cards at 1024x768: every state line fits.
 
 Not added: cost, Codex background terminals, a plan-mode chip (it would need one more field from every hook and one more mark on the top line).
 
@@ -206,10 +206,10 @@ Claude limits come only from the Claude Code status line, so a reading can be ma
 
 Saver harness, live times, Default (Matrix) and Calm (a real aerial), 1512x982 and 1024x768. Not committed. "Before" is the 6.2 runtime fed the same state.
 
-- Idle: `<scratchpad>/t63/shots/before-idle-default-1512x982.png` and `<scratchpad>/t63/shots/after-idle-default-1512x982.png`; the other theme and size use the same pattern (`-calm-`, `-1024x768`).
-- Attention: `<scratchpad>/t63/shots/before-attention-default-1024x768.png` and `<scratchpad>/t63/shots/after-attention-default-1024x768.png`, same pattern.
-- Worst case (Hebrew name and project, long name, long project and branch, long model, 97% context, no context, 12 in background, four cards): `<scratchpad>/t63/shots/before-stress-default-1024x768.png` and `<scratchpad>/t63/shots/after-stress-default-1024x768.png`, same pattern.
-- Rings (Claude 5h reset with an old 20%, Claude week 20 h old, Codex plan fresh): `<scratchpad>/t63/shots/before-rings-default-1512x982.png` and `<scratchpad>/t63/shots/after-rings-default-1512x982.png`, same pattern.
+- Idle: not committed.
+- Attention: not committed.
+- Worst case (Hebrew name and project, long name, long project and branch, long model, 97% context, no context, 12 in background, four cards): not committed.
+- Rings (Claude 5h reset with an old 20%, Claude week 20 h old, Codex plan fresh): not committed.
 
 ## Fixes from the real screen (24 October)
 
@@ -227,6 +227,6 @@ Rules checked by `web/test/task-row-style.test.ts`. `impeccable detect`: no find
 
 Screenshots (saver harness, live times, four cards like the owner's photo; not committed):
 
-- Before: `<scratchpad>/t67/shots/before-four-default-1512x982.png`, `<scratchpad>/t67/shots/before-four-default-1024x768.png`, `<scratchpad>/t67/shots/before-four-calm-1512x982.png`, `<scratchpad>/t67/shots/before-four-calm-1024x768.png`
-- After: the same names with `after-` in place of `before-`. Card rows side by side: `<scratchpad>/t67/shots/pair-default.png`, `<scratchpad>/t67/shots/pair-calm.png`.
-- Worst case and wide cards: `<scratchpad>/t67/shots/pair-stress.png`, `<scratchpad>/t67/shots/pair-two.png`.
+- Before: not committed.
+- After: the same names with `after-` in place of `before-`. Card rows side by side: not committed.
+- Worst case and wide cards: not committed.

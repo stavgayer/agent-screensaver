@@ -31,7 +31,7 @@ The owner is the first user. The project will be open source.
 ### Non-goals (not in version 1)
 
 - Linux and Windows. The design must not block them later, but no work goes there now.
-- Cursor usage limits. Cursor keeps usage on its server only; it is reachable only with the login token or cookies through undocumented endpoints (research file `cursor-usage-research.md`, 24/10/2026). (Cursor task status is in version 1, as a built-in agent extension, §7d. Owner decision, 22/10/2026.)
+- Cursor usage limits. Cursor keeps usage on its server only; it is reachable only with the login token or cookies through undocumented endpoints (research of 24/10/2026: neither its hooks, its CLI nor its local files hold the plan's limit, percent used or reset date). (Cursor task status is in version 1, as a built-in agent extension, §7d. Owner decision, 22/10/2026.)
 - Jira, GitHub, calendar, Slack, social networks (Reddit, Bluesky, YouTube, Gmail). The card model (section 6) must make them easy to add later.
 - A drag-and-drop layout editor.
 - Running another company's screen saver inside ours.
@@ -367,7 +367,7 @@ An agent manifest has no `entry` and no `options` in version 1.
 
 ### Example: the built-in Cursor extension
 
-The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/2026) and the research file `.superpowers/sdd/2026-10-20-agent-screensaver-v1/richer-cards-research.md`. Task 6.5 checks them against real payloads.
+The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/2026) and the research for Task 6.3 (a read of Cursor's docs and of the payloads other tools record; not committed). Task 6.5 checks them against real payloads.
 
 ```json
 {
