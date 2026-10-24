@@ -9,20 +9,33 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"agent-screensaver/internal/paths"
 )
 
 // Launchd runs a process as a launchd user agent: started at login and kept
-// alive. Run executes a command; tests replace it so no real launchctl runs.
+// alive. Run executes a command and Sleep waits; tests replace both so no
+// real launchctl runs and no real time passes.
 type Launchd struct {
-	Home string
-	Run  func(name string, args ...string) error
+	Home  string
+	Run   func(name string, args ...string) error
+	Sleep func(time.Duration)
 }
+
+// After bootout, launchd may still be tearing the service down, and a
+// bootstrap in that window fails with error 5. We wait until `print` says the
+// service is gone, then retry bootstrap a few times before giving up.
+const (
+	goneCheckInterval = 100 * time.Millisecond
+	goneCheckAttempts = 30
+	bootstrapAttempts = 5
+	bootstrapBackoff  = 750 * time.Millisecond
+)
 
 // NewLaunchd returns a Launchd that runs the real launchctl.
 func NewLaunchd(home string) Launchd {
-	return Launchd{Home: home, Run: runCommand}
+	return Launchd{Home: home, Run: runCommand, Sleep: time.Sleep}
 }
 
 func runCommand(name string, args ...string) error {
@@ -52,10 +65,25 @@ func (l Launchd) Install(label string, args []string) (string, error) {
 	if err := l.unloadIfLoaded(label); err != nil {
 		return "", err
 	}
-	if err := l.Run("launchctl", "bootstrap", domain(), plist); err != nil {
-		return "", fmt.Errorf("load %s: %w", label, err)
+	if err := l.bootstrap(plist); err != nil {
+		return "", fmt.Errorf("load %s: %w\nif it still fails, run: launchctl bootstrap gui/$(id -u) %s (or re-run install)", label, err, plist)
 	}
 	return plist, nil
+}
+
+// bootstrap loads the plist, retrying with a backoff. The error is the last
+// failure.
+func (l Launchd) bootstrap(plist string) error {
+	var err error
+	for attempt := 1; attempt <= bootstrapAttempts; attempt++ {
+		if err = l.Run("launchctl", "bootstrap", domain(), plist); err == nil {
+			return nil
+		}
+		if attempt < bootstrapAttempts {
+			l.Sleep(bootstrapBackoff)
+		}
+	}
+	return err
 }
 
 // Uninstall unloads the service if it is loaded and removes the plist.
@@ -79,7 +107,20 @@ func (l Launchd) unloadIfLoaded(label string) error {
 	if err := l.Run("launchctl", "bootout", target); err != nil {
 		return fmt.Errorf("unload %s: %w", label, err)
 	}
+	l.waitUntilGone(target)
 	return nil
+}
+
+// waitUntilGone polls until `print` fails, which means launchd no longer
+// knows the service. If it never does, we carry on: the bootstrap retries
+// cover the rest and report a real failure.
+func (l Launchd) waitUntilGone(target string) {
+	for attempt := 0; attempt < goneCheckAttempts; attempt++ {
+		if l.Run("launchctl", "print", target) != nil {
+			return
+		}
+		l.Sleep(goneCheckInterval)
+	}
 }
 
 // trayLabelSuffix marks the menu bar app's service. Its Quit item exits with

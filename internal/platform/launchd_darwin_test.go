@@ -8,19 +8,126 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type recorder struct {
 	commands [][]string
 	failOn   string // an argument that makes the call fail, for example "print"
+	loaded   bool   // print succeeds until bootout ran, like a real service
+	gone     bool   // set by bootout: print fails from then on
 }
+
+func noSleep(time.Duration) {}
 
 func (r *recorder) run(name string, args ...string) error {
 	r.commands = append(r.commands, append([]string{name}, args...))
+	if r.loaded {
+		switch args[0] {
+		case "bootout":
+			r.loaded, r.gone = false, true
+		case "print":
+			return nil
+		}
+	}
+	if r.gone && args[0] == "print" {
+		return errors.New("exit status 113")
+	}
 	if r.failOn != "" && len(args) > 0 && args[0] == r.failOn {
 		return errors.New("exit status 113")
 	}
 	return nil
+}
+
+// scriptedLaunchd is a fake launchctl. printLoaded is how many `print` calls
+// still say "loaded" (the first one decides whether bootout runs);
+// bootstrapFailures is how many bootstrap calls fail before one succeeds
+// (-1 means always).
+type scriptedLaunchd struct {
+	printLoaded       int
+	bootstrapFailures int
+	commands          [][]string
+	slept             []time.Duration
+}
+
+func (s *scriptedLaunchd) run(name string, args ...string) error {
+	s.commands = append(s.commands, append([]string{name}, args...))
+	switch args[0] {
+	case "print":
+		if s.printLoaded > 0 {
+			s.printLoaded--
+			return nil
+		}
+		return errors.New("exit status 113")
+	case "bootstrap":
+		if s.bootstrapFailures != 0 {
+			if s.bootstrapFailures > 0 {
+				s.bootstrapFailures--
+			}
+			return errors.New("exit status 5: Bootstrap failed: 5: Input/output error")
+		}
+	}
+	return nil
+}
+
+func (s *scriptedLaunchd) sleep(d time.Duration) { s.slept = append(s.slept, d) }
+
+func (s *scriptedLaunchd) count(verb string) int {
+	n := 0
+	for _, command := range s.commands {
+		if command[1] == verb {
+			n++
+		}
+	}
+	return n
+}
+
+func TestLaunchdWaitsAndRetries(t *testing.T) {
+	tests := []struct {
+		name          string
+		fake          scriptedLaunchd
+		wantErr       bool
+		wantPrints    int
+		wantBootstrap int
+		wantSleeps    int
+	}{
+		{"gone after 2 polls, bootstrap once",
+			scriptedLaunchd{printLoaded: 3}, false, 4, 1, 2},
+		{"bootstrap fails twice with status 5, then loads",
+			scriptedLaunchd{printLoaded: 1, bootstrapFailures: 2}, false, 2, 3, 2},
+		{"bootstrap always fails",
+			scriptedLaunchd{printLoaded: 1, bootstrapFailures: -1}, true, 2, 5, 4},
+		{"service never goes away, bootstrap still tried",
+			scriptedLaunchd{printLoaded: 1000, bootstrapFailures: 0}, false, 31, 1, 30},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := tt.fake
+			launchd := Launchd{Home: t.TempDir(), Run: fake.run, Sleep: fake.sleep}
+
+			_, err := launchd.Install("x.y", []string{"/bin/x", "daemon"})
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				for _, want := range []string{"Bootstrap failed: 5", "launchctl bootstrap gui/$(id -u)", "re-run install"} {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("error lacks %q: %v", want, err)
+					}
+				}
+			}
+			if got := fake.count("print"); got != tt.wantPrints {
+				t.Errorf("print calls = %d, want %d", got, tt.wantPrints)
+			}
+			if got := fake.count("bootstrap"); got != tt.wantBootstrap {
+				t.Errorf("bootstrap calls = %d, want %d", got, tt.wantBootstrap)
+			}
+			if got := len(fake.slept); got != tt.wantSleeps {
+				t.Errorf("sleeps = %d, want %d", got, tt.wantSleeps)
+			}
+		})
+	}
 }
 
 func TestLaunchdPlistAndCommands(t *testing.T) {
@@ -30,6 +137,7 @@ func TestLaunchdPlistAndCommands(t *testing.T) {
 	tests := []struct {
 		name          string
 		failOn        string
+		loaded        bool
 		wantInstall   [][]string
 		wantUninstall [][]string
 	}{
@@ -43,23 +151,26 @@ func TestLaunchdPlistAndCommands(t *testing.T) {
 			wantUninstall: [][]string{{"launchctl", "print", target}},
 		},
 		{
-			name: "already loaded",
+			name:   "already loaded",
+			loaded: true,
 			wantInstall: [][]string{
 				{"launchctl", "print", target},
 				{"launchctl", "bootout", target},
+				{"launchctl", "print", target},
 				{"launchctl", "bootstrap", domain, ""},
 			},
 			wantUninstall: [][]string{
 				{"launchctl", "print", target},
 				{"launchctl", "bootout", target},
+				{"launchctl", "print", target},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
-			fake := &recorder{failOn: tt.failOn}
-			launchd := Launchd{Home: home, Run: fake.run}
+			fake := &recorder{failOn: tt.failOn, loaded: tt.loaded}
+			launchd := Launchd{Home: home, Run: fake.run, Sleep: noSleep}
 			bin := filepath.Join(home, "Library", "Application Support", "agent-screensaver", "bin", "agent-screensaver")
 
 			plist, err := launchd.Install(label, []string{bin, "daemon"})
@@ -91,6 +202,7 @@ func TestLaunchdPlistAndCommands(t *testing.T) {
 			}
 
 			fake.commands = nil
+			fake.loaded, fake.gone = tt.loaded, false
 			if err := launchd.Uninstall(label); err != nil {
 				t.Fatal(err)
 			}
@@ -120,7 +232,7 @@ func assertCommands(t *testing.T, got, want [][]string, plist string) {
 
 func TestLaunchdPlistEscapesXML(t *testing.T) {
 	home := t.TempDir()
-	launchd := Launchd{Home: home, Run: (&recorder{failOn: "print"}).run}
+	launchd := Launchd{Home: home, Run: (&recorder{failOn: "print"}).run, Sleep: noSleep}
 	plist, err := launchd.Install("x.y", []string{"/a&b/<bin>", "daemon"})
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +244,7 @@ func TestLaunchdPlistEscapesXML(t *testing.T) {
 }
 
 func TestLaunchdBootstrapFailureIsReported(t *testing.T) {
-	launchd := Launchd{Home: t.TempDir(), Run: (&recorder{failOn: "bootstrap"}).run}
+	launchd := Launchd{Home: t.TempDir(), Run: (&recorder{failOn: "bootstrap"}).run, Sleep: noSleep}
 	if _, err := launchd.Install("x.y", []string{"/bin/x", "daemon"}); err == nil {
 		t.Error("want an error, got nil")
 	}
