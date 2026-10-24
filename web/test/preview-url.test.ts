@@ -37,6 +37,23 @@ describe("previewState", () => {
     assert.equal(rewritten.view.components[0].entry_url, `${PREVIEW_DATA_URL}extensions/builtin.clock/index.js`);
   });
 
+  const odd: [string, string][] = [
+    ["null", "null"],
+    ["a number", "42"],
+    ["an array", "[1,2]"],
+    ["a string", '"text"'],
+  ];
+  for (const [name, text] of odd) {
+    it(`passes JSON that is ${name} on unchanged`, () => assert.equal(previewState(text, DATA), text));
+  }
+
+  it("treats components that are not a list as none", () => {
+    const text = JSON.stringify({ view: { background: { entry_url: `${DATA}extensions/a/index.js` }, components: 7 } });
+    const result = JSON.parse(previewState(text, DATA));
+    assert.equal(result.view.background.entry_url, `${PREVIEW_DATA_URL}extensions/a/index.js`);
+    assert.equal(result.view.components, 7);
+  });
+
   it("leaves option values as the extension expects them", () => {
     // The aerials background keeps only file:// URLs; the frame maps media src instead.
     assert.deepEqual(rewritten.view.background.options.files, [`${DATA}media/aerials/a.mov`]);

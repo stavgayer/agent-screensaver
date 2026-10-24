@@ -26,13 +26,16 @@ interface Entry {
  * frame instead. Text that is not JSON is passed on unchanged.
  */
 export function previewState(state: string, dataUrl: string): string {
-  let parsed: { view?: { background?: Entry; components?: Entry[] } };
+  let parsed: { view?: { background?: Entry; components?: unknown } } | null;
   try {
     parsed = JSON.parse(state);
   } catch {
     return state;
   }
-  const entries = [parsed.view?.background, ...(parsed.view?.components ?? [])];
+  // Text that is JSON but not a state object is passed on unchanged too.
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return state;
+  const components = parsed.view?.components;
+  const entries = [parsed.view?.background, ...(Array.isArray(components) ? (components as Entry[]) : [])];
   for (const entry of entries) {
     if (typeof entry?.entry_url === "string") entry.entry_url = toPreviewUrl(entry.entry_url, dataUrl);
   }
