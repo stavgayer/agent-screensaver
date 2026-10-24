@@ -191,6 +191,9 @@ func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 
 func (d *Daemon) applyPendingLimits() bool {
 	for _, pending := range d.pendingLimit {
+		if d.agentOff(pending.Source) {
+			continue // a read that was running when the agent was turned off
+		}
 		d.state.Apply(pending)
 	}
 	changed := len(d.pendingLimit) > 0
@@ -275,6 +278,11 @@ func (d *Daemon) tick(nowMs int64) bool {
 func (d *Daemon) duePolls(nowMs int64, saverActive bool) []string {
 	var due []string
 	for _, source := range d.sources {
+		// Off means no activity at all for that agent: no provider read
+		// (for Codex that is a process that asks OpenAI).
+		if d.agentOff(source) {
+			continue
+		}
 		var last *int64
 		if polledAt, ok := d.lastPoll[source]; ok {
 			last = &polledAt

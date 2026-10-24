@@ -2,13 +2,16 @@ package daemon
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/spool"
 	"agent-screensaver/internal/state"
+	"agent-screensaver/internal/usage"
 )
 
 func TestStateCarriesAgentMarks(t *testing.T) {
@@ -81,5 +84,82 @@ func TestEventsOfAnAgentThatIsOffAreDropped(t *testing.T) {
 	file := readStateFile(t, p)
 	if len(file.Cards) != 1 || file.Cards[0].Source != "claude" {
 		t.Errorf("cards = %+v, want only the claude card", file.Cards)
+	}
+}
+
+func turnOff(t *testing.T, p paths.Paths, ids ...string) {
+	t.Helper()
+	cfg := config.Default()
+	cfg.AgentsOff = ids
+	if err := cfg.Save(p.ConfigFile); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Off means no activity at all for that agent: no limits read, no estimate,
+// no transcript reads.
+func TestAnAgentThatIsOffIsNotPolled(t *testing.T) {
+	for _, off := range []bool{false, true} {
+		d, p := newTestDaemon(t)
+		installBuiltinAgents(t, p)
+		if off {
+			turnOff(t, p, "builtin.codex")
+		}
+		d.SetSources("codex")
+
+		got := d.Step(1_000, true).PollSources
+
+		if want := !off; slices.Contains(got, "codex") != want {
+			t.Errorf("off %v: PollSources = %v", off, got)
+		}
+	}
+}
+
+func TestReadingsOfAnAgentTurnedOffDuringTheReadAreDropped(t *testing.T) {
+	d, p := newTestDaemon(t)
+	installBuiltinAgents(t, p)
+	turnOff(t, p, "builtin.codex")
+	d.SetLimits("codex", []event.LimitReading{{Window: event.Week, UsedPercent: 7}}, 900)
+
+	d.Step(1_000, true)
+
+	if got := readStateFile(t, p).Limits; len(got) != 0 {
+		t.Errorf("limits = %+v, want none", got)
+	}
+}
+
+func TestAnAgentThatIsOffIsNotEstimated(t *testing.T) {
+	d, p := newTestDaemon(t)
+	installBuiltinAgents(t, p)
+	turnOff(t, p, "builtin.claude")
+	estimator := &fakeEstimator{result: usage.Result{Readings: []usage.Reading{estimatedReading(event.FiveHour, 42, 900)}}}
+	d.Estimator = estimator
+
+	d.Step(1_000, false)
+	d.Step(1_000+estimateEveryMs, false)
+
+	if len(estimator.estimates) != 0 {
+		t.Errorf("estimated at %v, want never", estimator.estimates)
+	}
+	if got := readStateFile(t, p).Limits; len(got) != 0 {
+		t.Errorf("limits = %+v, want none", got)
+	}
+}
+
+func TestADetailsReadWaitingWhenTheAgentIsTurnedOffIsDropped(t *testing.T) {
+	d, p := newTestDaemon(t)
+	installBuiltinAgents(t, p)
+	reader := &fakeDetails{}
+	d.Details = reader
+	spoolEvent(t, p, "claude", "s1", event.KindStarted, 1_000)
+	d.Step(1_000, false)
+	spoolEvent(t, p, "claude", "s1", event.KindFinished, 2_000)
+	d.Step(2_000, false) // inside 5 s: the read waits
+	turnOff(t, p, "builtin.claude")
+
+	d.Step(2_000+detailsEveryMs, false)
+
+	if len(reader.reads) != 1 {
+		t.Errorf("%d reads, want only the one before the agent was turned off", len(reader.reads))
 	}
 }

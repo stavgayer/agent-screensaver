@@ -38,7 +38,8 @@ func (d *Daemon) observeLimits(incoming event.Event) {
 // due and reports whether a limit changed. While the estimator catches up
 // on a large history it is asked again on every step.
 func (d *Daemon) estimateLimits(nowMs int64) bool {
-	if d.Estimator == nil {
+	// An agent that is off is not estimated: no transcript scans for it.
+	if d.Estimator == nil || d.agentOff(d.Estimator.Source()) {
 		return false
 	}
 	if !d.estimateDue && d.estimatedOnce && nowMs-d.lastEstimateMs < estimateEveryMs {

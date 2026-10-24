@@ -227,7 +227,7 @@ A card whose source has no agent extension (any program that writes events) show
 
 ## Turning an agent off
 
-`agents_off` in the settings file lists agent ids that are off. An agent that is off keeps its hooks, but its hook only prints its reply and exits. The service drops its events.
+`agents_off` in the settings file lists agent ids that are off. An agent that is off keeps its hooks, but its hook only prints its reply and exits. The service drops its events, and does not read its limits, estimate its usage or read its transcripts.
 
 ## An untested example
 

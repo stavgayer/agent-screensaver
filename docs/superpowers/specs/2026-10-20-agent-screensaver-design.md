@@ -647,7 +647,7 @@ The hook command stays `agent-screensaver hook --tool <source>`. It reads the co
 
 ### Turning agents on and off
 
-The config gets `agents_off`: a list of agent ids. An agent that is off keeps its hooks (owner decision, 23/10/2026), but it is silent: its hook prints its reply and exits at once (no mapping, no converter), and the daemon drops events with its source. Turning an agent on does not add hooks; adding and removing hooks are separate actions, because they change the user's files.
+The config gets `agents_off`: a list of agent ids. An agent that is off keeps its hooks (owner decision, 23/10/2026), but it is silent: its hook prints its reply and exits at once (no mapping, no converter), and the daemon drops events with its source. The daemon also does no work of its own for it: no limits provider read (for Codex, no `codex app-server`), no usage estimate and no transcript reads. Turning an agent on does not add hooks; adding and removing hooks are separate actions, because they change the user's files.
 
 CLI: `agent-screensaver agent list`, `agent on|off <id>`, `agent hooks add|remove <id>` (each shows the plan and asks first). `install` adds hooks for every built-in agent whose `detect` path exists; `uninstall` removes every agent's hooks from the record.
 

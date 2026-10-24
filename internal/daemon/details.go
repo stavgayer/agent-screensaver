@@ -72,7 +72,7 @@ type detailsResult struct {
 func (d *Daemon) readDueDetails(nowMs int64) bool {
 	for key := range d.detailsDue {
 		card, ok := d.state.Card(key.source, key.session)
-		if !ok {
+		if !ok || d.agentOff(key.source) {
 			delete(d.detailsDue, key)
 			continue
 		}
