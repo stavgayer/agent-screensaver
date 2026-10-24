@@ -77,7 +77,7 @@ What `ctx` gives you:
 - A card has `source`, `session`, `kind` (`approval`, `running`, `finished`, `unknown`, `no_activity`), and these when known: `project`, `title`, `request`, `name`, `model`, `branch`, `context_percent`, `background`.
 - Use `state.agents[card.source]` for the agent's `name` and `mark_url`. A card from a source with no agent extension has no entry there.
 - A limit has `source`, `window` (`5h`, `week`, `plan`), `used_percent`, and `resets_at` in seconds.
-- For countdowns, use `state.nowMs`. Never read the clock yourself. The runtime gives you a new `nowMs` once a minute.
+- For countdowns, use `state.nowMs`. Never read the clock yourself. The runtime gives you a new `nowMs` at the start of every minute of the clock.
 - Card text is data. Set it with `textContent`, never `innerHTML`.
 
 ## 5. Follow the rules of the screen

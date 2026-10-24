@@ -252,7 +252,7 @@ The built-in rings never show an old number as the current one. The caption unde
 - Reset time: more than 24 hours and up to 6 days away it is the local day and time, for example "Mon 09:00" (English short weekday, 24-hour clock, no locale data). Further away it is the date and time, "1 Nov 02:00", or the date only, "1 Nov", when the caption also gives the age or "est.", so a reset a week away is never read as this week. Within 24 hours (24 hours exactly included) it is a countdown to the minute, rounded down: "4h 12m", under an hour "47m", under a minute "under 1m". A limit with no `resets_at` shows no reset time.
 - When `nowMs` is at or after `resets_at`, the window has reset since the reading. The ring is empty and its caption says "Reset" until a newer reading arrives.
 - When the reading is older than 30 minutes (5h window) or 6 hours (week and plan windows), the ring is dimmed and its caption adds the age, for example "20h ago".
-- The runtime gives every component a new `nowMs` once a minute, and whenever the state changes, so countdowns move without a new state file. Components must take the time from `state.nowMs`, never from the clock.
+- The runtime gives every component a new `nowMs` at the start of every minute of the clock, and whenever the state changes, so countdowns move without a new state file. Components must take the time from `state.nowMs`, never from the clock.
 
 Components that show limits should follow the same rule.
 
