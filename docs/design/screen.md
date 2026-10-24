@@ -180,7 +180,7 @@ The owner asked each card to say which agent it is, the conversation's name, whe
 
 Four lines, top to bottom:
 
-1. **State and agent.** The 6.2 state line ("Working · 24m", "Done · 3m ago", ...) on the left. On the right, the agent's mark and its name in muted white. The mark comes from the agent extension: a letter tile of our own ("C" for Claude Code, "X" for Codex), never a product logo. A user can put their own icon in `marks/<source>.svg` in the data folder (docs/agents.md). A source without an agent extension shows a neutral dot and its name.
+1. **State and agent.** The 6.2 state line ("Working · 24m", "Done · 3m ago", ...) on the left. On the right, the agent's mark and its name in muted white (24 October: the mark now leads the state line, see below). The mark comes from the agent extension: a letter tile of our own ("C" for Claude Code, "X" for Codex), never a product logo. A user can put their own icon in `marks/<source>.svg` in the data folder (docs/agents.md). A source without an agent extension shows a neutral dot and its name.
 2. **What.** The conversation name when the agent has one (Claude `/rename` or its own title, the Codex thread name), else the prompt title, else the project.
 3. **Context.** "Context", a thin bar whose fill is the true share of the window, and the percent. The fill is muted white; from 80% the fill and the percent take the attention color, because Claude Code compacts the conversation near the end of the window. No bar when the agent does not say.
 4. **Where.** Project · model · branch, then "N in background" in the accent.
@@ -210,3 +210,23 @@ Saver harness, live times, Default (Matrix) and Calm (a real aerial), 1512x982 a
 - Attention: `<scratchpad>/t63/shots/before-attention-default-1024x768.png` and `<scratchpad>/t63/shots/after-attention-default-1024x768.png`, same pattern.
 - Worst case (Hebrew name and project, long name, long project and branch, long model, 97% context, no context, 12 in background, four cards): `<scratchpad>/t63/shots/before-stress-default-1024x768.png` and `<scratchpad>/t63/shots/after-stress-default-1024x768.png`, same pattern.
 - Rings (Claude 5h reset with an old 20%, Claude week 20 h old, Codex plan fresh): `<scratchpad>/t63/shots/before-rings-default-1512x982.png` and `<scratchpad>/t63/shots/after-rings-default-1512x982.png`, same pattern.
+
+## Fixes from the real screen (24 October)
+
+The owner photographed the live screen with four cards and read it from about 3 m.
+
+| Change | Why |
+| --- | --- |
+| The agent's mark leads the state line, 1.5 times the state's font size, so its letter stands about as tall as the state's capitals | The mark was a small badge in each card's top-right corner and could not be read from the room. Next to the state it answers "which agent, and how is it doing" in one look. |
+| The agent's name moves to the far end of the state line, in muted white, and only on cards wider than 40vmin | The mark already names the agent; its alt text keeps the name for screen readers. |
+| On the narrowest cards (under 26vmin) the state's own small mark goes before anything else; the agent's mark never goes | The state's color still tells the state. |
+| The last line keeps the model: the branch gives way first, then the project shortens to a few letters, and the model last. A card under 40vmin wide with background jobs leaves the project out | With four cards the line showed only the project. Now it reads "agent-screensaver · Opus 5.5"; with a count, "GPT-5.5 · 1 in background". |
+| Ring reset times: a countdown within 24 hours, the weekday and time within 6 days, else the date ("2 Nov 04:27", or "2 Nov" when the caption also gives the age or "est.") | "Sun 02:00" for a reset 8 days away read as tomorrow. |
+
+Rules checked by `web/test/task-row-style.test.ts`. `impeccable detect`: no findings. `design-taste-frontend` lint (`--app`): 0 FAIL, 0 WARN. No new motion.
+
+Screenshots (saver harness, live times, four cards like the owner's photo; not committed):
+
+- Before: `<scratchpad>/t67/shots/before-four-default-1512x982.png`, `<scratchpad>/t67/shots/before-four-default-1024x768.png`, `<scratchpad>/t67/shots/before-four-calm-1512x982.png`, `<scratchpad>/t67/shots/before-four-calm-1024x768.png`
+- After: the same names with `after-` in place of `before-`. Card rows side by side: `<scratchpad>/t67/shots/pair-default.png`, `<scratchpad>/t67/shots/pair-calm.png`.
+- Worst case and wide cards: `<scratchpad>/t67/shots/pair-stress.png`, `<scratchpad>/t67/shots/pair-two.png`.

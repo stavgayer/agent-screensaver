@@ -1,55 +1,6 @@
 import type { Card, ComponentExt, ViewState } from "../../api.ts";
+import { PULSE_MS, STYLE } from "./style.ts";
 import { taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere, type TaskContext, type TaskTone } from "./logic.ts";
-
-// Lines that answer, from across the room: what state (in words and color) and which
-// agent, what task (the conversation name or the prompt), how full the context is,
-// and where (project, model, branch, background jobs). Every line is one line with an
-// ellipsis, so a long name never grows the card; the last line sits at the bottom, so
-// a card without a context bar still lines up with its neighbours.
-const PULSE_MS = 2400;
-const STYLE = `
-.tasks { display: flex; gap: 1.6vmin; }
-.task { --tone: var(--accent, #00e07a); flex: 1; min-width: 0; container: task / inline-size; background: rgba(10, 20, 14, var(--card-opacity, 0.82));
-  border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent); border-radius: 1.6vmin; padding: 2vmin 2.4vmin;
-  display: flex; flex-direction: column; }
-.task.done { --tone: var(--done, #78c8ff); }
-.task.check { --tone: var(--attention, #ffb020); }
-.task.quiet { --tone: rgba(255, 255, 255, 0.62); }
-.task > div { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.task .top { display: flex; align-items: baseline; gap: 1.2vmin; }
-.task .source { flex: none; display: flex; align-items: center; gap: 0.45em; font-size: 1.8vmin; line-height: 1.25; color: rgba(255, 255, 255, 0.72); }
-.task .status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 2.2vmin; line-height: 1.25; font-weight: 600; color: var(--tone); font-variant-numeric: tabular-nums; }
-.task .mark { display: inline-block; width: 0.9em; height: 0.9em; margin-inline-end: 0.4em; vertical-align: -0.1em; }
-.task .mark svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-.task .mark .dot { fill: currentColor; stroke: none; }
-.task.working .mark { animation: task-alive ${PULSE_MS}ms cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-@keyframes task-alive { from { opacity: 1; } to { opacity: 0.35; } }
-.task .heading { margin-top: 0.7vmin; font-size: 2.6vmin; line-height: 1.25; color: #fff; font-weight: 600; letter-spacing: -0.005em; }
-.task .context { margin-top: 1vmin; display: flex; align-items: center; gap: 0.6em; font-size: 1.7vmin; line-height: 1.3;
-  color: rgba(255, 255, 255, 0.72); font-variant-numeric: tabular-nums; }
-.task .context .track { flex: 1 1 auto; min-width: 4em; height: 0.7vmin; border-radius: 0.35vmin; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
-.task .context .fill { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.62); }
-.task .context.high .fill { background: var(--attention, #ffb020); }
-.task .context.high .value { color: var(--attention, #ffb020); font-weight: 600; }
-.task .where { margin-top: auto; padding-top: 0.7vmin; font-size: 1.9vmin; line-height: 1.3; color: rgba(255, 255, 255, 0.72); font-variant-numeric: tabular-nums; }
-.task .where { display: flex; }
-.task .where > span { flex: none; white-space: nowrap; }
-.task .where > span + span::before { content: "·"; margin: 0 0.4em; color: rgba(255, 255, 255, 0.72); font-weight: 400; }
-.task .where > .project { flex: 0 1 auto; min-width: 3.5em; overflow: hidden; text-overflow: ellipsis; }
-/* The branch, then the model, give way long before the project does. */
-.task .where > .model { flex: 0 100 auto; min-width: 3em; overflow: hidden; text-overflow: ellipsis; }
-.task .where > .branch { flex: 0 1000 auto; min-width: 3em; overflow: hidden; text-overflow: ellipsis; }
-/* Narrow cards drop the least needed words first: the branch, then the model, the
-   word "Context" and the agent's name (its mark stays), then on the narrowest cards
-   the mark too. The state and the count are never cut for them. */
-@container task (max-width: 40vmin) { .task .where > .branch { display: none; } }
-@container task (max-width: 33vmin) { .task .where > .model, .task .context .label, .task .source-name { display: none; } }
-@container task (max-width: 26vmin) { .task .source { display: none; } }
-.task .where > .background { color: var(--accent, #00e07a); font-weight: 600; }
-@media (prefers-reduced-motion: reduce) { .task.working .mark { animation: none; } }
-.task .source-mark { flex: none; width: 1.1em; height: 1.1em; object-fit: contain; }
-.task .source-dot { flex: none; width: 0.55em; height: 0.55em; margin: 0 0.275em; border-radius: 50%; background: currentColor; opacity: 0.7; }
-`;
 
 // Drawn marks instead of text glyphs, which each font draws differently. Working is a
 // dot that breathes (it is alive), done a check, quiet an empty ring, check a solid dot.
@@ -67,40 +18,36 @@ function line(className: string, text: string): HTMLElement {
   return element;
 }
 
+/** The agent's mark, the state, and on wide cards the agent's name at the far end. */
 function topLine(card: Card, state: ViewState): HTMLElement {
+  const source = taskSource(card, state.agents);
   const element = document.createElement("div");
   element.className = "top";
-  element.append(statusLine(card, state.nowMs), sourceLabel(card, state));
+  element.dataset.source = card.source;
+  const name = document.createElement("span");
+  name.className = "source-name";
+  name.textContent = source.name;
+  element.append(agentMark(source), statusLine(card, state.nowMs), name);
   return element;
 }
 
 /**
- * The agent: the mark of its extension and its name, or a neutral dot and the source
- * name for a source without one. The mark is an <img>, so an SVG can run no code and
- * load nothing (the service checked it too).
+ * The mark of the agent's extension, or a neutral dot for a source without one. The
+ * mark is an <img>, so an SVG can run no code and load nothing (the service checked
+ * it too). Its alt text names the agent, because on narrow cards the name is hidden.
  */
-function sourceLabel(card: Card, state: ViewState): HTMLElement {
-  const source = taskSource(card, state.agents);
-  const element = document.createElement("span");
-  element.className = "source";
-  element.dataset.source = card.source;
-  let mark: HTMLElement;
+function agentMark(source: { markUrl: string | undefined; name: string }): HTMLElement {
   if (source.markUrl === undefined) {
-    mark = document.createElement("span");
-    mark.className = "source-dot";
-  } else {
-    const image = document.createElement("img");
-    image.className = "source-mark";
-    image.src = source.markUrl;
-    image.alt = "";
-    mark = image;
+    const dot = document.createElement("span");
+    dot.className = "agent source-dot";
+    dot.setAttribute("aria-hidden", "true");
+    return dot;
   }
-  mark.setAttribute("aria-hidden", "true");
-  const name = document.createElement("span");
-  name.className = "source-name";
-  name.textContent = source.name;
-  element.append(mark, name);
-  return element;
+  const image = document.createElement("img");
+  image.className = "agent source-mark";
+  image.src = source.markUrl;
+  image.alt = source.name;
+  return image;
 }
 
 /** A labelled bar whose fill is the true share of the window in use. */
@@ -137,9 +84,9 @@ function statusLine(card: Card, nowMs: number): HTMLElement {
 }
 
 /**
- * Project, model, branch and background jobs. When the line is too long the project
- * and the branch give way down to a few letters; on narrow cards the branch, then the
- * model, are left out (see STYLE). The count is never cut. Each part is isolated, so a
+ * Project, model, branch and background jobs. When the line is too long the branch
+ * gives way first, then the project down to a few letters, and the model last; on
+ * narrow cards the branch is left out, and with a count the project too (see STYLE). The count is never cut. Each part is isolated, so a
  * Hebrew project name keeps its own direction.
  */
 function whereLine(card: Card): HTMLElement {
