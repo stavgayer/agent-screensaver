@@ -63,6 +63,10 @@ type Calibration struct {
 type Reading struct {
 	event.LimitReading
 	AtMs int64
+	// ResetDerived is true when ResetsAt was worked out (the week rolled
+	// forward from an older end) instead of read with the reading. It is
+	// for logs and tests only; the screen shows the time the same way.
+	ResetDerived bool
 }
 
 // Result is what one Estimate call found.
@@ -154,16 +158,34 @@ func (e *Estimator) advance(anchors []Anchor, nowMs int64) {
 	slices.SortStableFunc(anchors, func(a, b Anchor) int { return cmp.Compare(a.AtMs, b.AtMs) })
 	for _, anchor := range anchors {
 		window, ok := windowOf(anchor.Window)
-		if !ok || anchor.AtMs <= nowMs-horizonMs {
+		if !ok {
 			continue
 		}
 		calibration := e.calibration(anchor.Window)
+		// Week ends come every seven days, so any end ever seen, however
+		// old, gives the cadence the week rolls forward on.
+		if window.name == event.Week && calibration.noteEnd(anchor.ResetsAt) {
+			e.dirty = true
+		}
+		if anchor.AtMs <= nowMs-horizonMs {
+			continue
+		}
 		if calibration.Latest != nil && anchor.AtMs <= calibration.Latest.AtMs {
 			continue
 		}
 		calibration.add(anchor, window, e.Tally)
 		e.dirty = true
 	}
+}
+
+// noteEnd keeps end as the known window end when it is newer than the one
+// known. It reports whether it changed anything.
+func (c *Calibration) noteEnd(end *int64) bool {
+	if end == nil || (c.ResetsAt != nil && *end <= *c.ResetsAt) {
+		return false
+	}
+	c.ResetsAt = copyInt64(end)
+	return true
 }
 
 // add makes anchor the latest reading. An anchor without a reset time takes
@@ -280,11 +302,19 @@ func (e *Estimator) reading(window limitWindow, nowMs int64) (Reading, bool) {
 		exact.ResetsAt = int64Pointer(anchorClosedMs / 1000)
 	} else {
 		exact.ResetsAt = int64Pointer(current.endS)
+		exact.ResetDerived = weekEndDerived(window, latest, current)
 	}
 	if reading, ok := e.estimate(window, calibration, from, basePercent, int64Pointer(current.endS), nowMs); ok {
+		reading.ResetDerived = weekEndDerived(window, latest, current)
 		return reading, true
 	}
 	return exact, true
+}
+
+// weekEndDerived says whether the open week's end was rolled forward rather
+// than read with the latest reading.
+func weekEndDerived(window limitWindow, latest *Anchor, current period) bool {
+	return window.name == event.Week && (latest.ResetsAt == nil || *latest.ResetsAt != current.endS)
 }
 
 // readingWithoutPeriod is the reading when the open window cannot be told.
@@ -371,8 +401,13 @@ func (c *Calibration) sane(window limitWindow) *Calibration {
 	if c.PercentPerToken > 0 && !math.IsInf(c.PercentPerToken, 0) {
 		clean.PercentPerToken = c.PercentPerToken
 	}
-	if clean.Latest != nil && clean.Latest.ResetsAt != nil {
-		clean.ResetsAt = copyInt64(clean.Latest.ResetsAt)
+	// The known end may be older than the latest reading (the week rolls
+	// forward from it), but never more than one window after it.
+	if c.ResetsAt != nil && *c.ResetsAt > 0 && (clean.Latest == nil || *c.ResetsAt*1000 <= clean.Latest.AtMs+window.lengthMs) {
+		clean.ResetsAt = copyInt64(c.ResetsAt)
+	}
+	if clean.Latest != nil {
+		clean.noteEnd(clean.Latest.ResetsAt)
 	}
 	return clean
 }

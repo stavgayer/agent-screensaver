@@ -73,6 +73,12 @@ func exact(window event.Window, percent float64, resetsAtMs, atMs int64) Reading
 	return reading
 }
 
+// derived marks a reading whose reset time was worked out, not read.
+func derived(reading Reading) Reading {
+	reading.ResetDerived = true
+	return reading
+}
+
 func estimated(window event.Window, percent float64, resetsAtMs, atMs int64) Reading {
 	reading := exact(window, percent, resetsAtMs, atMs)
 	reading.Estimated = true
@@ -310,6 +316,51 @@ func TestCalibrationSurvivesARestart(t *testing.T) {
 	}
 }
 
+func TestWeekEndSurvivesARestart(t *testing.T) {
+	const dayMs = 24 * hourMs
+	setup := newEstimator(t)
+	setup.source.anchors = []Anchor{withReset(anchor(event.Week, 96, at10-16*dayMs), at10-13*dayMs), anchor(event.Week, 40, at10-dayMs)}
+	if _, err := setup.estimator.Estimate(at10); err != nil {
+		t.Fatal(err)
+	}
+	if err := setup.estimator.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := &Estimator{
+		Tally:     &Tally{FS: os.DirFS(setup.root), Root: "projects", Weights: DefaultWeights},
+		StoreFile: setup.estimator.StoreFile,
+	}
+	result, err := restarted.Estimate(at10 + hourMs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Reading{derived(exact(event.Week, 40, at10+dayMs, at10-dayMs))}
+	if !reflect.DeepEqual(result.Readings, want) {
+		t.Errorf("after restart =\n %s\nwant\n %s", show(result.Readings), show(want))
+	}
+}
+
+func TestLoadedWeekEndFarAheadIsDropped(t *testing.T) {
+	setup := newEstimator(t)
+	saved := `{"version":1,"windows":{"week":{"latest":{"window":"week","percent":40,"at_ms":` +
+		fmt.Sprint(at10) + `},"resets_at":99999999999}}}`
+	if err := os.MkdirAll(filepath.Dir(setup.estimator.StoreFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(setup.estimator.StoreFile, []byte(saved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := setup.estimator.Estimate(at10 + minuteMs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Reading{exact(event.Week, 40, 0, at10)}
+	if !reflect.DeepEqual(result.Readings, want) {
+		t.Errorf("readings = %s, want %s", show(result.Readings), show(want))
+	}
+}
+
 func TestCalibrationSavesAreSpacedOut(t *testing.T) {
 	setup := newEstimator(t)
 	setup.source.anchors = []Anchor{anchor(event.FiveHour, 10, at10)}
@@ -412,9 +463,9 @@ func show(readings []Reading) string {
 	for _, reading := range readings {
 		resets := "none"
 		if reading.ResetsAt != nil {
-			resets = time.Unix(*reading.ResetsAt, 0).UTC().Format("15:04")
+			resets = time.Unix(*reading.ResetsAt, 0).UTC().Format("Jan 2 15:04")
 		}
-		text += fmt.Sprintf("{%s %.2f%% est=%v resets=%s at=%s} ", reading.Window, reading.UsedPercent, reading.Estimated, resets,
+		text += fmt.Sprintf("{%s %.2f%% est=%v resets=%s derived=%v at=%s} ", reading.Window, reading.UsedPercent, reading.Estimated, resets, reading.ResetDerived,
 			time.UnixMilli(reading.AtMs).UTC().Format("15:04"))
 	}
 	return text
@@ -475,7 +526,23 @@ func TestEstimateResetTime(t *testing.T) {
 			anchors: []Anchor{withReset(anchor(event.Week, 60, at10-4*dayMs), at10-2*dayMs), anchor(event.Week, 5, at10-dayMs)},
 			nowMs:   at10,
 			window:  event.Week,
-			want:    exact(event.Week, 5, at10+5*dayMs, at10-dayMs),
+			want:    derived(exact(event.Week, 5, at10+5*dayMs, at10-dayMs)),
+		},
+		{
+			// The /usage cache in ~/.claude.json can be weeks old; its week
+			// end still gives the weekly cadence.
+			name:    "a week end read longer ago than the horizon still rolls forward to the next one",
+			anchors: []Anchor{withReset(anchor(event.Week, 96, at10-16*dayMs), at10-13*dayMs), anchor(event.Week, 40, at10-dayMs)},
+			nowMs:   at10,
+			window:  event.Week,
+			want:    derived(exact(event.Week, 40, at10+dayMs, at10-dayMs)),
+		},
+		{
+			name:    "the newest week end seen wins over an older one",
+			anchors: []Anchor{withReset(anchor(event.Week, 96, at10-30*dayMs), at10-27*dayMs-hourMs), withReset(anchor(event.Week, 50, at10-16*dayMs), at10-13*dayMs), anchor(event.Week, 40, at10-dayMs)},
+			nowMs:   at10,
+			window:  event.Week,
+			want:    derived(exact(event.Week, 40, at10+dayMs, at10-dayMs)),
 		},
 		{
 			name:    "a week end never seen stays unknown",
