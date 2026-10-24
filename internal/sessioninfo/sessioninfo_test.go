@@ -146,6 +146,32 @@ func TestBranch(t *testing.T) {
 	}
 }
 
+// A dotfiles repository in the home folder is not the repository of every
+// project below it.
+func TestBranchIgnoresARepoInTheHomeFolder(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".git", "HEAD"), "ref: refs/heads/dotfiles\n")
+	writeFile(t, filepath.Join(home, "work", "app", "keep"), "")
+	writeFile(t, filepath.Join(home, "work", "repo", ".git", "HEAD"), "ref: refs/heads/main\n")
+
+	tests := []struct {
+		name string
+		cwd  string
+		want string
+	}{
+		{"a project without a repo", filepath.Join(home, "work", "app"), ""},
+		{"a project with its own repo", filepath.Join(home, "work", "repo"), "main"},
+		{"a session in the home folder itself", home, "dotfiles"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Branch(tt.cwd, home); got != tt.want {
+				t.Errorf("Branch(%q) = %q, want %q", tt.cwd, got, tt.want)
+			}
+		})
+	}
+}
+
 func percent(value float64) *float64 { return &value }
 
 func equalPercent(a, b *float64) bool {

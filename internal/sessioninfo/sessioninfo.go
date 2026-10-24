@@ -149,12 +149,18 @@ func contextWindow(model string, used float64, sizes *ContextSizes) (float64, bo
 
 // Branch returns the git branch checked out in cwd or a folder above it,
 // the short commit when the head is detached, or "" when cwd is not in a
-// repository. It does not go above stop (usually the home folder).
+// repository. It does not go above stop (usually the home folder), and it
+// looks at stop itself only when cwd is stop: a dotfiles repository in the
+// home folder must not give its branch to every project below it.
 func Branch(cwd, stop string) string {
 	if cwd == "" {
 		return ""
 	}
-	for dir := filepath.Clean(cwd); ; dir = filepath.Dir(dir) {
+	start, stop := filepath.Clean(cwd), filepath.Clean(stop)
+	for dir := start; ; dir = filepath.Dir(dir) {
+		if dir == stop && dir != start {
+			return ""
+		}
 		if gitDir, ok := findGitDir(dir); ok {
 			return headBranch(filepath.Join(gitDir, "HEAD"))
 		}
