@@ -94,7 +94,11 @@ func TestConverterEnvironment(t *testing.T) {
 	home := t.TempDir()
 	env := ConverterEnv(home, "/usr/bin:/bin", testSource, "session.idle")
 
-	if _, err := RunConverter(context.Background(), testConverter(t, "env.sh"), nil, env); err != nil {
+	// This test checks the environment, not speed: a generous limit keeps a
+	// busy machine from failing it.
+	converter := testConverter(t, "env.sh")
+	converter.Timeout = 2 * time.Second
+	if _, err := RunConverter(context.Background(), converter, nil, env); err != nil {
 		t.Fatal(err)
 	}
 
