@@ -66,6 +66,10 @@ func TestMaskSecretsKeepsIdentifiers(t *testing.T) {
 		{"random key with underscores still masked", "k_9fA3Zq8LmN2xR7vB1cD5eG0hJ4kP6sT", mask},
 		{"mixed case long run still masked", "Mcp__Engram__Mem_Session_Summary_Value", mask},
 		{"hex hash still masked", "0123456789abcdef0123456789abcdef", mask},
+		{"prefixed hex token masked", "tok_a3f9b2c1d4e5f60718293a4b5c6d7e8f", mask},
+		{"prefixed hex token in a command masked", `curl -H "X-Auth tok_a3f9b2c1d4e5f60718293a4b5c6d7e8f"`, `curl -H "X-Auth ` + mask + `"`},
+		{"two-part token with a long word masked", "svc_live_9f8e7d6c5b4a39281706f5e4d3c2b1a0", mask},
+		{"word of 20 characters kept", "abcdefghijklmnopqrst_update_record", "abcdefghijklmnopqrst_update_record"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -47,8 +47,10 @@ var longRun = regexp.MustCompile(`[A-Za-z0-9+/_\-]{32,}`)
 
 // identifier is a lowercase snake_case name such as the tool name
 // mcp__engram__mem_session_summary: words that start with a letter, joined by
-// one or two underscores. Random keys do not look like this.
-var identifier = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_{1,2}[a-z][a-z0-9]*)+$`)
+// one or two underscores, each word at most 20 characters. Random keys do not
+// look like this; the word limit keeps prefixed tokens such as tok_<32 hex>
+// masked.
+var identifier = regexp.MustCompile(`^[a-z][a-z0-9]{0,19}(?:_{1,2}[a-z][a-z0-9]{0,19})+$`)
 
 // MaskSecrets replaces likely secrets with a mask, keeping the surrounding
 // context (the "Bearer" word, the key name and separator) readable.
