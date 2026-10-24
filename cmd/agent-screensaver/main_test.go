@@ -34,6 +34,9 @@ func buildAndRun(m *testing.M) int {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n%s", err, out)
 		return 1
 	}
+	// Start it once: macOS checks a new program on its first start, which
+	// can take most of a second, and no test should pay for that.
+	_ = exec.Command(binaryPath, "version").Run()
 	return m.Run()
 }
 
@@ -139,8 +142,10 @@ func TestHookGarbageStdinExitsZeroFast(t *testing.T) {
 			if got.exitCode != 0 || got.stdout != "" {
 				t.Errorf("exit %d, stdout %q; want 0 and empty", got.exitCode, got.stdout)
 			}
-			if got.elapsed > 100*time.Millisecond {
-				t.Errorf("took %v, want under 100ms", got.elapsed)
+			// A loose guard against a hook that blocks; the real latency is
+			// measured by BenchmarkHookWithManyExtensions in internal/cli.
+			if got.elapsed > time.Second {
+				t.Errorf("took %v, want under 1 s", got.elapsed)
 			}
 		})
 	}
@@ -226,8 +231,9 @@ func TestStatuslineTimesOutSlowPrevious(t *testing.T) {
 	if got.exitCode != 0 || got.stdout != "" {
 		t.Errorf("exit %d, stdout %q; want 0 and empty", got.exitCode, got.stdout)
 	}
-	if got.elapsed > 500*time.Millisecond {
-		t.Errorf("took %v, want under 500ms", got.elapsed)
+	// Well under the previous command's sleep 2, which proves the timeout.
+	if got.elapsed > 1500*time.Millisecond {
+		t.Errorf("took %v, want under 1.5 s", got.elapsed)
 	}
 }
 

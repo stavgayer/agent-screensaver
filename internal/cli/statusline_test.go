@@ -82,11 +82,13 @@ func TestRunPrevious(t *testing.T) {
 		wantOK  bool
 		limit   time.Duration
 	}{
-		{"success", "echo hi", "hi\n", true, 500 * time.Millisecond},
-		{"exit failure", "exit 1", "", false, 500 * time.Millisecond},
-		{"timeout in pipeline", "sleep 3 | cat", "", false, 500 * time.Millisecond},
-		{"timeout with background child", "(sleep 3; echo x) & wait", "", false, 500 * time.Millisecond},
-		{"background process holds stdout", "echo hi; sleep 3 &", "hi\n", true, 500 * time.Millisecond},
+		// The limits are loose so a busy machine does not fail them; well
+		// under the sleep 3 is what proves the 300 ms timeout works.
+		{"success", "echo hi", "hi\n", true, 1500 * time.Millisecond},
+		{"exit failure", "exit 1", "", false, 1500 * time.Millisecond},
+		{"timeout in pipeline", "sleep 3 | cat", "", false, 1500 * time.Millisecond},
+		{"timeout with background child", "(sleep 3; echo x) & wait", "", false, 1500 * time.Millisecond},
+		{"background process holds stdout", "echo hi; sleep 3 &", "hi\n", true, 1500 * time.Millisecond},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

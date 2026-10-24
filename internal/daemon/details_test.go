@@ -206,7 +206,9 @@ func TestASlowDetailsReadDoesNotDelayEvents(t *testing.T) {
 	started := time.Now()
 	d.Step(2_000, false)
 
-	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+	// The read blocks until released, so any bound proves the step did not
+	// wait for it; a loose one keeps a busy machine from failing the test.
+	if elapsed := time.Since(started); elapsed > time.Second {
 		t.Errorf("a step took %v while a read was blocked", elapsed)
 	}
 	if cards := readStateFile(t, p).Cards; len(cards) != 1 || cards[0].Kind != state.KindApproval {

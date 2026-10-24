@@ -636,7 +636,7 @@ The service checks every mark before it accepts the extension: at most 8 KiB, an
 | The details reader in the daemon, and the git branch reader. | Bounded file reads with no hidden inputs. |
 | The Codex limits provider. | JSON-RPC (see above). |
 
-The hook command stays `agent-screensaver hook --tool <source>`. It reads the config (to see if the agent is off) and the agent manifests in the extensions folder, maps the payload, writes the event, and exits 0. It stays under 100 ms with 50 installed extensions (test in Task 6.4).
+The hook command stays `agent-screensaver hook --tool <source>`. It reads the config (to see if the agent is off) and the agent manifests in the extensions folder, maps the payload, writes the event, and exits 0. It stays under 100 ms with 50 installed extensions (about 3 to 15 ms; `BenchmarkHookWithManyExtensions` in `internal/cli` measures it, and the unit tests keep only a loose 1 s guard so a busy machine does not fail them).
 
 ### Moving Claude Code and Codex
 

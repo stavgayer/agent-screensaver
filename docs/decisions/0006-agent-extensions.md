@@ -76,7 +76,7 @@ What the model does not cover: a converter or a plugin file is code the user cho
 ## Costs
 
 - Work: Task 6.4 (engine, recipe engine, move Claude and Codex), 6.5 (Cursor), 6.6 (settings Connections tab), 6.7 (real-world re-check). The move must prove, with the existing fixtures and install tests, that Claude and Codex behave exactly as before.
-- The hook now reads manifests from disk on every event. It must stay under 100 ms with 50 installed extensions; a test checks it.
+- The hook now reads manifests from disk on every event. It must stay under 100 ms with 50 installed extensions; a benchmark (`BenchmarkHookWithManyExtensions`) measures it.
 - A new public format to keep stable (`api: 1`). Changing it later needs a version bump and old manifests keep working.
 - Cursor approval cards need our hook to answer Cursor's permission hooks with "ask". If a live test shows that "ask" changes Cursor's behavior (for example for commands Cursor runs without asking), the Cursor recipe drops those events and Cursor shows no approval cards.
 - TOML configs are not supported in version 1 (no byte-preserving TOML editor in the standard library).

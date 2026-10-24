@@ -80,8 +80,10 @@ func TestConverterTimeout(t *testing.T) {
 
 	got, err := mapping.Events(context.Background(), nil, "", nil, testNowMs)
 
-	if elapsed := time.Since(start); elapsed > 600*time.Millisecond {
-		t.Errorf("took %v, want under 600 ms", elapsed)
+	// Well under the script's sleep, which proves the kill; loose so a busy
+	// machine or the first start of a new program does not fail it.
+	if elapsed := time.Since(start); elapsed > 1500*time.Millisecond {
+		t.Errorf("took %v, want under 1.5 s", elapsed)
 	}
 	if len(got) != 0 || err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Errorf("events %+v, error %v", got, err)

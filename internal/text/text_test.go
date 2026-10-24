@@ -192,16 +192,18 @@ func TestPromptTitleIsFastOnManyLoneTags(t *testing.T) {
 	prompt := strings.Repeat("<a>\n", 256*1024) // 1 MB, no closing tag
 	start := time.Now()
 	PromptTitle(prompt)
-	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
-		t.Errorf("PromptTitle took %v on 1 MB of lone tags, want well under 100 ms", elapsed)
+	// A quadratic scan would take minutes here; the loose bound only
+	// catches that, not small slowdowns.
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("PromptTitle took %v on 1 MB of lone tags, want well under 1 s", elapsed)
 	}
 }
 
 func TestPromptTitleIsFastOnOneHugeLine(t *testing.T) {
 	start := time.Now()
 	got := PromptTitle(strings.Repeat("word ", 200*1024))
-	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
-		t.Errorf("PromptTitle took %v on 1 MB single line", elapsed)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("PromptTitle took %v on 1 MB single line, want well under 1 s", elapsed)
 	}
 	if want := "word word word word word word word word…"; got != want {
 		t.Errorf("got %q, want %q", got, want)

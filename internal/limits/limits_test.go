@@ -3,6 +3,7 @@ package limits
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -262,14 +263,39 @@ func TestWithFallbackDirs(t *testing.T) {
 	}
 }
 
-// fakeCodex writes a shell script that stands in for the codex binary.
-func fakeCodex(t *testing.T, body string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "codex")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
-		t.Fatal(err)
+// fakeCodexBin is one shell script that stands in for the codex binary. It
+// runs the body in FAKE_CODEX_BODY. One script, started once in TestMain,
+// means no test pays the macOS check of a new program on its first start.
+var fakeCodexBin string
+
+func TestMain(m *testing.M) {
+	os.Exit(runWithFakeCodex(m))
+}
+
+func runWithFakeCodex(m *testing.M) int {
+	dir, err := os.MkdirTemp("", "ags-fake-codex")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
-	return path
+	defer os.RemoveAll(dir)
+	fakeCodexBin = filepath.Join(dir, "codex")
+	warm := exec.Command(fakeCodexBin)
+	warm.Env = append(os.Environ(), "FAKE_CODEX_BODY=exit 0")
+	if err := os.WriteFile(fakeCodexBin, []byte("#!/bin/sh\neval \"$FAKE_CODEX_BODY\"\n"), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if err := warm.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "warm the fake codex:", err)
+		return 1
+	}
+	return m.Run()
+}
+
+// fakeCodex is a Codex reader whose binary runs body.
+func fakeCodex(body string) Codex {
+	return Codex{Bin: fakeCodexBin, Env: append(os.Environ(), "FAKE_CODEX_BODY="+body)}
 }
 
 func TestCodexRead(t *testing.T) {
@@ -300,7 +326,7 @@ func TestCodexRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			got, err := Codex{Bin: fakeCodex(t, tt.script), Env: os.Environ()}.Read(ctx)
+			got, err := fakeCodex(tt.script).Read(ctx)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -318,23 +344,22 @@ func TestCodexReadPutsItsFolderFirstOnPath(t *testing.T) {
 		`echo "{\"id\":2,\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":$p}}}}"`
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	got, err := Codex{Bin: fakeCodex(t, script), Env: os.Environ()}.Read(ctx)
+	got, err := fakeCodex(script).Read(ctx)
 	if err != nil || len(got) != 1 || got[0].UsedPercent != 1 {
 		t.Errorf("got %+v, %v; want one reading with 1 (folder first on PATH)", got, err)
 	}
 }
 
-// The timeout is generous because the first run of a fresh script can be
-// slow on macOS; the script has to write its pid before the deadline.
+// The script has to write its pid before the deadline.
 func TestCodexReadTimeoutKillsProcessGroup(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	// The inner sleep is a grandchild: only a group kill removes it.
-	script := fakeCodex(t, "sleep 60 &\necho $! > "+pidFile+"\nwait")
+	codex := fakeCodex("sleep 60 &\necho $! > " + pidFile + "\nwait")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	start := time.Now()
-	_, err := Codex{Bin: script, Env: os.Environ()}.Read(ctx)
+	_, err := codex.Read(ctx)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want DeadlineExceeded", err)
 	}
