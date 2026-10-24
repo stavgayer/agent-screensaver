@@ -117,6 +117,16 @@ var (
 	plainMention = regexp.MustCompile(`(?:^|\s)@(\S*/\S+)`)
 )
 
+// harnessMarkers start messages that Claude Code writes as a user turn. A
+// prompt that starts with one has no human text at all. The list is short
+// and explicit on purpose: a bracket at the start of a real prompt
+// ("[WIP] fix the build") stays the user's.
+var harnessMarkers = []string{
+	"[Subagent hand-back]",
+	"[Request interrupted by user]",
+	"[Request interrupted by user for tool use]",
+}
+
 // firstHumanText drops leading machine-made parts and returns the rest.
 func firstHumanText(s string) string {
 	for range maxSkipSteps {
@@ -125,11 +135,22 @@ func firstHumanText(s string) string {
 			s = rest
 		} else if rest, ok := skipBanner(s); ok {
 			s = rest
+		} else if startsWithHarnessMarker(s) {
+			return ""
 		} else {
 			return s
 		}
 	}
 	return strings.TrimLeft(s, " \t\r\n")
+}
+
+func startsWithHarnessMarker(s string) bool {
+	for _, marker := range harnessMarkers {
+		if strings.HasPrefix(s, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // skipTagBlock removes <tag ...>...</tag>, a self-closing tag, a stray
