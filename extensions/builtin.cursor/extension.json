@@ -10,9 +10,6 @@
     "hooks": {
       "event": "hook_event_name",
       "session": "conversation_id",
-      "reply": {
-        "events": { "beforeShellExecution": "ask", "beforeMCPExecution": "ask" }
-      },
       "common": {
         "project": { "path": ["workspace_roots.0", "cwd"], "as": "basename" },
         "transcript": "transcript_path"

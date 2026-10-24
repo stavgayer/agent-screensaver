@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"slices"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -358,5 +359,41 @@ func TestCursorShellCommandMakesAWorkingCard(t *testing.T) {
 	card := cards.Cards[0]
 	if card.Kind != state.KindRunning || card.Request != "npm run migrate" || cards.NeedsAttention() {
 		t.Errorf("card = %+v, needs attention %v; want running with the command and no attention", card, cards.NeedsAttention())
+	}
+}
+
+// TestCursorHookNeverAnswersForTheUser: our hook prints nothing to Cursor.
+// On 24/10/2026 (Cursor 3.27.12, run mode "Run Everything") our
+// {"permission":"ask"} on beforeShellExecution made Cursor wait 49 minutes
+// for an approval it would never have asked for, while the card said
+// Working. With no output Cursor decides as it would without us.
+func TestCursorHookNeverAnswersForTheUser(t *testing.T) {
+	agent := builtinAgent(t, "cursor")
+	for _, name := range append(slices.Clone(agent.Install.Hooks.Events), "") {
+		if got := agent.Hooks.Reply.Text(name); got != "" {
+			t.Errorf("reply to %q = %q, want nothing", name, got)
+		}
+		if agent.Hooks.Reply.HasOwn(name) {
+			t.Errorf("%q has its own reply, so its command would carry --reply", name)
+		}
+	}
+}
+
+// TestCursorTurnWithAShellCommandEndsDone replays the hook order Cursor
+// logged for a turn with one shell command (24/10/2026): the card is done
+// after stop, and Cursor's later steps of the same turn come before it.
+func TestCursorTurnWithAShellCommandEndsDone(t *testing.T) {
+	var cards state.State
+	steps := []string{"before_submit_prompt.json", "before_shell_execution.json", "after_shell_execution.json", "post_tool_use.json", "stop.json"}
+	for index, fixture := range steps {
+		mapped, ok := mapHook(t, "cursor", readTestFile(t, filepath.Join("testdata", "cursor", fixture)))
+		if !ok {
+			t.Fatalf("%s gave no event", fixture)
+		}
+		mapped.AtMs = testNowMs + int64(index)*1000
+		cards.Apply(mapped)
+	}
+	if len(cards.Cards) != 1 || cards.Cards[0].Kind != state.KindFinished {
+		t.Fatalf("cards = %+v, want one finished card", cards.Cards)
 	}
 }

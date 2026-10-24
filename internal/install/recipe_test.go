@@ -89,7 +89,11 @@ func TestEventWithReplyGetsEventArg(t *testing.T) {
 	home := t.TempDir()
 	rec := Record{Version: RecordVersion}
 
-	addAgent(t, home, cursorAgent(t), &rec)
+	// The built-in Cursor agent has no reply of its own any more; the engine
+	// still supports one.
+	agent := cursorAgent(t)
+	agent.Hooks.Reply = agents.Reply{Events: map[string]string{"beforeShellExecution": agents.ReplyAsk}}
+	addAgent(t, home, agent, &rec)
 
 	file := readJSON(t, cursorPath(home))
 	ask := shellQuote(testBin) + " hook --tool cursor --event beforeShellExecution --reply ask"
@@ -522,14 +526,11 @@ func TestAgentInstall(t *testing.T) {
 					}
 				}
 			}},
-		{name: "cursor permission events get --event in the command", user: userFile,
+		{name: "cursor commands carry no --event or --reply", user: userFile,
 			check: func(t *testing.T, home string, agent agents.Agent, _ *Record) {
 				for event, handlers := range ourHandlers(t, mustRead(t, cursorPath(home))) {
 					command := handlers[0]["command"].(string)
 					want := shellQuote(testBin) + " hook --tool cursor"
-					if agent.Hooks.Reply.HasOwn(event) {
-						want = shellQuote(testBin) + " hook --tool cursor --event " + event + " --reply ask"
-					}
 					if command != want {
 						t.Errorf("%s command = %q, want %q", event, command, want)
 					}

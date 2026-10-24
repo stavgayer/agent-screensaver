@@ -382,9 +382,6 @@ The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/20
     "hooks": {
       "event": "hook_event_name",
       "session": "conversation_id",
-      "reply": {
-        "events": { "beforeShellExecution": "ask", "beforeMCPExecution": "ask" }
-      },
       "common": {
         "project": { "path": ["workspace_roots.0", "cwd"], "as": "basename" },
         "transcript": "transcript_path"
@@ -422,7 +419,7 @@ The Cursor field names come from https://cursor.com/docs/hooks (fetched 23/10/20
 }
 ```
 
-**Cursor commands are working steps, not approvals (owner decision, 24/10/2026; replaces the 23/10 approval cards).** Cursor has no approval event that only reports. Its events before a command are permission hooks: Cursor reads the hook's answer, and an invalid answer blocks the action. The built-in Cursor extension subscribes to `beforeShellExecution` and `beforeMCPExecution`, and our hook always answers `{"permission": "ask"}` for them. "Ask" means "let Cursor ask the user", so Cursor behaves as before (live test, below). Our hook never answers allow or deny (a hard rule of the engine, see "Safety rules"). The two events map to `tool_intent`: the working card shows the command or the MCP tool name. They are not approvals, because Cursor does not tell the hook whether it will really ask the user, and in "Run Everything" mode it sends them before every command, which would show a false approval card and play its sound for each one. So Cursor never makes an approval card. `afterShellExecution` and `afterMCPExecution` map to `resumed`.
+**Cursor commands are working steps, not approvals (owner decision, 24/10/2026; replaces the 23/10 approval cards).** Cursor has no approval event that only reports. Its events before a command are permission hooks: Cursor reads the hook's answer, and an invalid answer blocks the action. The built-in Cursor extension subscribes to `beforeShellExecution` and `beforeMCPExecution`, and our hook prints nothing for them, so Cursor decides as it would without us. It first answered `{"permission": "ask"}`; on 24/10/2026 (Cursor 3.27.12, "Run Everything") that answer made Cursor wait 49 minutes for an approval it would not have asked for, while the card said "Working" (Task 6.7). Our hook never answers allow or deny (a hard rule of the engine, see "Safety rules"). The two events map to `tool_intent`: the working card shows the command or the MCP tool name. They are not approvals, because Cursor does not tell the hook whether it will really ask the user, and in "Run Everything" mode it sends them before every command, which would show a false approval card and play its sound for each one. So Cursor never makes an approval card. `afterShellExecution` and `afterMCPExecution` map to `resumed`.
 
 - `preToolUse` is not used. The docs say Cursor accepts `ask` there but does not enforce it today, so its effect is unclear.
 - Risk: Cursor can run some commands without asking (an allow list or auto-run mode). The docs do not say whether a hook's `ask` makes Cursor ask for such a command. Task 6.5 tested this live on the owner's Mac, with and without our hook.
