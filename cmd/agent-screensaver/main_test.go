@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"agent-screensaver/internal/cli"
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/paths"
 )
@@ -272,5 +273,17 @@ func TestVersionPrintsBuildVersion(t *testing.T) {
 				t.Errorf("exit %d, stdout %q; want 0 and \"dev\\n\"", got.exitCode, got.stdout)
 			}
 		})
+	}
+}
+
+// Every subcommand that run does not dispatch by name is a settings command,
+// so none falls through to an unknown-command error.
+func TestEverySubcommandIsDispatched(t *testing.T) {
+	byName := map[string]bool{"hook": true, "statusline": true, "daemon": true, "install": true,
+		"uninstall": true, "tray": true, "settings": true, "agent": true}
+	for _, name := range subcommands {
+		if !byName[name] && !cli.IsSettingsCommand(name) {
+			t.Errorf("subcommand %q is neither dispatched by name nor a settings command", name)
+		}
 	}
 }

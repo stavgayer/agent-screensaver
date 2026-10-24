@@ -21,17 +21,13 @@ const (
 	stagingPrefix = ".install-"
 )
 
-// InstallFrom installs an extension from a folder or a .zip file into extDir
-// and returns its manifest. The files are staged in a temp folder inside
-// extDir first (same filesystem, so the final rename is cheap), validated,
-// and only then moved to extDir/<id>.
-func InstallFrom(src, extDir string) (Manifest, error) {
-	return InstallChecked(src, extDir, nil)
-}
-
-// InstallChecked is InstallFrom with one more check, run on the staged
-// folder before it replaces anything. Callers use it for the rules that
-// live in other packages, such as an agent's install recipe. check may be nil.
+// InstallChecked installs an extension from a folder or a .zip file into
+// extDir and returns its manifest. The files are staged in a temp folder
+// inside extDir first (same filesystem, so the final rename is cheap),
+// validated, and only then moved to extDir/<id>. check runs on the staged
+// folder before it replaces anything: callers pass the rules that live in
+// other packages, such as an agent's install recipe. check may be nil only
+// for extensions that are not agents.
 func InstallChecked(src, extDir string, check func(m Manifest, dir string) error) (Manifest, error) {
 	info, err := os.Stat(src)
 	if err != nil {

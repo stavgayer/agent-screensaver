@@ -45,16 +45,6 @@ type agentManifest struct {
 	} `json:"limits,omitempty"`
 }
 
-// Validate checks every rule of an agent manifest: the common extension
-// rules and the agent body. dir is the extension folder.
-func Validate(m extensions.Manifest, dir string) error {
-	if err := extensions.Validate(m, dir); err != nil {
-		return err
-	}
-	_, err := FromManifest(m, dir)
-	return err
-}
-
 // FromManifest turns a manifest that passed extensions.Validate into an
 // Agent, checking the agent body on the way.
 func FromManifest(m extensions.Manifest, dir string) (Agent, error) {

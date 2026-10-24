@@ -60,15 +60,6 @@ func AgentSource(m Manifest) string {
 	return basics.Source
 }
 
-// AgentMark is the path of an agent's mark inside its folder.
-func AgentMark(m Manifest) string {
-	var basics agentBasics
-	if json.Unmarshal(m.Agent, &basics) != nil {
-		return ""
-	}
-	return filepath.Clean(basics.Mark)
-}
-
 // markRules are the things a mark may not hold. The runtime shows the mark
 // with <img src>, which runs no script and loads nothing; this check is the
 // second line of defense.

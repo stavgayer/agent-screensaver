@@ -178,7 +178,7 @@ func TestValidateAgentManifest(t *testing.T) {
 			if tt.files != nil {
 				tt.files(t, dir)
 			}
-			err := Validate(readManifest(t, dir), dir)
+			err := validateAgent(readManifest(t, dir), dir)
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -192,13 +192,23 @@ func TestValidateAgentManifest(t *testing.T) {
 	}
 }
 
+// validateAgent checks every rule of an agent manifest: the common extension
+// rules and the agent body, as an install does.
+func validateAgent(m extensions.Manifest, dir string) error {
+	if err := extensions.Validate(m, dir); err != nil {
+		return err
+	}
+	_, err := FromManifest(m, dir)
+	return err
+}
+
 func TestInstallOfSecondAgentWithSameSourceIsRefused(t *testing.T) {
 	extDir := filepath.Join(t.TempDir(), "extensions")
-	if _, err := extensions.InstallFrom(agentCopy(t, "builtin.codex", "acme.one", nil), extDir); err != nil {
+	if _, err := extensions.InstallChecked(agentCopy(t, "builtin.codex", "acme.one", nil), extDir, nil); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := extensions.InstallFrom(agentCopy(t, "builtin.codex", "acme.two", nil), extDir)
+	_, err := extensions.InstallChecked(agentCopy(t, "builtin.codex", "acme.two", nil), extDir, nil)
 
 	if err == nil || !strings.Contains(err.Error(), "already used by acme.one") {
 		t.Errorf("error = %v", err)

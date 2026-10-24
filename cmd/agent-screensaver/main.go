@@ -63,18 +63,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runSettingsWindow(args[1:], stderr)
 	case "agent":
 		return runAgent(args[1:], os.Stdin, stdout, stderr)
-	}
-	if cli.IsSettingsCommand(name) {
+	default: // theme, background, option, privacy, sound, fps and ext
 		return runSettings(name, args[1:], stdout, stderr)
 	}
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	if err := flags.Parse(args[1:]); err != nil {
-		return 2
-	}
-	// Every subcommand is a stub until its task is built.
-	fmt.Fprintf(stderr, "agent-screensaver %s: not implemented\n", name)
-	return 1
 }
 
 func isSubcommand(name string) bool {
