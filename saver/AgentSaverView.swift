@@ -89,7 +89,25 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         // The display role may have changed: send the same file again with the new role.
         lastModified = nil
         pushStateIfChanged()
+        // The System Settings thumbnail gets a window but never startAnimation, and it stayed
+        // black until Preview was pressed (decision 0007, "Thumbnail"). Start it ourselves, as
+        // the host does for every view it shows. Spare views are never previews.
+        if isPreview, window != nil, !isAnimating {
+            startAnimation()
+        }
         updateRunning()
+    }
+
+    /// The thumbnail view starts at 0 x 0 and gets its size later. Keep the web view on the
+    /// exact bounds, and send the state again once there is a size to draw at.
+    override func setFrameSize(_ newSize: NSSize) {
+        let hadNoSize = bounds.width < 1 || bounds.height < 1
+        super.setFrameSize(newSize)
+        webView.frame = bounds
+        if hadNoSize, bounds.width >= 1, bounds.height >= 1 {
+            lastModified = nil
+            pushStateIfChanged()
+        }
     }
 
     private static let engineBundleID = "com.apple.ScreenSaver.Engine"
@@ -107,7 +125,8 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
 
     private static var runStarted = false
 
-    /// The System Settings thumbnail never gets startAnimation, so a preview runs while it has a window.
+    /// A preview (the System Settings thumbnail) runs while it has a window, animating or not:
+    /// the host stops it when Preview is pressed but keeps showing it.
     private var shouldRun: Bool {
         guard window != nil else { return false }
         if isPreview || !Self.hostMakesSpares { return true }

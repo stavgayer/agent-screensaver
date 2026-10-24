@@ -35,6 +35,21 @@ The first version of this rule (commit d92f039) also required `isAnimating`, and
 
 So a preview view now runs whenever it has a window. A full-size view also counts as shown after its process got `didstart`. The process quits at `willstop`, so this state never outlives the run. Spare views stay paused, because they exist before any `didstart` and no engine runs.
 
+## Correction (2026-10-24): the thumbnail draws by itself
+
+After the correction above, the owner saw the full Preview and real runs draw, but the System Settings thumbnail stayed black until Preview was pressed (owner check, 23/10/2026).
+
+Evidence (the 23/10 diagnostic log; we cannot open System Settings ourselves):
+- The thumbnail view (`isPreview`) gets `viewDidMoveToWindow` in a 111 x 16 window and starts at 0 x 0. It never gets `startAnimation`. Every view that the host does show (the full Preview, a real run) gets `startAnimation`.
+- Our rule already shows the thumbnail's web view and pushes the state, so the page itself runs. What the thumbnail lacks is the host's animation: a `ScreenSaverView` that never animates is the one difference between the black thumbnail and the views that draw.
+- Pressing Preview is the first lifecycle call the thumbnail gets (`stopAnimation`), and after it the thumbnail draws.
+
+Change: when a preview view gets a window and is not animating, the view calls `startAnimation()` itself. The view keeps the default `animateOneFrame`, which draws nothing, so this costs only the host's frame timer. The view also keeps the web view on its exact bounds when its size changes, and sends the state again when it first gets a size, so a page that loaded at 0 x 0 is not left without a state.
+
+Spare views are not affected: they are never previews, and they still pause until `didstart` or ScreenSaverEngine.
+
+This is a likely cause, not a proven one. The owner checks that the thumbnail draws on its own when the Screen Saver pane opens. If it is still black, the next step is a diagnostic build that logs the thumbnail's window size, `isVisible` and the page's `visibilityState` over time.
+
 ## Alternatives
 
 - Show the page only between `didstart` and `willstop`. This fails for a run whose process starts with the run, because that process misses `didstart` (the first run in the log). Rejected.
