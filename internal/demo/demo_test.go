@@ -161,21 +161,43 @@ func TestSceneResetCountdownTicks(t *testing.T) {
 func TestSceneTextIsScripted(t *testing.T) {
 	allowed := map[string]bool{
 		"refactor auth middleware": true, "add rate limit tests": true, "update dashboard styles": true,
-		"Bash: npm run migrate": true, "feat/auth": true, "": true,
+		"Bash: npm run migrate": true, "feat/auth": true, "web-app": true, "Opus 5.5": true, "gpt-5.6": true, "": true,
 	}
 	for _, elapsed := range []int64{0, 7_000, 11_000, 19_000, 25_000} {
 		cards, _ := Scene(elapsed, totalMs, nowMs)
 		for _, card := range cards {
-			for _, text := range []string{card.Title, card.Request, card.Branch} {
+			for _, text := range []string{card.Title, card.Request, card.Branch, card.Project, card.Model} {
 				if !allowed[text] {
 					t.Errorf("unscripted text %q", text)
 				}
 			}
-			for _, text := range []string{card.Project, card.Name, card.Model, card.Session, card.Cwd, card.Transcript} {
+			for _, text := range []string{card.Name, card.Session, card.Cwd, card.Transcript} {
 				if strings.ContainsAny(text, "/\\~") {
 					t.Errorf("%q looks like a path", text)
 				}
 			}
+		}
+	}
+}
+
+func TestSceneFinishedCardKeepsFinishMoment(t *testing.T) {
+	loopStartMs := int64(nowMs - 20_000)
+	cards, _ := Scene(20_000, totalMs, nowMs)
+	for _, card := range cards {
+		if card.Source == "codex" && card.UpdatedAtMs != loopStartMs+6_000 {
+			t.Errorf("codex updated_at_ms = %d, want %d", card.UpdatedAtMs, loopStartMs+6_000)
+		}
+		if card.Source == "cursor" && card.UpdatedAtMs != nowMs {
+			t.Errorf("running cursor updated_at_ms = %d, want now", card.UpdatedAtMs)
+		}
+	}
+}
+
+func TestSceneCardsShowWhere(t *testing.T) {
+	cards, _ := Scene(0, totalMs, nowMs)
+	for _, card := range cards {
+		if card.Project != "web-app" {
+			t.Errorf("%s project = %q", card.Source, card.Project)
 		}
 	}
 }

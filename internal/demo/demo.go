@@ -13,14 +13,6 @@ import (
 // Loop is the length of one pass of the scripted scene.
 const Loop = 30 * time.Second
 
-// Moments inside one loop, in milliseconds.
-const (
-	codexFinishesMs    = 6_000
-	approvalStartsMs   = 10_000
-	approvalAnsweredMs = 18_000
-	claudeFinishesMs   = 24_000
-)
-
 // The Claude 5h ring rises once over the whole demo, not once per loop.
 const (
 	claudeFiveHourFrom = 42.0
@@ -34,19 +26,27 @@ const (
 
 const approvalRequest = "Bash: npm run migrate"
 
-// script is the fixed part of one card.
+// script is one card and its timeline inside a loop. Times are
+// milliseconds from the loop start. A card with no approval window has
+// approvalStartsMs equal to approvalEndsMs.
 type script struct {
-	source, session, title, branch string
-	runningForMs                   int64
-	contextPercent                 *float64
+	source, session, title, project, model, branch string
+	runningForMs                                   int64
+	contextPercent                                 *float64
+	approvalStartsMs, approvalEndsMs               int64
+	finishesMs                                     int64
 }
 
 func percent(value float64) *float64 { return &value }
 
+// Cursor never asks for approval.
 var scripts = []script{
-	{"claude", "demo-claude", "refactor auth middleware", "feat/auth", 10 * minuteMs, percent(34)},
-	{"codex", "demo-codex", "add rate limit tests", "", 4 * minuteMs, nil},
-	{"cursor", "demo-cursor", "update dashboard styles", "", 7 * minuteMs, nil},
+	{"claude", "demo-claude", "refactor auth middleware", "web-app", "Opus 5.5", "feat/auth",
+		10 * minuteMs, percent(34), 10_000, 18_000, 24_000},
+	{"codex", "demo-codex", "add rate limit tests", "web-app", "gpt-5.6", "",
+		4 * minuteMs, nil, 0, 0, 6_000},
+	{"cursor", "demo-cursor", "update dashboard styles", "web-app", "", "",
+		7 * minuteMs, nil, 0, 0, 24_000},
 }
 
 // Scene returns the cards and limits to show elapsedMs into a demo of
@@ -66,39 +66,33 @@ func buildCard(item script, loopMs, demoStartMs, nowMs int64) state.Card {
 	card := state.Card{
 		Source:         item.source,
 		Session:        item.session,
-		Kind:           kindAt(item.source, loopMs),
+		Kind:           kindAt(item, loopMs),
 		Title:          item.title,
+		Project:        item.project,
+		Model:          item.model,
 		Branch:         item.branch,
 		ContextPercent: item.contextPercent,
 		StartedAtMs:    demoStartMs - item.runningForMs,
 		UpdatedAtMs:    nowMs,
 	}
-	if card.Kind == state.KindApproval {
+	switch card.Kind {
+	case state.KindApproval:
 		card.Request = approvalRequest
-		since := nowMs - (loopMs - approvalStartsMs)
+		since := nowMs - (loopMs - item.approvalStartsMs)
 		card.ApprovalSinceMs = &since
+	case state.KindFinished:
+		// The card reads "Done" for as long as it has been finished.
+		card.UpdatedAtMs = nowMs - (loopMs - item.finishesMs)
 	}
 	return card
 }
 
-// kindAt is the script. Cursor never asks for approval.
-func kindAt(source string, loopMs int64) state.CardKind {
-	switch source {
-	case "codex":
-		if loopMs >= codexFinishesMs {
-			return state.KindFinished
-		}
-	case "claude":
-		switch {
-		case loopMs >= claudeFinishesMs:
-			return state.KindFinished
-		case loopMs >= approvalStartsMs && loopMs < approvalAnsweredMs:
-			return state.KindApproval
-		}
-	case "cursor":
-		if loopMs >= claudeFinishesMs {
-			return state.KindFinished
-		}
+func kindAt(item script, loopMs int64) state.CardKind {
+	switch {
+	case loopMs >= item.finishesMs:
+		return state.KindFinished
+	case loopMs >= item.approvalStartsMs && loopMs < item.approvalEndsMs:
+		return state.KindApproval
 	}
 	return state.KindRunning
 }
