@@ -62,7 +62,7 @@ describe("chrome rings", () => {
     assert.deepEqual(root.find("ring-value").map((element) => element.textContent), ordered.map((one) => ringView(one, NOW_MS).center));
     assert.deepEqual(
       root.find("ring-detail").map((element) => element.textContent),
-      ordered.map((one) => ringView(one, NOW_MS).detail || " "),
+      ordered.map((one) => ringView(one, NOW_MS).detail || "\u00a0"),
     );
     assert.equal(root.find("ring-detail")[0].textContent, "2h 10m · est.");
   });

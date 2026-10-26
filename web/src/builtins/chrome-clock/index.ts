@@ -1,6 +1,5 @@
-import type { ComponentExt, Ctx } from "../../api.ts";
-import { formatClock, formatDate } from "../../format.ts";
 import { loadFont } from "../shared/fonts.ts";
+import { createMinuteClock } from "../shared/clock.ts";
 
 const FONT_FAMILY = "Chrome Clock Anton";
 
@@ -31,57 +30,11 @@ const STYLE = `
 @media (prefers-reduced-motion: reduce) { .chrome-clock .date { transition: none; } }
 `;
 
-function createChromeClock(): ComponentExt {
-  let box: HTMLElement | undefined;
-  let time: HTMLElement | undefined;
-  let date: HTMLElement | undefined;
-  let cancelFrame: (() => void) | undefined;
-
-  // Write only on change: the tick runs every second, the text changes once a minute.
-  const show = (element: HTMLElement | undefined, text: string): void => {
-    if (element !== undefined && element.textContent !== text) element.textContent = text;
-  };
-
-  const tick = (nowMs: number): void => {
-    const moment = new Date(nowMs);
-    show(time, formatClock(moment));
-    show(date, formatDate(moment));
-  };
-
-  const setSize = (options: Readonly<Record<string, unknown>>): void => {
-    box?.classList.toggle("small", options.size === "small");
-  };
-
-  function mount(root: HTMLElement, ctx: Ctx): void {
-    const style = document.createElement("style");
-    style.textContent = STYLE;
-    const clock = document.createElement("div");
-    clock.className = "chrome-clock";
-    time = document.createElement("div");
-    time.className = "time";
-    date = document.createElement("div");
-    date.className = "date";
-    clock.append(time, date);
-    root.append(style, clock);
-    box = clock;
-    setSize(ctx.options);
-    tick(ctx.now());
-    cancelFrame = ctx.requestFrame(() => tick(ctx.now()), 1);
-    if (scriptSrc !== "") {
-      void loadFont(FONT_FAMILY, new URL("fonts/Anton-Regular.woff2", scriptSrc).href).then((ok) => {
-        if (ok) clock.classList.add("font-ready");
-      });
-    }
-  }
-
-  function unmount(): void {
-    cancelFrame?.();
-    cancelFrame = undefined;
-    box?.parentElement?.replaceChildren();
-    box = time = date = undefined;
-  }
-
-  return { mount, update() {}, setOptions: setSize, unmount };
+function loadAnton(box: HTMLElement): void {
+  if (scriptSrc === "") return;
+  void loadFont(FONT_FAMILY, new URL("fonts/Anton-Regular.woff2", scriptSrc).href).then((ok) => {
+    if (ok) box.classList.add("font-ready");
+  });
 }
 
-window.agentScreensaver.register(createChromeClock);
+window.agentScreensaver.register(() => createMinuteClock({ css: STYLE, className: "chrome-clock", onMount: loadAnton }));
