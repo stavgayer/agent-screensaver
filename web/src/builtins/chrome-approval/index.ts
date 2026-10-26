@@ -17,7 +17,9 @@ const scriptSrc = (document.currentScript as HTMLScriptElement | null)?.src ?? "
 // laid exactly on it fades in and out (opacity is composited, so the large card is
 // painted once). Names break between words; only the command may break anywhere.
 // Under reduced motion the border stays lit. The token block holds every color and
-// face; the theme can set --attention.
+// face; the theme can set --attention. The headline stays on one line at any aspect
+// ratio, so the card keeps its height between the lifted shape and the signs; the
+// wait keeps its own case ("<1m" is minutes, not months).
 const STYLE = `
 :root { --chrome-approval-ink: #eef1f4; --chrome-approval-pink: #ff3d9a; --chrome-approval-plate: rgba(16, 7, 12, 0.86);
   --chrome-approval-display: "${DISPLAY_FAMILY}", "Helvetica Neue", sans-serif;
@@ -32,9 +34,10 @@ const STYLE = `
 .approval > div { overflow-wrap: break-word; }
 .approval .meta { display: flex; justify-content: space-between; gap: 2em; font-family: var(--chrome-approval-mono); font-size: 2vmin;
   font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tone); font-variant-numeric: tabular-nums; }
+.approval .meta > .agent { flex: 1 1 auto; }
 .approval .meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.approval .meta > .waiting { flex: none; color: var(--chrome-approval-ink); font-weight: 500; }
-.approval .headline { margin: 1.2vmin 0 2.2vmin; font-family: var(--chrome-approval-display); font-size: 12.5vmin; font-weight: 400; line-height: 0.9;
+.approval .meta > .waiting { flex: none; color: var(--chrome-approval-ink); font-weight: 500; text-transform: none; letter-spacing: 0.02em; }
+.approval .headline { margin: 1.2vmin 0 1.8vmin; font-family: var(--chrome-approval-display); font-size: min(12.5vmin, 8vw); font-weight: 400; line-height: 0.9; white-space: nowrap;
   letter-spacing: 0.005em; text-transform: uppercase; color: var(--tone); }
 .approval .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 2.6vmin; row-gap: 1vmin; align-items: baseline; }
 .approval .label { font-family: var(--chrome-approval-mono); font-size: 1.7vmin; letter-spacing: 0.1em; text-transform: uppercase;
@@ -42,8 +45,7 @@ const STYLE = `
 .approval .where { font-size: 3.2vmin; font-weight: 600; line-height: 1.2; color: var(--chrome-approval-ink); overflow-wrap: break-word; }
 .approval .request { font-family: var(--chrome-approval-mono); font-size: 2.6vmin; line-height: 1.35; color: var(--chrome-approval-ink);
   overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.approval .more { margin-top: 2vmin; font-family: var(--chrome-approval-mono); font-size: 2vmin; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--tone); font-variant-numeric: tabular-nums; }
+.approval .meta > .more { flex: none; margin-inline-start: -0.8em; color: var(--tone); }
 @media (prefers-reduced-motion: reduce) { .approval::after { animation: none; opacity: 1; } }
 `;
 
@@ -68,15 +70,16 @@ function content(first: Card, more: number, state: ViewState): ApprovalContent {
   return {
     key: JSON.stringify([agent, waiting, facts, moreLabel]),
     build() {
+      // The queue count shares the label line, so a queue does not make the card taller.
       const meta = element("div", "meta");
       meta.append(element("span", "agent", agent), element("span", "waiting", waiting));
+      if (moreLabel !== "") meta.append(element("span", "more", moreLabel));
       const lines = [meta, element("div", "headline", "Needs approval")];
       if (facts.length > 0) {
         const sheet = element("div", "facts");
         for (const [label, className, text] of facts) sheet.append(element("span", "label", label), element("span", className, text));
         lines.push(sheet);
       }
-      if (moreLabel !== "") lines.push(element("div", "more", moreLabel));
       return lines;
     },
   };
