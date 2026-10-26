@@ -125,7 +125,7 @@ Regions: `top-left`, `top-right`, `center`, `bottom`. Other names are refused. A
 
 A theme picks a background and a layout, and sets style values. It needs no entry file.
 
-Two themes are built in: `builtin.default` (Default, on the Matrix background) and `builtin.calm` (Calm, on `builtin.aerials`; it shows Matrix until aerial videos are downloaded).
+Three themes are built in: `builtin.default` (Default, on the Matrix background), `builtin.calm` (Calm, on `builtin.aerials`; it shows Matrix until aerial videos are downloaded) and `builtin.chrome` (Chrome, on `builtin.chrome-scene`, with its own layout `builtin.chrome-layout` and the components `builtin.chrome-clock` and `builtin.chrome-rings`).
 
 | Field | Meaning |
 |---|---|

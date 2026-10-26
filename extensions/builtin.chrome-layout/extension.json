@@ -1,0 +1,25 @@
+{
+  "id": "builtin.chrome-layout",
+  "name": "Chrome layout",
+  "version": "1.0.0",
+  "type": "layout",
+  "api": 1,
+  "layout": {
+    "modes": {
+      "idle": {
+        "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }],
+        "top-right": [{ "id": "builtin.chrome-rings" }],
+        "bottom": [{ "id": "builtin.task-row" }]
+      },
+      "attention": {
+        "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "small" } }],
+        "top-right": [{ "id": "builtin.chrome-rings" }],
+        "center": [{ "id": "builtin.approval-card" }],
+        "bottom": [{ "id": "builtin.task-row" }]
+      },
+      "secondary": {
+        "center": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }]
+      }
+    }
+  }
+}

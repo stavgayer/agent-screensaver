@@ -56,6 +56,7 @@ func TestShippedThemes(t *testing.T) {
 	}{
 		{"builtin.default", "builtin.matrix", "builtin.spotlight"},
 		{"builtin.calm", "builtin.aerials", "builtin.spotlight"},
+		{"builtin.chrome", "builtin.chrome-scene", "builtin.chrome-layout"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.theme, func(t *testing.T) {

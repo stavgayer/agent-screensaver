@@ -1,0 +1,17 @@
+{
+  "id": "builtin.chrome",
+  "name": "Chrome",
+  "version": "1.0.0",
+  "type": "theme",
+  "api": 1,
+  "theme": {
+    "background": { "id": "builtin.chrome-scene" },
+    "layout": "builtin.chrome-layout",
+    "style": {
+      "--accent": "#c8ff2e",
+      "--attention": "#ff3d9a",
+      "--done": "#c8ff2e",
+      "--card-opacity": "1"
+    }
+  }
+}
