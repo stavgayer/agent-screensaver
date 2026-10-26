@@ -230,6 +230,8 @@ export interface Ctx {
 
 export interface BackgroundExt {
   start(root: HTMLElement, ctx: Ctx): void;
+  /** Optional. Called after start and whenever the view state changes, like a component's update. */
+  update?(state: ViewState): void;
   stop(): void;
 }
 
@@ -256,7 +258,7 @@ The built-in rings never show an old number as the current one. The caption unde
 
 Components that show limits should follow the same rule.
 
-The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
+The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. It can also have an `update` method. The runtime calls it with the view state after `start`, and on every new state, as it does for components. A background without `update` never gets the state. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
 
 ### When macOS shows its lock screen
 

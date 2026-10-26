@@ -1,7 +1,7 @@
 import type { BackgroundExt, ComponentExt, CreateExtension, Ctx, Region } from "./api.ts";
 import { loadExtension, pendingLoads, safeCall } from "./loader.ts";
 import { createFrameScheduler, requestedFps, type FrameScheduler } from "./frame.ts";
-import { createKeeper, type Instance } from "./instance.ts";
+import { bindBackground, createKeeper, type Instance } from "./instance.ts";
 import { screenMode } from "./mode.ts";
 import { setLockUI } from "./overlay.ts";
 import { startMinuteTick } from "./tick.ts";
@@ -111,7 +111,7 @@ async function launch(
   parent.appendChild(root);
   const ctx = createContext(item, options, (latest as NonNullable<typeof latest>).display);
   if (kind === "background") {
-    item.stop = () => (ext as BackgroundExt).stop();
+    bindBackground(item, ext as BackgroundExt);
     keeper.guard(item, "start", () => (ext as BackgroundExt).start(root, ctx));
   } else {
     item.stop = () => (ext as ComponentExt).unmount();
@@ -215,19 +215,24 @@ async function reconcileMounted(state: StateFile, display: Display): Promise<voi
   }
 }
 
+/** Everything that follows the view state: the background first, then the components. */
+function updatable(): Instance[] {
+  return background?.item === undefined ? components : [background.item, ...components];
+}
+
 async function reconcile(): Promise<void> {
   if (latest === undefined) return;
   const { state, display } = latest;
   resetIfNeeded(state);
   await reconcileBackground(state);
   await reconcileMounted(state, display);
-  keeper.updateAll(components, toViewState(state, display, Date.now()));
+  keeper.updateAll(updatable(), toViewState(state, display, Date.now()));
 }
 
-/** Gives every component the time now. The page is the one place that reads the clock. */
+/** Gives the background and every component the time now. The page is the one place that reads the clock. */
 function tickClock(): void {
   if (latest === undefined) return;
-  keeper.updateAll(components, toViewState(latest.state, latest.display, Date.now()));
+  keeper.updateAll(updatable(), toViewState(latest.state, latest.display, Date.now()));
 }
 
 /** Parts of the page that follow the state directly, with no loading involved. */

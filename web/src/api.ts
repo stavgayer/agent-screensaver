@@ -73,6 +73,8 @@ export interface Ctx {
 
 export interface BackgroundExt {
   start(root: HTMLElement, ctx: Ctx): void;
+  /** Optional. Called after start and whenever the view state changes, like a component's update. */
+  update?(state: ViewState): void;
   stop(): void;
 }
 

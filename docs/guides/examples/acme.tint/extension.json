@@ -1,0 +1,8 @@
+{
+  "id": "acme.tint",
+  "name": "Tint",
+  "version": "1.0.0",
+  "type": "background",
+  "api": 1,
+  "entry": "main.js"
+}

@@ -1,4 +1,4 @@
-import type { ViewState } from "./api.ts";
+import type { BackgroundExt, ViewState } from "./api.ts";
 import { safeCall } from "./loader.ts";
 
 /** One running extension. `root` is only asked to `remove`, so tests need no DOM. */
@@ -10,6 +10,12 @@ export interface Instance {
   stop(): void;
   update?(state: ViewState): void;
   dead: boolean;
+}
+
+/** Wires a background to its item. `update` is set only when the extension has one. */
+export function bindBackground(item: Instance, ext: BackgroundExt): void {
+  item.stop = () => ext.stop();
+  if (typeof ext.update === "function") item.update = (state) => ext.update?.(state);
 }
 
 export interface Keeper {

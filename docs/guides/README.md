@@ -16,7 +16,7 @@ Read [extensions.md](../extensions.md) for the reference of the manifest and the
 |---|---|---|---|
 | Connect a new coding agent, such as opencode or pi | [add-an-agent.md](add-an-agent.md) | People who know how their tool runs hooks or plugins. No code needed, unless you use a converter. | [acme.quill](examples/acme.quill), [acme.tern](examples/acme.tern) |
 | Draw a new piece of the screen | [add-a-widget.md](add-a-widget.md) | People who write JavaScript and CSS. | [acme.agent-count](examples/acme.agent-count) |
-| Change what is behind the clock and cards | [add-a-background.md](add-a-background.md) | People who write JavaScript, or who have a picture or a video. | [acme.drift](examples/acme.drift), [acme.still](examples/acme.still) |
+| Change what is behind the clock and cards | [add-a-background.md](add-a-background.md) | People who write JavaScript, or who have a picture or a video. | [acme.drift](examples/acme.drift), [acme.still](examples/acme.still), [acme.tint](examples/acme.tint) |
 | Move things around on the screen | [change-the-layout.md](change-the-layout.md) | Anyone who can edit JSON. | [acme.compact](examples/acme.compact) |
 | Make one choice that sets look, layout and colors | [create-a-theme.md](create-a-theme.md) | Anyone who can edit JSON. | [acme.dusk](examples/acme.dusk) |
 | Try it, package it, share it | [test-and-share.md](test-and-share.md) | Everyone, last. | |

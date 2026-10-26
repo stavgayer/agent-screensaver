@@ -6,6 +6,7 @@ Samples:
 
 - [examples/acme.drift](examples/acme.drift): a canvas animation with its own frame rate.
 - [examples/acme.still](examples/acme.still): a picture that ships in the extension folder.
+- [examples/acme.tint](examples/acme.tint): a background that changes tint with the agents' state.
 
 The built-in `builtin.matrix`, `builtin.image` and `builtin.video` use the same API. Read `web/src/builtins/` for more. The API is in [extensions.md](../extensions.md), "The web API".
 
@@ -127,7 +128,23 @@ picture.src = base + "bg.svg";
 
 Pictures load only from files and `data:` addresses. Videos load only from files. The page cannot open a network address.
 
-## 7. Install and try it
+## 7. React to your agents
+
+A background can follow the agents. Add an optional `update(state)` method next to `start` and `stop`. The runtime calls it after `start`, and again on every new view state, the same way it calls a component's `update`. The state is the `ViewState` described in [extensions.md](../extensions.md). For example, `state.mode` is `idle`, `attention` or `secondary`.
+
+```js
+return {
+  start: function (root) { /* build your layer */ },
+  update: function (state) {
+    layer.style.backgroundColor = state.mode === "attention" ? "#2a1a05" : "#05080a";
+  },
+  stop: function () { /* remove your layer */ }
+};
+```
+
+Keep `update` cheap. It runs on every state change and once a minute. Store what you need and let your frame loop draw it, instead of drawing inside `update`. If `update` throws, the runtime stops the background, as it does for a component. A background without `update` works as before. The full file is `examples/acme.tint/main.js`.
+
+## 8. Install and try it
 
 1. `agent-screensaver ext install ./acme.drift`
 2. `agent-screensaver background set acme.drift`

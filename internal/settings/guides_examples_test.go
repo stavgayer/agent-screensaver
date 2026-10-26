@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"agent-screensaver/internal/agents"
@@ -54,6 +55,19 @@ func TestGuideExamplesInstall(t *testing.T) {
 	installed := extensions.Scan(service.Paths.ExtensionsDir)
 	if len(installed) != len(exampleFolders(t)) {
 		t.Errorf("%d examples are installed, want %d", len(installed), len(exampleFolders(t)))
+	}
+}
+
+// TestBackgroundExampleReactsToState checks the sample of the "React to your
+// agents" step. Nothing here runs its JavaScript, so this only proves that
+// its entry file defines the optional update method.
+func TestBackgroundExampleReactsToState(t *testing.T) {
+	entry, err := os.ReadFile(filepath.Join(guideExamples, "acme.tint", "main.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`\bupdate\s*:\s*function`).Match(entry) {
+		t.Error("acme.tint/main.js does not define update")
 	}
 }
 
