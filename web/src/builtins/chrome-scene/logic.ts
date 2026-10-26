@@ -87,12 +87,28 @@ export function flashAmount(sign: Sign, nowMs: number): number {
  * card (which the runtime centres on the screen).
  */
 export const ROW_Y_CALM = -0.82;
-export const ROW_Y_APPROVAL = -1.07;
+export const ROW_Y_APPROVAL = -1.12;
 
 /** The row's height for an approval amount from 0 (calm) to 1 (open). */
 export function rowY(approval: number): number {
   const amount = Math.min(1, Math.max(0, approval));
   return ROW_Y_CALM + (ROW_Y_APPROVAL - ROW_Y_CALM) * amount;
+}
+
+/**
+ * How far the lifted shape moves left, in screen units (half the screen height is 1),
+ * so it stays clear of the limit rings in the top-right corner. The rings reach
+ * about RINGS_REACH from the right edge (four rings with their captions and the
+ * margin, in the same units); the lifted shape needs LIFTED_HALF_WIDTH on each side
+ * of its centre. On a wide screen there is room and it stays centred; on a 4:3
+ * screen it moves left of the first ring.
+ */
+export const RINGS_REACH = 1.24;
+export const LIFTED_HALF_WIDTH = 0.29;
+
+export function liftShift(aspect: number): number {
+  if (!(aspect > 0)) return 0;
+  return Math.min(0, aspect - RINGS_REACH - LIFTED_HALF_WIDTH);
 }
 
 /** 0 = calm, 1 = full pink; eases toward 1 while any approval is open. */

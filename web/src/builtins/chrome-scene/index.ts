@@ -8,6 +8,7 @@ import {
   flashAmount,
   glitchAmount,
   layoutRow,
+  liftShift,
   pinkTarget,
   renderSize,
   rowY,
@@ -22,6 +23,7 @@ import {
   FOCAL,
   FRAGMENT_SHADER,
   ROW_Z,
+  SHAPE_LIFT_Z,
   SIGN_HALF_HEIGHT,
   VERTEX_SHADER,
 } from "./shader.ts";
@@ -42,7 +44,7 @@ const MAX_FRAME_MS = 250; // a long pause must not make the scene jump
 const WARP_START_S = 40;
 const STATE_CODES: Record<SignState, number> = { idle: 0, running: 1, finished: 2, approval: 3 };
 const UNIFORMS = [
-  "uResolution", "uTime", "uWarpTime", "uPink", "uLift", "uGlitch", "uGrain", "uCount", "uSigns", "uSignBox", "uRowY", "uRowHalf", "uAtlas",
+  "uResolution", "uTime", "uWarpTime", "uPink", "uLift", "uLiftX", "uGlitch", "uGrain", "uCount", "uSigns", "uSignBox", "uRowY", "uRowHalf", "uAtlas",
 ] as const;
 type UniformName = (typeof UNIFORMS)[number];
 
@@ -297,6 +299,8 @@ function createChromeScene(): BackgroundExt {
       gl.uniform1f(uniforms.uPink ?? null, pink);
       // The shape rises with the pink ease and settles back; under reduced motion it jumps.
       gl.uniform1f(uniforms.uLift ?? null, reducedMotion ? pinkGoal : pink);
+      // From screen units to scene units at the lifted shape's depth.
+      gl.uniform1f(uniforms.uLiftX ?? null, (liftShift(surface.width / Math.max(1, surface.height)) * (SHAPE_LIFT_Z - CAMERA_Z)) / FOCAL);
       gl.uniform1f(uniforms.uGlitch ?? null, glitch);
       gl.uniform1f(uniforms.uGrain ?? null, grain);
       gl.uniform1i(uniforms.uCount ?? null, signs.length);

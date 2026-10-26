@@ -12,7 +12,7 @@ export const ROW_Z = -0.6;
 export const SIGN_HALF_HEIGHT = 0.21;
 /** Where the shape's centre goes while an approval is open: higher and further back. */
 export const SHAPE_LIFT_Y = 2.9;
-export const SHAPE_LIFT_Z = 4.0;
+export const SHAPE_LIFT_Z = 4.4;
 
 /** One triangle that covers the screen, made from the vertex index: no buffers. */
 export const VERTEX_SHADER = `#version 300 es
@@ -43,6 +43,7 @@ uniform float uTime;      // seconds; grain and glitch noise
 uniform float uWarpTime;  // seconds; stands still under reduced motion
 uniform float uPink;      // 0 calm, 1 full pink
 uniform float uLift;      // 0 calm, 1 lifted clear of the approval card
+uniform float uLiftX;     // the lifted shape's sideways move in scene units, see liftShift in logic.ts
 uniform float uGlitch;    // 0 none, 1 full burst
 uniform float uGrain;
 uniform int uCount;
@@ -59,7 +60,7 @@ const vec3 PINK = vec3(1.0, 0.16, 0.56);
 const vec3 SHAPE_CENTER = vec3(0.0, 0.62, 0.0);
 // While an approval is open the shape rises and steps back, so it sits above the
 // card (which the runtime centres on the screen) instead of being cut in half by it.
-const vec3 SHAPE_LIFTED = vec3(0.0, ${glsl(SHAPE_LIFT_Y)}, ${glsl(SHAPE_LIFT_Z)});
+const vec2 SHAPE_LIFTED_YZ = vec2(${glsl(SHAPE_LIFT_Y)}, ${glsl(SHAPE_LIFT_Z)});
 const vec3 PALE = vec3(0.93, 0.95, 0.97);
 const float CAMERA_Z = ${glsl(CAMERA_Z)};
 const float FOCAL = ${glsl(FOCAL)};
@@ -83,7 +84,7 @@ float roundBox(vec3 p, vec3 size, float radius) {
 
 float shape(vec3 p) {
   float t = uWarpTime;
-  p -= mix(SHAPE_CENTER, SHAPE_LIFTED, uLift);
+  p -= mix(SHAPE_CENTER, vec3(uLiftX, SHAPE_LIFTED_YZ), uLift);
   p.xz *= rot(t * 0.06);
   p.xy *= rot(sin(t * 0.05) * 0.5);
   p.x *= 0.86;

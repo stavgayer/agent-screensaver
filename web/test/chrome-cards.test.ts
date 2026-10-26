@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { before, describe, it } from "node:test";
 import type { Card, ComponentExt, ViewState } from "../src/api.ts";
 import { FRAGMENT_SHADER, VERTEX_SHADER } from "../src/builtins/chrome-scene/shader.ts";
+import { liftShift } from "../src/builtins/chrome-scene/logic.ts";
 import { FakeElement, fakeCtx, loadComponent } from "./fake-page.ts";
 
 const NOW_MS = 10_000_000_000;
@@ -79,7 +80,7 @@ describe("chrome approval", () => {
 
   it("puts the agent and the wait in one line of labels, the project and the request in a labelled sheet", () => {
     const root = render(create, [approval, card({ session: "s2", kind: "approval" })]);
-    assert.deepEqual(root.find("meta")[0]?.children.map((element) => element.textContent), ["Claude Code", "waiting 3m"]);
+    assert.deepEqual(root.find("meta")[0]?.children.map((element) => element.textContent), ["Claude Code", "waiting 3m", "+1 more"]);
     assert.equal(root.find("headline")[0]?.textContent, "Needs approval");
     assert.deepEqual(root.find("label").map((element) => element.textContent), ["Project", "Request"]);
     assert.equal(root.find("where")[0]?.textContent, "web-app");
@@ -92,6 +93,12 @@ describe("chrome approval", () => {
     const root = render(create, [card({ kind: "approval" })]);
     assert.equal(root.find("facts").length, 0);
     assert.equal(root.find("more").length, 0);
+  });
+
+  it("keeps the headline on one line and the wait in its own case", () => {
+    const style = styleOf(render(create, [approval]));
+    assert.match(style, /\.approval \.headline \{[^}]*font-size: min\([^)]*vw\);[^}]*white-space: nowrap;/);
+    assert.match(style, /\.approval \.meta > \.waiting \{[^}]*text-transform: none;/);
   });
 
   it("pulses its own border, holds it lit under reduced motion, and breaks only the command anywhere", () => {
@@ -127,6 +134,13 @@ describe("chrome palette", () => {
 });
 
 describe("chrome scene shader", () => {
+  it("moves the lifted shape left of the rings only on a narrow screen", () => {
+    assert.equal(liftShift(1512 / 982), 0);
+    assert.equal(liftShift(16 / 9), 0);
+    assert.ok(liftShift(4 / 3) < -0.15, String(liftShift(4 / 3)));
+    assert.equal(liftShift(0), 0);
+  });
+
   it("keeps the shading out of the vertex shader", () => {
     assert.doesNotMatch(VERTEX_SHADER, /surface|normalAt/);
     assert.equal((FRAGMENT_SHADER.match(/vec3 surface\(/g) ?? []).length, 1);
@@ -134,7 +148,7 @@ describe("chrome scene shader", () => {
 
   it("lifts the shape with uLift and softens its outline from the nearest miss", () => {
     assert.match(FRAGMENT_SHADER, /uniform float uLift;/);
-    assert.match(FRAGMENT_SHADER, /mix\(SHAPE_CENTER, SHAPE_LIFTED, uLift\)/);
+    assert.match(FRAGMENT_SHADER, /mix\(SHAPE_CENTER, vec3\(uLiftX, SHAPE_LIFTED_YZ\), uLift\)/);
     assert.match(FRAGMENT_SHADER, /float cover = /);
   });
 });
