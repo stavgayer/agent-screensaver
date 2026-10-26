@@ -20,20 +20,33 @@ export function taskCards(cards: Card[]): Card[] {
   return cards.filter((card) => card.kind !== "approval");
 }
 
-/** What the card is doing, in words: the first line of a card. */
-export function taskStatus(card: Card, nowMs: number): TaskStatus {
+/** The state line in two parts: the state in words, and how long it has been so, when that is known. */
+export interface TaskStatusParts {
+  tone: TaskTone;
+  word: string;
+  since: string;
+}
+
+/** What the card is doing, in parts, for a look that sets the word and the time apart. */
+export function taskStatusParts(card: Card, nowMs: number): TaskStatusParts {
   switch (card.kind) {
     case "running":
-      return { tone: "working", text: `Working · ${formatDuration(nowMs - card.started_at_ms)}` };
+      return { tone: "working", word: "Working", since: formatDuration(nowMs - card.started_at_ms) };
     case "finished":
-      return { tone: "done", text: `Done · ${ago(nowMs - card.updated_at_ms)}` };
+      return { tone: "done", word: "Done", since: ago(nowMs - card.updated_at_ms) };
     case "no_activity":
-      return { tone: "quiet", text: `No activity · ${formatDuration(nowMs - card.updated_at_ms)}` };
+      return { tone: "quiet", word: "No activity", since: formatDuration(nowMs - card.updated_at_ms) };
     case "unknown":
-      return { tone: "check", text: "Check the terminal" };
+      return { tone: "check", word: "Check the terminal", since: "" };
     case "approval":
-      return { tone: "check", text: "Needs you" };
+      return { tone: "check", word: "Needs you", since: "" };
   }
+}
+
+/** What the card is doing, in words: the first line of a card. */
+export function taskStatus(card: Card, nowMs: number): TaskStatus {
+  const { tone, word, since } = taskStatusParts(card, nowMs);
+  return { tone, text: since === "" ? word : `${word} · ${since}` };
 }
 
 function ago(ms: number): string {
