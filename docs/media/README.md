@@ -47,7 +47,7 @@ The GIF is made the same way as the stills, but the data plays: a small program 
    tools/harness/frames-to-gif.sh frames <start ms> 2.5 30 docs/media/demo.gif demo.mp4
    ```
 
-   The GIF is 960 wide with 160 colors, about 7.5 MB. If it grows past 8 MB, lower `max_colors` or the width in the script. The video is H.264, 1280 wide.
+   The GIF is 960 wide with 160 colors, about 7.4 MB. If it grows past 8 MB, lower `max_colors` or the width in the script. The video is H.264, 1280 wide.
 6. Look at a few frames of the GIF, for example `ffmpeg -ss 13 -i docs/media/demo.gif -frames:v 1 check.png`: the Chrome scene and its fonts must show, not a black screen.
 7. Commit `docs/media/demo.gif`. Do not commit `demo.mp4` or the frames.
 
