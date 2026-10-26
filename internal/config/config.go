@@ -27,7 +27,19 @@ type Config struct {
 	// AgentsOff lists agent extension ids that are off: their hooks stay
 	// but print only their reply, and the daemon drops their events.
 	AgentsOff []string `json:"agents_off,omitempty"`
+	// DemoSeconds and DemoArmedMs arm the scripted demo: the daemon plays
+	// it for DemoSeconds when the saver next shows. Only the CLI writes
+	// them; DemoArmedMs is 0 when no demo is armed.
+	DemoSeconds int   `json:"demo_seconds,omitempty"`
+	DemoArmedMs int64 `json:"demo_armed_ms,omitempty"`
 }
+
+// Demo lengths in seconds: the default and the allowed range.
+const (
+	DemoDefaultSeconds = 60
+	DemoMinSeconds     = 10
+	DemoMaxSeconds     = 600
+)
 
 // AgentOff reports whether the agent extension with this id is off.
 func (c Config) AgentOff(id string) bool {

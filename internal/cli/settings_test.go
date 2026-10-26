@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/paths"
 )
 
@@ -108,5 +109,41 @@ func TestOptionSetPrintsAerialsHint(t *testing.T) {
 
 	if want := "option: builtin.aerials group = space\n" + hint; code != 0 || stdout != want {
 		t.Errorf("exit %d, stdout %q (stderr %q), want %q", code, stdout, stderr, want)
+	}
+}
+
+func TestDemoCommand(t *testing.T) {
+	p := paths.ForHome(t.TempDir())
+	steps := []struct {
+		name        string
+		args        []string
+		wantCode    int
+		wantOut     string // substring of stdout, or of stderr on failure
+		wantSeconds int
+		wantArmed   bool
+	}{
+		{"default length", nil, 0, "Demo ready. Start the screen saver now; it plays for 60 seconds.\n", 60, true},
+		{"chosen length", []string{"--seconds", "90"}, 0, "it plays for 90 seconds.", 90, true},
+		{"too short", []string{"--seconds", "5"}, 1, "out of range", 90, true},
+		{"too long", []string{"--seconds", "601"}, 1, "out of range", 90, true},
+		{"not a number", []string{"--seconds", "long"}, 1, "usage: demo", 90, true},
+		{"unknown word", []string{"start"}, 1, "usage: demo", 90, true},
+		{"stop clears", []string{"stop"}, 0, "Demo stopped.", 0, false},
+	}
+	for _, step := range steps {
+		t.Run(step.name, func(t *testing.T) {
+			code, stdout, stderr := runSettings(t, p, "demo", step.args...)
+			if code != step.wantCode {
+				t.Fatalf("exit code = %d, want %d (stderr %q)", code, step.wantCode, stderr)
+			}
+			if out := stdout + stderr; !strings.Contains(out, step.wantOut) {
+				t.Errorf("output %q, want %q", out, step.wantOut)
+			}
+			cfg := config.Load(p.ConfigFile)
+			if cfg.DemoSeconds != step.wantSeconds || (cfg.DemoArmedMs != 0) != step.wantArmed {
+				t.Errorf("demo_seconds = %d, demo_armed_ms = %d; want %d, armed %v",
+					cfg.DemoSeconds, cfg.DemoArmedMs, step.wantSeconds, step.wantArmed)
+			}
+		})
 	}
 }

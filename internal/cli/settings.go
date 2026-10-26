@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
+	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/settings"
@@ -23,6 +26,7 @@ var settingsCommands = map[string]commandHandler{
 	"sound":      runSound,
 	"fps":        runFPS,
 	"ext":        runExt,
+	"demo":       runDemo,
 }
 
 // IsSettingsCommand reports whether name is handled by Settings.
@@ -32,7 +36,7 @@ func IsSettingsCommand(name string) bool {
 }
 
 // Settings runs one settings command (theme, background, option, privacy,
-// sound, fps or ext) and returns the exit code: 0 on success, 1 with a message on stderr
+// sound, fps, ext or demo) and returns the exit code: 0 on success, 1 with a message on stderr
 // when it fails. The logic lives in settings.Service; this is only parsing
 // and printing.
 func Settings(command string, args []string, stdout, stderr io.Writer, p paths.Paths) int {
@@ -203,6 +207,29 @@ func runFPS(service settings.Service, args []string, stdout io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(stdout, "fps max: %s\n", args[1])
+	return nil
+}
+
+// runDemo arms the scripted demo, or stops it with "stop".
+func runDemo(service settings.Service, args []string, stdout io.Writer) error {
+	const usage = "demo [--seconds N] | demo stop"
+	if len(args) == 1 && args[0] == "stop" {
+		if err := service.StopDemo(); err != nil {
+			return err
+		}
+		fmt.Fprintln(stdout, "Demo stopped.")
+		return nil
+	}
+	flags := flag.NewFlagSet("demo", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	seconds := flags.Int("seconds", config.DemoDefaultSeconds, "")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
+		return usageError(usage)
+	}
+	if err := service.ArmDemo(*seconds, time.Now().UnixMilli()); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Demo ready. Start the screen saver now; it plays for %d seconds.\n", *seconds)
 	return nil
 }
 

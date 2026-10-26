@@ -50,8 +50,11 @@ Change settings with `agent-screensaver` commands, run from the unzipped folder.
 | `sound` | `./agent-screensaver sound on` |
 | `fps` | `./agent-screensaver fps max 30` |
 | `ext` | `./agent-screensaver ext install ./my-extension` |
+| `demo` | `./agent-screensaver demo --seconds 60` |
 
 Run `./agent-screensaver theme list` to see the themes you can use.
+
+`demo` plays a made-up scene with three agents, for a screen recording. It starts when the screen saver next shows and plays for the seconds you give (10 to 600, 60 if you give none). Start the screen saver within 5 minutes, or the demo is dropped. A real approval request ends it at once. `./agent-screensaver demo stop` ends it early. Privacy mode does not hide the demo text, because none of it is real.
 
 To hide the sessions of a folder, add its name under General, Ignored projects, in the settings window. They then get no card, no approval and no sound. The list starts with `observer-sessions`, the folder where the claude-mem plugin runs its hidden Claude sessions.
 

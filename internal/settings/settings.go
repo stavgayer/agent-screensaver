@@ -250,6 +250,26 @@ func (s Service) SetMaxFPS(fps int) error {
 	})
 }
 
+// ArmDemo arms the scripted demo for seconds, armed at nowMs. The daemon
+// plays it when the saver next shows.
+func (s Service) ArmDemo(seconds int, nowMs int64) error {
+	if seconds < config.DemoMinSeconds || seconds > config.DemoMaxSeconds {
+		return fmt.Errorf("demo length %d is out of range, use %d..%d seconds", seconds, config.DemoMinSeconds, config.DemoMaxSeconds)
+	}
+	return s.update(func(cfg *config.Config) error {
+		cfg.DemoSeconds, cfg.DemoArmedMs = seconds, nowMs
+		return nil
+	})
+}
+
+// StopDemo disarms the demo; one that plays stops at once.
+func (s Service) StopDemo() error {
+	return s.update(func(cfg *config.Config) error {
+		cfg.DemoSeconds, cfg.DemoArmedMs = 0, 0
+		return nil
+	})
+}
+
 // SetIgnoredProjects replaces the list of folders whose sessions get no
 // card. Each entry is stored as a folder name (a path keeps its last part,
 // which is what events carry); blanks and repeats are dropped.

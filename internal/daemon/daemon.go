@@ -95,6 +95,8 @@ type Daemon struct {
 	aerialsSyncedMs                          int64
 
 	attention    bool
+	demo         demoRun
+	demoShown    bool // the last step showed the scripted demo
 	written      bool
 	dirty        bool // a write failed or limits arrived; write on the next step
 	lastWriteMs  int64
@@ -176,16 +178,27 @@ func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	changed = d.readDueDetails(nowMs) || changed
 	changed = d.tick(nowMs) || changed
 
-	attention := d.state.NeedsAttention()
+	realAttention := d.state.NeedsAttention()
+	frame := d.demo.next(d.cfg, realAttention, saverActive, nowMs)
+	playing := frame != nil
+	// The sound follows the file the saver shows. Attention carries over
+	// only within the demo or within the real state, so a real approval
+	// that ends the demo plays the sound like any new approval.
+	attention := realAttention
+	if playing {
+		attention = frame.needsAttention()
+	}
 	result := StepResult{
-		PlaySound:   ShouldPlaySound(d.attention, attention, saverActive, d.cfg.Sound),
+		PlaySound:   ShouldPlaySound(d.attention && d.demoShown == playing, attention, saverActive, d.cfg.Sound),
 		PollSources: d.duePolls(nowMs, saverActive),
 	}
 	d.attention = attention
 
-	if changed || d.dirty || !d.written || nowMs-d.lastWriteMs >= rewriteEveryMs {
-		d.writeState(nowMs, &result)
+	// The demo scene moves with time, so it is written on every step.
+	if playing || playing != d.demoShown || changed || d.dirty || !d.written || nowMs-d.lastWriteMs >= rewriteEveryMs {
+		d.writeState(nowMs, frame, &result)
 	}
+	d.demoShown = playing
 	return result
 }
 
@@ -299,8 +312,13 @@ func (d *Daemon) duePolls(nowMs int64, saverActive bool) []string {
 	return due
 }
 
-func (d *Daemon) writeState(nowMs int64, result *StepResult) {
+// writeState writes the state file. A demo frame replaces the cards and
+// limits after Build, so privacy mode never masks the made-up text.
+func (d *Daemon) writeState(nowMs int64, frame *demoFrame, result *StepResult) {
 	file := statefile.Build(d.state, d.view, nowMs)
+	if frame != nil {
+		file.Cards, file.Limits = frame.cards, frame.limits
+	}
 	if err := statefile.WriteAtomic(d.paths.StateFile, file); err != nil {
 		d.dirty = true
 		result.WriteErr = err

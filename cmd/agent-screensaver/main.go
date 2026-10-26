@@ -29,7 +29,7 @@ import (
 // subcommands lists every subcommand, in the order shown in the usage text.
 var subcommands = []string{
 	"hook", "statusline", "daemon", "install", "uninstall", "theme",
-	"background", "option", "privacy", "sound", "fps", "ext", "agent", "tray", "settings",
+	"background", "option", "privacy", "sound", "fps", "ext", "demo", "agent", "tray", "settings",
 }
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -63,7 +63,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runSettingsWindow(args[1:], stderr)
 	case "agent":
 		return runAgent(args[1:], os.Stdin, stdout, stderr)
-	default: // theme, background, option, privacy, sound, fps and ext
+	default: // theme, background, option, privacy, sound, fps, ext and demo
 		return runSettings(name, args[1:], stdout, stderr)
 	}
 }
