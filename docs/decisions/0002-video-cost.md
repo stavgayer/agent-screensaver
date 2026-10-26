@@ -65,3 +65,22 @@ Notes on the numbers:
 - 1080p files and battery power.
 - The pause on `visibilitychange` inside the real `legacyScreenSaver` host. We could not make the host hide the page, so only the code path is written; it is not observed.
 - Playback of an APFS clone of an aerial was not measured separately. These runs played a real copy under the data dir; a clone holds the same bytes, so we expect the same cost. Sandbox access to the aerials is settled in 0001.
+
+## Addendum: Chrome theme (2026-10-26)
+
+The owner measured the Chrome theme once. The conditions are not the same as the runs above, so compare with care.
+
+- Saver: the real `AgentScreensaver.saver`, shown by `ScreenSaverEngine` (not the harness). Build `655ef9b`.
+- Theme: Chrome, with the demo playing.
+- Machine: under heavy load, load average about 25.
+- Samples: `top -l 3 -s 10 -n 500 -stats pid,command,cpu`, filtered to the `legacyScreenSaver`, WebKit and `ScreenSaverEngine` processes. The first sample is dropped.
+
+| Process | CPU (share of one core) |
+| --- | --- |
+| `legacyScreenSaver` | about 5.8% to 6.3% |
+| WebKit process | about 3.8% to 4.3% |
+| WebKit process | about 3.0% to 3.4% |
+| WebKit process | about 0.7% |
+| Total | about 14% |
+
+Matrix was not measured again in the same session. Its 5.9% is the harness number in the table above, taken in a different host and under a different load. So the Chrome theme costs about 2.4 times the Matrix, but that ratio is only approximate.

@@ -27,7 +27,7 @@ These are the limits of version 1 that you can see or that change how you use it
 ## Themes
 
 - **The Chrome theme needs WebGL2.** Without it, the background is only black with grain and scan lines: no chrome shape and no agent signs. The clock, the rings and the cards still show.
-- **The Chrome theme uses more CPU than the others.** On the owner's Mac it used about 14% of one core. Matrix uses about 5.9% ([decision 0002](decisions/0002-video-cost.md)). To keep it low, it draws 30 frames a second at half the screen size by default.
+- **The Chrome theme uses more CPU than the others.** On the owner's Mac it used about 14% of one core, measured once while the machine was under heavy load ([how it was measured](decisions/0002-video-cost.md#addendum-chrome-theme-2026-10-26)). Matrix uses about 5.9%, measured in a different session ([decision 0002](decisions/0002-video-cost.md)), so compare the two only roughly. To keep it low, it draws 30 frames a second at half the screen size by default.
 
 ## Files
 
