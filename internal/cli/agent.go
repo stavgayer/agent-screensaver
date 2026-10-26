@@ -13,7 +13,7 @@ import (
 const agentUsage = "agent list | agent on|off <id> | agent hooks add|remove [--yes] <id>"
 
 // Agent runs `agent-screensaver agent ...` and returns the exit code. It
-// shows and changes the same things as the settings window's Connections
+// shows and changes the same things as the settings window's Agents
 // tab, through the same settings.Service methods.
 func Agent(args []string, stdin io.Reader, stdout, stderr io.Writer, p paths.Paths, nowMs int64) int {
 	service := settings.Service{Paths: p}
@@ -68,7 +68,7 @@ func agentHooks(service settings.Service, add bool, rest []string, stdin io.Read
 }
 
 // listAgents prints one tab-separated line per agent: id, name, origin,
-// state and last event, the same text as the Connections tab.
+// state and last event, the same text as the Agents tab.
 func listAgents(service settings.Service, stdout io.Writer, nowMs int64) error {
 	list, err := service.Connections(nowMs)
 	if err != nil {
@@ -85,7 +85,7 @@ func listAgents(service settings.Service, stdout io.Writer, nowMs int64) error {
 	return nil
 }
 
-// StateText is the state as the Connections tab writes it (web/settings/
+// StateText is the state as the Agents tab writes it (web/settings/
 // connections.ts, which has the same cases): "Active · 4m ago", "Idle · 3h",
 // "Idle · no events yet", "Hooks not added", "Not installed", "Off".
 func StateText(c settings.Connection, nowMs int64) string {

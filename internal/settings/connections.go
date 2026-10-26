@@ -18,8 +18,8 @@ import (
 	"agent-screensaver/internal/view"
 )
 
-// ConnectionState is what the Connections tab and `agent list` say about
-// one agent extension (spec §7d "The Connections tab").
+// ConnectionState is what the Agents tab and `agent list` say about
+// one agent extension (spec §7d "The Agents tab").
 type ConnectionState string
 
 const (
@@ -38,7 +38,7 @@ const ActiveWindowMs = 10 * 60 * 1000
 // user saw: a file it touches changed in between.
 var ErrPlanChanged = errors.New("the plan changed since it was shown; look at the new plan")
 
-// Connection is one row of the Connections tab.
+// Connection is one row of the Agents tab.
 type Connection struct {
 	ID      string          `json:"id"`
 	Name    string          `json:"name"`

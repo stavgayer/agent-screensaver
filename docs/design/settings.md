@@ -10,7 +10,7 @@ Sources for the criteria: the `emil-design-eng` skill (motion and polish), the `
 
 ## Structure
 
-- A sidebar with five views: Theme & background, Extension options, Extensions, Connections, General. One view per area, with the area's name as the title. One long page of every area would put General four screens down.
+- A sidebar with five views: Theme & background, Extension options, Extensions, Agents, General. One view per area, with the area's name as the title. One long page of every area would put General four screens down.
 - The title and the save status stay at the top while the view scrolls, so an error is never out of sight.
 - Each view is one centred column, at most 760px wide, so a wide window keeps equal margins.
 
@@ -37,7 +37,7 @@ Sources for the criteria: the `emil-design-eng` skill (motion and polish), the `
 - Secondary text is #636366 in light (6.0:1 on the panel, 5.4:1 on the ground) and #a6a6ab in dark (5.7:1 on the panel). Every tier with words passes 4.5:1.
 - The switch is a checkbox drawn as the macOS switch. It keeps checkbox behavior for the keyboard and for VoiceOver (`role="switch"`).
 
-## Connections
+## Agents
 
 - One row per agent extension, built-ins first: the mark in a fixed 24px slot (so names share one edge), the name, "Built in" or "From <id> <version>" with the last event under it, then one status pill and two buttons in fixed columns, so the states and buttons line up down the list.
 - One status mark per row. Only "Active" has color (a pale green pill with a dot); every other state is a neutral grey pill. "Hooks were changed outside agent-screensaver" is a second line in the notice color, because it is a separate fact that asks for an action.

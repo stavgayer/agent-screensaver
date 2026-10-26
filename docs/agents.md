@@ -16,7 +16,7 @@ acme.opencode/
   bin/convert                   (only if the manifest uses a converter)
 ```
 
-Install it like any extension: `agent-screensaver ext install ./acme.opencode`, or "Install extension" in the settings window. Installing checks the manifest and the recipe and copies the folder. It does not add hooks. Add them as a second step: `agent-screensaver agent hooks add <id>` (or "Add hooks" in the Connections tab). It shows its plan first and needs the install record that `agent-screensaver install` writes.
+Install it like any extension: `agent-screensaver ext install ./acme.opencode`, or "Install extension" in the settings window. Installing checks the manifest and the recipe and copies the folder. It does not add hooks. Add them as a second step: `agent-screensaver agent hooks add <id>` (or "Add hooks" in the Agents tab). It shows its plan first and needs the install record that `agent-screensaver install` writes.
 
 ## The manifest
 

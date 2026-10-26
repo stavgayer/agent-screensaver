@@ -1,4 +1,4 @@
-// The Connections tab's text and buttons, as pure functions of Go's
+// The Agents tab's text and buttons, as pure functions of Go's
 // settings.Connection list. The state text is the same as `agent-screensaver
 // agent list` writes (internal/cli/agent.go StateText): change both together.
 

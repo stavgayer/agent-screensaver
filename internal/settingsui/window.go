@@ -117,7 +117,7 @@ func (b *bridge) methods() map[string]method {
 		}),
 		"notice": withParams(func(p struct{ Extension string }) (any, error) { return b.svc.Notice(p.Extension), nil }),
 		"state":  func(json.RawMessage) (any, error) { return b.state() },
-		// The Connections tab. The page sends agent ids, choices and the
+		// The Agents tab. The page sends agent ids, choices and the
 		// plan hash it showed, never a path or a command: those come from
 		// the manifest and the install record, in Go.
 		"connections": withParams(func(struct{}) (any, error) { return b.svc.Connections(b.now()) }),

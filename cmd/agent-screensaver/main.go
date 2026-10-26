@@ -111,7 +111,7 @@ func runSettings(name string, args []string, stdout, stderr io.Writer) int {
 	return cli.Settings(name, args, stdout, stderr, paths.ForHome(home))
 }
 
-// runAgent runs an `agent` command (the CLI side of the Connections tab)
+// runAgent runs an `agent` command (the CLI side of the Agents tab)
 // against the real home.
 func runAgent(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	home, err := os.UserHomeDir()

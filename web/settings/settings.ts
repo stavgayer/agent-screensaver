@@ -45,13 +45,13 @@ const VIEW_TITLES: Record<View, string> = {
   appearance: "Theme & background",
   options: "Extension options",
   extensions: "Extensions",
-  connections: "Connections",
+  connections: "Agents",
   general: "General",
 };
 const TYPE_NAMES = { background: "Background", component: "Component", layout: "Layout", theme: "Theme" };
 const FPS_CHOICES = [0, 15, 24, 30, 60, 120, 240];
 const PREVIEW_POLL_MS = 1000;
-// The Connections tab reads the agents' states again this often while it is open.
+// The Agents tab reads the agents' states again this often while it is open.
 const CONNECTIONS_POLL_MS = 5000;
 const STATUS_CLEAR_MS = 2000;
 // The runtime's own default accent (styles.css), for a theme that sets none.
@@ -74,7 +74,7 @@ const bridge = createBridge(
 window.__agsReply = (id, result, error) => bridge.reply(id, result, error);
 
 let snapshot: Snapshot | undefined;
-/** The agent extensions, read only while the Connections view is open. */
+/** The agent extensions, read only while the Agents view is open. */
 let connections: Connection[] = [];
 let notices: Record<string, string> = {};
 let currentView: View = "appearance";
@@ -378,7 +378,7 @@ async function installExtension(): Promise<void> {
   if (result?.manifest !== undefined) showStatus(`Installed ${result.manifest.name || result.manifest.id}`, "saved");
 }
 
-// ---------- Connections ----------
+// ---------- Agents ----------
 
 /** The mark is shown only from the data folder, where Go found it. */
 function markImage(row: ConnectionRow): HTMLElement {
@@ -522,7 +522,7 @@ function restoreFocus(): void {
   focusAfterClose = undefined;
 }
 
-/** Reads the agents again every few seconds while the Connections view is open and visible. */
+/** Reads the agents again every few seconds while the Agents view is open and visible. */
 const connectionsPoll = {
   timer: undefined as ReturnType<typeof setInterval> | undefined,
 

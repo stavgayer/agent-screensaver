@@ -135,7 +135,7 @@ Everything on the screen is an extension: the clock, the cards, the rings, the b
 
 The menu bar app shows how many agents wait and run, your limits, and each open approval. Its icon changes when an agent waits for you. From its menu you can preview the screen saver, open the settings window, and turn the sound and privacy mode on or off.
 
-The settings window has five parts: Theme & background, Extension options, Extensions, Connections (add or remove an agent's hooks, turn an agent off) and General. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then run `./agent-screensaver settings` to open the settings window directly.
+The settings window has five parts: Theme & background, Extension options, Extensions, Agents (add or remove an agent's hooks, turn an agent off) and General. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then run `./agent-screensaver settings` to open the settings window directly.
 
 To hide the sessions of a folder, add its name under General, Ignored projects, in the settings window. They then get no card, no approval and no sound. The list starts with `observer-sessions`, the folder where the claude-mem plugin runs its hidden Claude sessions.
 

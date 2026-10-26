@@ -77,7 +77,7 @@ For a real install, the settings window shows the result:
 - Theme & background: a live preview of the real runtime, fed with what the service writes now. It shows your theme, your background and your cards. Below it, the theme tiles and the background menu.
 - Extension options: a form made from your `options`. Every control saves at once.
 - Extensions: "Install..." installs a folder or a `.zip`. "Remove..." removes one (not a built-in one).
-- Connections: your agent extension, its state, "Add hooks", and "Add another agent" for an install.
+- Agents: your agent extension, its state, "Add hooks", and "Add another agent" for an install.
 
 Open it with `agent-screensaver settings`, or from the menu bar app. The preview runs your script in a sandboxed frame, so a script that tries to reach the page around it does not work there. Use only the API in [extensions.md](../extensions.md).
 

@@ -80,7 +80,7 @@ func (d *Daemon) restoreLimits() {
 }
 
 // restoreSources reads back the last event time of each source, which the
-// Connections tab shows, so a restart does not lose it.
+// Agents tab shows, so a restart does not lose it.
 func (d *Daemon) restoreSources() {
 	sources, err := statefile.ReadSources(d.paths.StateFile)
 	if err != nil {

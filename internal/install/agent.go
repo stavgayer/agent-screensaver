@@ -10,7 +10,7 @@ import (
 	"agent-screensaver/internal/extensions"
 )
 
-// The helpers in this file answer the settings window's Connections tab and
+// The helpers in this file answer the settings window's Agents tab and
 // the `agent` CLI commands: is the tool here, are our entries still there,
 // and what would removing one agent's hooks do.
 

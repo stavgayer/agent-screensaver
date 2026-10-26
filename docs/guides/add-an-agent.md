@@ -172,7 +172,7 @@ This checks the manifest and the recipe, then copies the folder. It adds no hook
 agent-screensaver agent hooks add acme.quill
 ```
 
-The plan lists each file, each event and each command. The settings window shows the same plan (Connections, then "Add hooks"). "Add another agent" in that tab installs a folder.
+The plan lists each file, each event and each command. The settings window shows the same plan (Agents, then "Add hooks"). "Add another agent" in that tab installs a folder.
 
 3. Check the state:
 
@@ -182,7 +182,7 @@ agent-screensaver agent list
 
 A line shows `Hooks not added`, `Idle · no events yet` (hooks added, nothing seen yet), `Active · 4m ago`, `Not installed` (the `detect` path is missing) or `Off`.
 
-4. Use your tool. A card appears on the screen. The same list is the Connections tab of the settings window.
+4. Use your tool. A card appears on the screen. The same list is the Agents tab of the settings window.
 
 To go quiet without removing hooks: `agent-screensaver agent off acme.quill` (and `on`). To remove the hooks: `agent-screensaver agent hooks remove acme.quill`. `agent-screensaver ext remove acme.quill` removes the hooks first, then the extension. If the hooks cannot be removed, the extension stays.
 
