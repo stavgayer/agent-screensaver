@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Card, ViewState } from "../src/api.ts";
-import { GLITCH_MS, MAX_SIGNS, easeToward, flashAmount, glitchAmount, labelFor, layoutRow, pinkTarget, renderSize, signsFrom, type Sign } from "../src/builtins/chrome-scene/logic.ts";
+import { GLITCH_MS, MAX_SIGNS, ROW_Y_APPROVAL, ROW_Y_CALM, easeToward, flashAmount, glitchAmount, labelFor, layoutRow, pinkTarget, renderSize, rowY, signsFrom, type Sign } from "../src/builtins/chrome-scene/logic.ts";
 
 const NOW_MS = 10_000_000_000;
 
@@ -101,6 +101,20 @@ describe("signsFrom", () => {
 
   it("secondary display gives no signs", () => {
     assert.deepEqual(signsFrom(view([card({})], { display: "secondary", mode: "secondary" }), [], NOW_MS), []);
+  });
+});
+
+describe("rowY", () => {
+  it("the row sits higher while calm and drops below the approval card while one is open", () => {
+    assert.equal(rowY(0), ROW_Y_CALM);
+    assert.equal(rowY(1), ROW_Y_APPROVAL);
+    assert.ok(ROW_Y_APPROVAL < ROW_Y_CALM, "an open approval moves the row down");
+    assert.equal(rowY(0.5), (ROW_Y_CALM + ROW_Y_APPROVAL) / 2);
+  });
+
+  it("an amount outside 0..1 is kept inside", () => {
+    assert.equal(rowY(-1), ROW_Y_CALM);
+    assert.equal(rowY(2), ROW_Y_APPROVAL);
   });
 });
 

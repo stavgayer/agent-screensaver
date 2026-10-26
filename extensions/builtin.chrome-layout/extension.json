@@ -18,7 +18,7 @@
         "bottom": [{ "id": "builtin.task-row" }]
       },
       "secondary": {
-        "center": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }]
+        "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }]
       }
     }
   }

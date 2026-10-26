@@ -7,10 +7,9 @@ export const ATLAS_ROW_PX = 128;
 /** Scene layout, shared by the shader and the code that lays out the signs. */
 export const CAMERA_Z = -5.4;
 export const FOCAL = 2.0;
-export const ROW_Y = -0.98;
 export const ROW_Z = -0.6;
 /** Half the height of a sign before the row is shrunk to fit. */
-export const SIGN_HALF_HEIGHT = 0.25;
+export const SIGN_HALF_HEIGHT = 0.21;
 
 /** One triangle that covers the screen, made from the vertex index: no buffers. */
 export const VERTEX_SHADER = `#version 300 es
@@ -45,6 +44,7 @@ uniform float uGrain;
 uniform int uCount;
 uniform vec4 uSigns[MAX_SIGNS];   // state code, lime flash, sway angle, pulse
 uniform vec4 uSignBox[MAX_SIGNS]; // centre x, half width, half height, half width of the word in the atlas (0..0.5)
+uniform float uRowY;               // height of the sign row, see rowY in logic.ts
 uniform vec2 uRowHalf;            // half width and half height of the box around the row
 uniform sampler2D uAtlas;
 
@@ -55,7 +55,6 @@ const vec3 PINK = vec3(1.0, 0.16, 0.56);
 const vec3 SHAPE_CENTER = vec3(0.0, 0.62, 0.0);
 const float CAMERA_Z = ${glsl(CAMERA_Z)};
 const float FOCAL = ${glsl(FOCAL)};
-const float ROW_Y = ${glsl(ROW_Y)};
 const float ROW_Z = ${glsl(ROW_Z)};
 
 float hash(vec2 p) {
@@ -88,7 +87,7 @@ float shape(vec3 p) {
 }
 
 vec3 signLocal(vec3 p, int index) {
-  vec3 q = p - vec3(uSignBox[index].x, ROW_Y, ROW_Z);
+  vec3 q = p - vec3(uSignBox[index].x, uRowY, ROW_Z);
   q.xz *= rot(uSigns[index].z);
   // Leaned back a little, so the face catches the top light.
   q.yz *= rot(0.18);
@@ -104,7 +103,7 @@ float signDistance(vec3 p, int index) {
 vec4 scene(vec3 p) {
   vec4 hit = vec4(shape(p), -1.0, FAR, -1.0);
   if (uCount == 0) return hit;
-  float row = roundBox(p - vec3(0.0, ROW_Y, ROW_Z), vec3(uRowHalf, 0.5), 0.0);
+  float row = roundBox(p - vec3(0.0, uRowY, ROW_Z), vec3(uRowHalf, 0.5), 0.0);
   if (row > hit.x) {
     hit.z = row;
     return hit;

@@ -81,6 +81,20 @@ export function flashAmount(sign: Sign, nowMs: number): number {
   return (1 - progress) ** 2;
 }
 
+/**
+ * Height of the sign row in scene units. Calm, it sits just under the shape with
+ * room above the task row; while an approval is open it drops below the approval
+ * card (which the runtime centres on the screen).
+ */
+export const ROW_Y_CALM = -0.82;
+export const ROW_Y_APPROVAL = -1.07;
+
+/** The row's height for an approval amount from 0 (calm) to 1 (open). */
+export function rowY(approval: number): number {
+  const amount = Math.min(1, Math.max(0, approval));
+  return ROW_Y_CALM + (ROW_Y_APPROVAL - ROW_Y_CALM) * amount;
+}
+
 /** 0 = calm, 1 = full pink; eases toward 1 while any approval is open. */
 export function pinkTarget(state: ViewState): number {
   // A secondary display shows the shape and grain only.

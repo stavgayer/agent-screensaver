@@ -10,6 +10,7 @@ import {
   layoutRow,
   pinkTarget,
   renderSize,
+  rowY,
   signsFrom,
   type Sign,
   type SignState,
@@ -41,7 +42,7 @@ const MAX_FRAME_MS = 250; // a long pause must not make the scene jump
 const WARP_START_S = 40;
 const STATE_CODES: Record<SignState, number> = { idle: 0, running: 1, finished: 2, approval: 3 };
 const UNIFORMS = [
-  "uResolution", "uTime", "uWarpTime", "uPink", "uGlitch", "uGrain", "uCount", "uSigns", "uSignBox", "uRowHalf", "uAtlas",
+  "uResolution", "uTime", "uWarpTime", "uPink", "uGlitch", "uGrain", "uCount", "uSigns", "uSignBox", "uRowY", "uRowHalf", "uAtlas",
 ] as const;
 type UniformName = (typeof UNIFORMS)[number];
 
@@ -299,6 +300,8 @@ function createChromeScene(): BackgroundExt {
       gl.uniform1i(uniforms.uCount ?? null, signs.length);
       gl.uniform4fv(uniforms.uSigns ?? null, signData);
       gl.uniform4fv(uniforms.uSignBox ?? null, signBox);
+      // The row follows the pink ease down and up; under reduced motion it jumps.
+      gl.uniform1f(uniforms.uRowY ?? null, rowY(reducedMotion ? pinkGoal : pink));
       gl.uniform2f(uniforms.uRowHalf ?? null, rowHalfWidth, rowHalfHeight);
       gl.uniform1i(uniforms.uAtlas ?? null, 0);
       gl.activeTexture(gl.TEXTURE0);
