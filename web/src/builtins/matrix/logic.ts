@@ -11,12 +11,6 @@ export function charsetFor(name: unknown): string[] {
   return Array.from(CHARSETS[key]);
 }
 
-/** A number option kept inside min..max; anything that is not a number gives the fallback. */
-export function numberOption(value: unknown, fallback: number, min: number, max: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-  return Math.min(max, Math.max(min, value));
-}
-
 /** The look was tuned at 24 frames a second with a black fill of this opacity. */
 const TUNED_FPS = 24;
 const TUNED_FADE = 0.08;

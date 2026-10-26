@@ -1,5 +1,6 @@
 import type { BackgroundExt, Ctx } from "../../api.ts";
-import { ROWS_PER_SECOND, advanceDrop, charsetFor, fadeAlpha, numberOption } from "./logic.ts";
+import { numberOption } from "../shared/options.ts";
+import { ROWS_PER_SECOND, advanceDrop, charsetFor, fadeAlpha } from "./logic.ts";
 
 const BASE_CELL_PX = 16;
 const MAX_FRAME_MS = 250; // a long pause (sleep, hidden tab) must not make the rain jump

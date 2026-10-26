@@ -1,4 +1,4 @@
-import { numberOption } from "../matrix/logic.ts";
+import { numberOption } from "./options.ts";
 
 export type Fit = "cover" | "contain";
 

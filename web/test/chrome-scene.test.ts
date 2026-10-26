@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Card, ViewState } from "../src/api.ts";
-import { GLITCH_MS, MAX_SIGNS, easeToward, flashAmount, glitchAmount, pinkTarget, renderSize, signsFrom, type Sign } from "../src/builtins/chrome-scene/logic.ts";
+import { GLITCH_MS, MAX_SIGNS, easeToward, flashAmount, glitchAmount, labelFor, layoutRow, pinkTarget, renderSize, signsFrom, type Sign } from "../src/builtins/chrome-scene/logic.ts";
 
 const NOW_MS = 10_000_000_000;
 
@@ -30,7 +30,7 @@ const view = (cards: Card[], overrides: Partial<ViewState> = {}): ViewState => (
 });
 
 describe("signsFrom", () => {
-  it("one sign per card with the agent's first letter", () => {
+  it("one sign per card with the agent's name", () => {
     const signs = signsFrom(
       view([
         card({ source: "claude", session: "a", updated_at_ms: NOW_MS - 1000 }),
@@ -41,12 +41,12 @@ describe("signsFrom", () => {
       NOW_MS,
     );
     assert.deepEqual(
-      signs.map((sign) => [sign.source, sign.letter, sign.state]),
+      signs.map((sign) => [sign.source, sign.label, sign.state]),
       [
-        ["claude", "C", "running"],
-        ["codex", "C", "running"],
-        // No agent extension: the letter comes from the source.
-        ["aider", "A", "running"],
+        ["claude", "CLAUDE", "running"],
+        ["codex", "CODEX", "running"],
+        // No agent extension: the name comes from the source.
+        ["aider", "AIDER", "running"],
       ],
     );
   });
@@ -80,7 +80,7 @@ describe("signsFrom", () => {
   });
 
   it("a flash keeps its start while the card stays finished", () => {
-    const previous: Sign[] = [{ source: "claude", session: "a", letter: "C", state: "finished", flashStartMs: NOW_MS - 300 }];
+    const previous: Sign[] = [{ source: "claude", session: "a", label: "CLAUDE", state: "finished", flashStartMs: NOW_MS - 300 }];
     const [sign] = signsFrom(view([card({ session: "a", kind: "finished" })]), previous, NOW_MS);
     assert.equal(sign.flashStartMs, NOW_MS - 300);
   });
@@ -98,9 +98,42 @@ describe("signsFrom", () => {
   });
 });
 
+describe("labelFor", () => {
+  const cases: Array<[string, string, string]> = [
+    ["a short name is uppercased", "Codex", "CODEX"],
+    ["a long name keeps its first word", "Claude Code", "CLAUDE"],
+    ["a long single word is cut at eight letters", "Supercalifragilistic", "SUPERCAL"],
+    ["a long first word is cut too", "Antigravity Agent", "ANTIGRAV"],
+    ["spaces around are dropped", "  Cursor ", "CURSOR"],
+    ["an empty name gives a question mark", "  ", "?"],
+  ];
+  for (const [name, input, want] of cases) {
+    it(name, () => assert.equal(labelFor(input), want));
+  }
+});
+
+describe("layoutRow", () => {
+  it("centres the signs with even gaps", () => {
+    const { centers, scale } = layoutRow([1, 0.5, 1], 0.2, 100);
+    assert.equal(scale, 1);
+    // Widths 2 + 1 + 2 and two gaps of 0.2: 5.4 wide, from -2.7 to 2.7.
+    assert.deepEqual(centers.map((x) => Math.round(x * 1000) / 1000), [-1.7, 0, 1.7]);
+  });
+
+  it("shrinks a row that is too wide to fit", () => {
+    const { centers, scale } = layoutRow([1, 1], 0, 2);
+    assert.equal(scale, 0.5);
+    assert.deepEqual(centers, [-0.5, 0.5]);
+  });
+
+  it("no signs, no row", () => {
+    assert.deepEqual(layoutRow([], 0.2, 5), { centers: [], scale: 1 });
+  });
+});
+
 describe("flashAmount", () => {
   it("is full at the start, gone after the flash, zero without one", () => {
-    const sign: Sign = { source: "claude", session: "a", letter: "C", state: "finished", flashStartMs: NOW_MS };
+    const sign: Sign = { source: "claude", session: "a", label: "CLAUDE", state: "finished", flashStartMs: NOW_MS };
     assert.equal(flashAmount(sign, NOW_MS), 1);
     assert.equal(flashAmount(sign, NOW_MS + 60_000), 0);
     assert.ok(flashAmount(sign, NOW_MS + 300) < 1);
@@ -113,6 +146,10 @@ describe("pinkTarget", () => {
     assert.equal(pinkTarget(view([card({ session: "a" }), card({ session: "b", kind: "approval" })])), 1);
     assert.equal(pinkTarget(view([card({ kind: "running" }), card({ session: "b", kind: "finished" })])), 0);
     assert.equal(pinkTarget(view([])), 0);
+  });
+
+  it("a secondary display stays calm", () => {
+    assert.equal(pinkTarget(view([card({ kind: "approval" })], { display: "secondary", mode: "secondary" })), 0);
   });
 });
 
@@ -151,9 +188,20 @@ describe("renderSize", () => {
 });
 
 // The scene's entry file registers itself on import, so the failure paths run
-// it against a fake page: a canvas, its listeners and a frame loop to count.
-describe("chrome scene failure paths", () => {
+// it against a fake page: canvases, their listeners, a counting WebGL2 context
+// and a frame loop to count.
+describe("chrome scene on a fake page", () => {
   type Listener = (event: { preventDefault(): void }) => void;
+  type Ext = import("../src/api.ts").BackgroundExt;
+
+  /** A 2D context with just what the scene uses. */
+  const fake2d = () => ({
+    createImageData: (width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }),
+    putImageData() {},
+    clearRect() {},
+    fillText() {},
+    measureText: (text: string) => ({ width: text.length * 50 }),
+  });
 
   class FakeElement {
     readonly tag: string;
@@ -170,7 +218,11 @@ describe("chrome scene failure paths", () => {
       this.tag = tag;
     }
     getContext(kind: string): unknown {
-      return kind === "webgl2" ? this.gl : null;
+      if (kind === "webgl2") return this.gl;
+      return kind === "2d" ? fake2d() : null;
+    }
+    toDataURL(): string {
+      return "data:image/png;base64,GRAIN";
     }
     appendChild(child: FakeElement): FakeElement {
       child.parent = this;
@@ -193,31 +245,50 @@ describe("chrome scene failure paths", () => {
     }
   }
 
-  /** A WebGL2 context where every call works and returns something truthy. */
-  const fakeGl = (): unknown =>
-    new Proxy({}, { get: (_target, prop) => (prop === "then" ? undefined : () => ({})) });
+  /** A WebGL2 context where every call works and is counted. */
+  function countingGl(options: { compiles?: boolean; links?: boolean } = {}) {
+    const calls = new Map<string, number>();
+    const count = (name: string): void => void calls.set(name, (calls.get(name) ?? 0) + 1);
+    const special: Record<string, (...args: unknown[]) => unknown> = {
+      getShaderParameter: () => options.compiles ?? true,
+      getProgramParameter: () => options.links ?? true,
+      getShaderInfoLog: () => "fake compile error",
+      getProgramInfoLog: () => "fake link error",
+      getExtension: (name) => (name === "WEBGL_lose_context" ? { loseContext: () => count("loseContext") } : null),
+    };
+    const gl = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          if (typeof prop !== "string" || prop === "then") return undefined;
+          return (...args: unknown[]) => {
+            count(prop);
+            return special[prop] === undefined ? {} : special[prop](...args);
+          };
+        },
+      },
+    );
+    return { gl, calls };
+  }
 
   const globals = globalThis as unknown as Record<string, unknown>;
   let nextGl: () => unknown = () => null;
-  const canvases: FakeElement[] = [];
-  let register: (() => import("../src/api.ts").BackgroundExt) | undefined;
+  const windowListeners = new Map<string, unknown>();
+  let register: (() => Ext) | undefined;
 
-  async function loadScene(): Promise<() => import("../src/api.ts").BackgroundExt> {
+  async function loadScene(): Promise<() => Ext> {
     if (register !== undefined) return register;
     globals.window = {
-      agentScreensaver: { register: (create: () => import("../src/api.ts").BackgroundExt) => (register = create) },
+      agentScreensaver: { register: (create: () => Ext) => (register = create) },
       matchMedia: () => ({ matches: false }),
-      addEventListener() {},
-      removeEventListener() {},
+      addEventListener: (type: string, listener: unknown) => windowListeners.set(type, listener),
+      removeEventListener: (type: string) => windowListeners.delete(type),
     };
     globals.document = {
       currentScript: { src: "file:///ext/builtin.chrome-scene/index.js" },
       createElement(tag: string) {
         const element = new FakeElement(tag);
-        if (tag === "canvas") {
-          element.gl = nextGl();
-          canvases.push(element);
-        }
+        if (tag === "canvas") element.gl = nextGl();
         return element;
       },
     };
@@ -240,36 +311,86 @@ describe("chrome scene failure paths", () => {
     return { ctx, loop };
   }
 
-  it("no WebGL2 falls back to black with CSS grain and does not throw", async () => {
-    nextGl = () => null;
+  /** Runs `fn` with console.error silenced, for paths that log on purpose. */
+  function quietly(fn: () => void): void {
+    const original = console.error;
+    console.error = () => {};
+    try {
+      fn();
+    } finally {
+      console.error = original;
+    }
+  }
+
+  async function started(gl: () => unknown) {
+    nextGl = gl;
     const create = await loadScene();
     const root = new FakeElement("div");
     const { ctx, loop } = fakeCtx();
     const scene = create();
-    assert.doesNotThrow(() => scene.start(root as unknown as HTMLElement, ctx));
+    quietly(() => scene.start(root as unknown as HTMLElement, ctx));
+    return { root, loop, scene };
+  }
+
+  function assertFallback(root: FakeElement): void {
+    assert.deepEqual(root.children.map((child) => child.tag), ["div"]);
+    const css = root.children[0].style.cssText;
+    assert.match(css, /#000/);
+    assert.match(css, /repeating-linear-gradient/);
+    assert.match(css, /url\(data:image\/png;base64,GRAIN\)/);
+  }
+
+  it("no WebGL2 falls back to black with CSS grain and does not throw", async () => {
+    const { root, loop, scene } = await started(() => null);
     assert.doesNotThrow(() => scene.update?.(view([card({ kind: "approval" })])));
     assert.equal(loop.started, 0, "no frame loop without WebGL2");
-    assert.equal(root.children.length, 1);
-    assert.equal(root.children[0].tag, "div");
-    assert.match(root.children[0].style.cssText, /background/);
+    assertFallback(root);
     scene.stop();
     assert.equal(root.children.length, 0);
   });
 
-  it("context lost stops the loop and falls back", async () => {
-    nextGl = fakeGl;
-    const create = await loadScene();
-    const root = new FakeElement("div");
-    const { ctx, loop } = fakeCtx();
-    const scene = create();
-    scene.start(root as unknown as HTMLElement, ctx);
+  it("a normal start draws on a canvas, and stop releases everything", async () => {
+    const { gl, calls } = countingGl();
+    const { root, loop, scene } = await started(() => gl);
     scene.update?.(view([card({})]));
     assert.equal(loop.started, 1);
+    assert.deepEqual(root.children.map((child) => child.tag), ["canvas"]);
+    assert.ok(windowListeners.has("resize"));
+    scene.stop();
+    assert.equal(loop.cancelled, 1);
+    assert.equal(calls.get("deleteProgram"), 1);
+    assert.equal(calls.get("deleteTexture"), 1);
+    assert.equal(calls.get("loseContext"), 1);
+    assert.equal(root.children.length, 0);
+    assert.ok(!windowListeners.has("resize"));
+  });
+
+  it("a shader that does not compile falls back", async () => {
+    const { gl } = countingGl({ compiles: false });
+    const { root, loop, scene } = await started(() => gl);
+    assert.equal(loop.started, 0);
+    assertFallback(root);
+    scene.stop();
+  });
+
+  it("a program that does not link falls back", async () => {
+    const { gl } = countingGl({ links: false });
+    const { root, loop, scene } = await started(() => gl);
+    assert.equal(loop.started, 0);
+    assertFallback(root);
+    scene.stop();
+  });
+
+  it("context lost stops the loop and falls back", async () => {
+    const { gl } = countingGl();
+    const { root, loop, scene } = await started(() => gl);
+    scene.update?.(view([card({})]));
     const canvas = root.children.find((child) => child.tag === "canvas");
     assert.ok(canvas, "the scene draws on a canvas");
     canvas.fire("webglcontextlost");
     assert.equal(loop.cancelled, 1);
-    assert.deepEqual(root.children.map((child) => child.tag), ["div"]);
+    assert.ok(!windowListeners.has("resize"), "the resize listener goes with the canvas");
+    assertFallback(root);
     assert.doesNotThrow(() => scene.update?.(view([card({ kind: "finished" })])));
     scene.stop();
     assert.equal(root.children.length, 0);

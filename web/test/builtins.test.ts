@@ -4,7 +4,8 @@ import type { Card, Limit } from "../src/api.ts";
 import { displayName } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
 import { orderLimits, ringCaption, ringPercent, ringView } from "../src/builtins/limit-rings/logic.ts";
-import { advanceDrop, charsetFor, fadeAlpha, numberOption } from "../src/builtins/matrix/logic.ts";
+import { advanceDrop, charsetFor, fadeAlpha } from "../src/builtins/matrix/logic.ts";
+import { numberOption } from "../src/builtins/shared/options.ts";
 import { CONTEXT_HIGH_PERCENT, taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
 
 const MINUTE_MS = 60_000;

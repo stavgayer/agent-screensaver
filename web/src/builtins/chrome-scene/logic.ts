@@ -6,7 +6,7 @@ export type SignState = "running" | "finished" | "approval" | "idle";
 export interface Sign {
   source: string;
   session: string;
-  letter: string;
+  label: string;
   state: SignState;
   flashStartMs?: number;
 }
@@ -27,9 +27,17 @@ const STATES: Record<CardKind, SignState> = {
   no_activity: "idle",
 };
 
-function letterFor(state: ViewState, source: string): string {
-  const name = state.agents[source]?.name ?? source;
-  return Array.from(name.trim())[0]?.toUpperCase() ?? "?";
+const MAX_LABEL = 8;
+
+/**
+ * The word a sign carries: the agent's name in capitals, its first word when
+ * the whole name is longer than eight letters, cut at eight letters.
+ */
+export function labelFor(name: string): string {
+  const upper = name.trim().toUpperCase();
+  if (upper === "") return "?";
+  const word = upper.length > MAX_LABEL ? upper.split(/\s+/)[0] : upper;
+  return Array.from(word).slice(0, MAX_LABEL).join("");
 }
 
 /**
@@ -43,7 +51,7 @@ export function signsFrom(state: ViewState, previous: readonly Sign[], nowMs: nu
     .sort((a, b) => b.updated_at_ms - a.updated_at_ms)
     .slice(0, MAX_SIGNS)
     .map((card) => {
-      const sign: Sign = { source: card.source, session: card.session, letter: letterFor(state, card.source), state: STATES[card.kind] ?? "idle" };
+      const sign: Sign = { source: card.source, session: card.session, label: labelFor(state.agents[card.source]?.name ?? card.source), state: STATES[card.kind] ?? "idle" };
       if (sign.state !== "finished") return sign;
       const old = before.get(`${card.source}\n${card.session}`);
       // A card seen for the first time already finished is old news: no flash.
@@ -63,6 +71,8 @@ export function flashAmount(sign: Sign, nowMs: number): number {
 
 /** 0 = calm, 1 = full pink; eases toward 1 while any approval is open. */
 export function pinkTarget(state: ViewState): number {
+  // A secondary display shows the shape and grain only.
+  if (state.display === "secondary") return 0;
   return state.cards.some((card) => card.kind === "approval") ? 1 : 0;
 }
 
@@ -91,4 +101,21 @@ export function glitchAmount(sinceMs: number | undefined): number {
 /** Counts approval signs, so a new approval can start a glitch burst. */
 export function approvalCount(signs: readonly Sign[]): number {
   return signs.filter((sign) => sign.state === "approval").length;
+}
+
+/**
+ * Lays signs of the given half widths in one centred row with `gap` between
+ * them. A row wider than `maxWidth` is shrunk as a whole; `scale` says how much.
+ */
+export function layoutRow(halfWidths: readonly number[], gap: number, maxWidth: number): { centers: number[]; scale: number } {
+  if (halfWidths.length === 0) return { centers: [], scale: 1 };
+  const total = halfWidths.reduce((sum, half) => sum + half * 2, 0) + gap * (halfWidths.length - 1);
+  const scale = Math.min(1, maxWidth / total);
+  let left = -total / 2;
+  const centers = halfWidths.map((half) => {
+    const center = (left + half) * scale;
+    left += half * 2 + gap;
+    return center;
+  });
+  return { centers, scale };
 }
