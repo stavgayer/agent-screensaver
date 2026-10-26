@@ -12,7 +12,7 @@ The pictures and the video at the top of the main [README](../../README.md). Eve
 | `chrome-idle.jpg` | Chrome theme with no tasks: the clock and the rings. |
 | `matrix-working.jpg` | Default theme on the Matrix background, three agents working. |
 | `matrix-approval.jpg` | Default theme on the Matrix background, waiting for approval. |
-| `demo.gif` | Chrome theme playing the demo scene for 27.5 seconds: three agents working, Codex finishes, Claude Code asks for approval, then all three finish. 960 by 623, 12 frames a second, shown at the top of the README. |
+| `demo.gif` | Chrome theme playing the demo scene for 30 seconds: three agents working, Codex finishes, Claude Code asks for approval, then all three finish. Made from a screen recording of the full-screen harness (below). 800 wide, 12 frames a second, shown at the top of the README. |
 
 There is no picture of a second display: the harness window is always on the main display, and the screen saver takes the secondary role only on a second display. There is no Calm picture because the aerial footage is Apple's.
 
@@ -50,6 +50,25 @@ The GIF is made the same way as the stills, but the data plays: a small program 
    The GIF is 960 wide with 160 colors, about 7.4 MB. If it grows past 8 MB, lower `max_colors` or the width in the script. The video is H.264, 1280 wide.
 6. Look at a few frames of the GIF, for example `ffmpeg -ss 13 -i docs/media/demo.gif -frames:v 1 check.png`: the Chrome scene and its fonts must show, not a black screen.
 7. Commit `docs/media/demo.gif`. Do not commit `demo.mp4` or the frames.
+
+## Smoother: from a screen recording
+
+The frames above come at about 12 a second, so motion looks stepped. For a smooth video, record the screen while `tools/harness/fullscreen.swift` plays the demo. It covers the whole screen, menu bar and Dock included, and hides the cursor.
+
+1. Build it: `swiftc -O tools/harness/fullscreen.swift -o build/fullscreen`. Prepare `D` and the state program as in steps 2 and 3 above (keep the default grain for a video).
+2. Press Cmd+Shift+5, choose Record Entire Screen and start recording.
+3. Start the state program for 50 seconds, then at once: `AGS_DATA_DIR="$D" build/fullscreen build/AgentScreensaver.saver 45 mid.png`. It closes itself after 45 seconds.
+4. Stop the recording (Cmd+Ctrl+Esc). Find where the demo starts in the recording, then cut one 30-second loop and crop a few pixels off the edges (the recording dot in the corner):
+
+   ```
+   ffmpeg -ss <start> -i recording.mov -t 30.5 -vf "crop=iw-64:ih-48:32:48,fps=30,scale=1600:-2:flags=lanczos,format=yuv420p" -c:v libx264 -crf 24 -movflags +faststart -an demo.mp4
+   ```
+
+5. For the GIF, denoise the grain and keep fewer colors so it stays under 8 MB:
+
+   ```
+   ffmpeg -ss <start> -t 30.5 -i recording.mov -vf "crop=iw-64:ih-48:32:48,fps=12,scale=800:-2:flags=lanczos,hqdn3d=16:16:36:36,split[a][b];[a]palettegen=max_colors=80:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" docs/media/demo.gif
+   ```
 
 ## Put the video in the README
 
