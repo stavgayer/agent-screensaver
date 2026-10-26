@@ -1,6 +1,6 @@
-import type { ComponentExt, ViewState } from "../../api.ts";
+import type { Card, ViewState } from "../../api.ts";
 import { agentName } from "../../format.ts";
-import { approvalQueue } from "../../mode.ts";
+import { createApprovalComponent, type ApprovalContent } from "../shared/approval.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "./logic.ts";
 
 // The pulse is a ring outside the border whose opacity breathes. Opacity is composited, so the
@@ -46,44 +46,24 @@ function warningIcon(): HTMLElement {
   return icon;
 }
 
-function createApprovalCard(): ComponentExt {
-  let box: HTMLElement | undefined;
-  let lastKey = "";
-
-  function mount(root: HTMLElement): void {
-    const style = document.createElement("style");
-    style.textContent = STYLE;
-    box = document.createElement("div");
-    box.className = "approval";
-    root.append(style, box);
-  }
-
-  function update(state: ViewState): void {
-    const { first, more } = approvalQueue(state.cards);
-    box?.toggleAttribute("hidden", first === undefined);
-    if (first === undefined) return;
-    const lines: Array<[string, string]> = [
-      ["meta", `${agentName(first.source, state.agents)} · ${approvalWaitingLabel(first, state.nowMs)}`],
-      ["headline", "Needs approval"],
-      ["where", first.project ?? ""],
-      ["request", first.request ?? ""],
-      ["more", approvalMoreLabel(more)],
-    ];
-    // Privacy mode removes the request; skip empty lines.
-    const shown = lines.filter(([, text]) => text !== "");
-    const key = JSON.stringify(shown);
-    if (key === lastKey) return;
-    lastKey = key;
-    box?.replaceChildren(...shown.map(([className, text]) => line(className, text)));
-    box?.querySelector(".headline")?.prepend(warningIcon());
-  }
-
-  function unmount(): void {
-    box?.parentElement?.replaceChildren();
-    box = undefined;
-  }
-
-  return { mount, update, unmount };
+function content(first: Card, more: number, state: ViewState): ApprovalContent {
+  const lines: Array<[string, string]> = [
+    ["meta", `${agentName(first.source, state.agents)} · ${approvalWaitingLabel(first, state.nowMs)}`],
+    ["headline", "Needs approval"],
+    ["where", first.project ?? ""],
+    ["request", first.request ?? ""],
+    ["more", approvalMoreLabel(more)],
+  ];
+  // Privacy mode removes the request; skip empty lines.
+  const shown = lines.filter(([, text]) => text !== "");
+  return {
+    key: JSON.stringify(shown),
+    build() {
+      const elements = shown.map(([className, text]) => line(className, text));
+      elements.find((element) => element.className === "headline")?.prepend(warningIcon());
+      return elements;
+    },
+  };
 }
 
-window.agentScreensaver.register(createApprovalCard);
+window.agentScreensaver.register(() => createApprovalComponent({ css: STYLE, content }));
