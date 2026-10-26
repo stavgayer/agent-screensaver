@@ -16,23 +16,31 @@ You start a long task in Claude Code, Codex or Cursor and walk away. When you co
 
 ## What it does
 
-![Three agents working, with the clock and four limit rings](docs/media/chrome-running.jpg)
+Each agent task gets a card: what it works on, for how long, its project, model and branch, and how full the context is. The rings show how much of your 5-hour and weekly limits is used and when they reset. When an agent waits for your approval, a large card says which agent, which project and what it wants to run. A sound plays when the screen saver is showing. With no tasks, you see the clock and your limits. A second display shows only the background and the clock.
 
-Each agent task gets a card: what it works on, for how long, its project, model and branch, and how full the context is. The rings show how much of your 5-hour and weekly limits is used and when they reset.
+The pictures are of the real screen saver with made-up data. First the Chrome theme:
 
-![An approval card in the middle of the screen](docs/media/chrome-approval.jpg)
+<table>
+  <tr>
+    <td><img src="docs/media/chrome-working.jpg" alt="Chrome theme with three agents working, the clock and four limit rings"><br>Three agents working</td>
+    <td><img src="docs/media/chrome-approval.jpg" alt="Chrome theme with a large approval card in the middle"><br>An agent needs approval</td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/chrome-done.jpg" alt="Chrome theme with three finished tasks"><br>All three tasks finished</td>
+    <td><img src="docs/media/chrome-idle.jpg" alt="Chrome theme with only the clock and the rings"><br>No tasks: the clock and your limits</td>
+  </tr>
+</table>
 
-When an agent waits for your approval, a large card says which agent, which project and what it wants to run. A sound plays when the screen saver is showing.
+The Default theme, on a Matrix background:
 
-![Only the clock and the rings, no cards](docs/media/chrome-idle.jpg)
+<table>
+  <tr>
+    <td><img src="docs/media/matrix-working.jpg" alt="Default theme on a Matrix background with three agents working"><br>Three agents working</td>
+    <td><img src="docs/media/matrix-approval.jpg" alt="Default theme on a Matrix background with an approval card"><br>An agent needs approval</td>
+  </tr>
+</table>
 
-With no tasks, you see the clock and your limits.
-
-![A second display with only the background and the clock](docs/media/chrome-secondary.jpg)
-
-A second display shows only the background and the clock.
-
-These pictures show the Chrome theme with made-up data. Two more themes are built in: Default, on a Matrix background, and Calm, on the Apple aerial videos that macOS has already downloaded. The Chrome theme needs WebGL2 and uses more CPU than the others, see [Known limits](docs/known-limits.md).
+A third theme, Calm, plays the Apple aerial videos that macOS has already downloaded. It has no picture here because the footage belongs to Apple. The Chrome theme needs WebGL2 and uses more CPU than the others, see [Known limits](docs/known-limits.md).
 
 ## Install
 
