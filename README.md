@@ -112,6 +112,8 @@ Privacy:
 
 Cursor shows no approval cards because it does not tell a hook when it will really ask you. It has no usage ring because it keeps your usage on its server only. `codex exec` runs show no card. The details are in [docs/agents.md](docs/agents.md) and [docs/known-limits.md](docs/known-limits.md).
 
+Sessions you start from [T3 Code](https://github.com/pingdotgg/t3code) show too, with no extra setup: T3 Code runs the same Claude Code, Codex and Cursor tools, so the same hooks fire. Tested with T3 Code 0.1.2 (beta): working and done cards for all three. Approval cards and T3's worktree mode were not tested yet.
+
 You can add other agents yourself, without changing our code: see [Add an agent](docs/guides/add-an-agent.md).
 
 ## Make it yours
