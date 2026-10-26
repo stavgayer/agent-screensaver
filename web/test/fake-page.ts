@@ -15,6 +15,12 @@ export class FakeElement {
   readonly attributes = new Map<string, string>();
   parentElement: FakeElement | undefined;
   textContent = "";
+  dir = "";
+  readonly dataset: Record<string, string> = {};
+  /** Markup set with innerHTML is kept as text, not parsed. */
+  innerHTML = "";
+  src = "";
+  alt = "";
   constructor(tag: string) {
     this.tag = tag;
   }
@@ -47,6 +53,20 @@ export class FakeElement {
       node.parentElement = this;
       this.children.push(node);
     }
+  }
+  prepend(...nodes: FakeElement[]): void {
+    for (const node of nodes) node.parentElement = this;
+    this.children.unshift(...nodes);
+  }
+  toggleAttribute(name: string, on?: boolean): boolean {
+    const want = on ?? !this.attributes.has(name);
+    if (want) this.attributes.set(name, "");
+    else this.attributes.delete(name);
+    return want;
+  }
+  /** The first element below this one that matches a single class selector such as ".headline". */
+  querySelector(selector: string): FakeElement | null {
+    return this.find(selector.replace(/^\./, ""))[0] ?? null;
   }
   appendChild(node: FakeElement): FakeElement {
     this.append(node);
