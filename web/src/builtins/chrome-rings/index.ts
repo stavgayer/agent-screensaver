@@ -13,7 +13,7 @@ const scriptSrc = (document.currentScript as HTMLScriptElement | null)?.src ?? "
 // the system monospace face, which draws until the bundled one is ready. The token
 // block holds every color and face; the theme can set --accent, --warn and --attention.
 const STYLE = `
-:root { --chrome-rings-lime: #c8ff2e; --chrome-rings-warn: #ff9fcf; --chrome-rings-pink: #ff3d9a; --chrome-rings-ink: #f4f6f8;
+:root { --chrome-rings-lime: #c8ff2e; --chrome-rings-warn: #fff1c7; --chrome-rings-pink: #ff3d9a; --chrome-rings-ink: #f4f6f8;
   --chrome-rings-steel: #c9ced4; --chrome-rings-disc: rgba(8, 9, 11, 0.82); --chrome-rings-track: rgba(255, 255, 255, 0.16);
   --chrome-rings-shade: #000; --chrome-rings-mono: "${FONT_FAMILY}", ui-monospace, Menlo, monospace; }
 .chrome-rings { display: flex; justify-content: flex-end; align-items: flex-start; gap: 2.4vmin;

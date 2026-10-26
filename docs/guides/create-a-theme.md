@@ -48,6 +48,7 @@ The `style` keys that start with `--` are set as CSS variables on the page. Othe
 | `--accent` | The main color: working state, rings, clock tint. |
 | `--attention` | A waiting agent: the approval card and the "Check the terminal" state. |
 | `--done` | A finished task. |
+| `--warn` | A limit ring from 50% used. Read by the Chrome rings (`builtin.chrome-rings`) only. |
 | `--card-opacity` | How solid the cards are. |
 
 Your own widgets can read any variable you set. Give each a fallback value in your CSS.

@@ -11,8 +11,7 @@
       "--accent": "#c8ff2e",
       "--attention": "#ff3d9a",
       "--done": "#e6ebf0",
-      "--warn": "#ff9fcf",
-      "--card-opacity": "1"
+      "--warn": "#fff1c7"
     }
   }
 }
