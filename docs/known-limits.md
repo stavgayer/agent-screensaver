@@ -22,7 +22,12 @@ These are the limits of version 1 that you can see or that change how you use it
 ## Screen and menu bar
 
 - **A second display was not tested on a real Mac.** It should show only the background and the clock.
-- **The menu bar icon can hide behind the notch.** See the README, "Settings", for how to open the settings window directly.
+- **The menu bar icon can hide behind the notch.** See the README, "Settings window and menu bar", for how to open the settings window directly.
+
+## Themes
+
+- **The Chrome theme needs WebGL2.** Without it, the background is only black with grain and scan lines: no chrome shape and no agent signs. The clock, the rings and the cards still show.
+- **The Chrome theme uses more CPU than the others.** On the owner's Mac it used about 14% of one core. Matrix uses about 5.9% ([decision 0002](decisions/0002-video-cost.md)). To keep it low, it draws 30 frames a second at half the screen size by default.
 
 ## Files
 
