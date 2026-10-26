@@ -308,3 +308,16 @@ func TestClockJumpEndsDemo(t *testing.T) {
 		})
 	}
 }
+
+// The step reads the clock before it reads the config, so a demo armed in
+// that gap looks a little in the future. It must still play.
+func TestJustArmedDemoPlays(t *testing.T) {
+	d, p := newTestDaemon(t)
+	armDemo(t, p, 60, 2_001, false)
+
+	d.Step(2_000, true)
+
+	if !showsDemo(readStateFile(t, p)) {
+		t.Error("a demo armed just after the step read the clock did not play")
+	}
+}

@@ -9,6 +9,11 @@ import (
 // demoExpiryMs is how long an armed demo waits for the saver to show.
 const demoExpiryMs = 5 * 60_000
 
+// demoFutureSlackMs is how far in the future an armed time may be and still
+// play. A step reads the clock before it reads the config, so a demo armed in
+// that gap looks a little in the future.
+const demoFutureSlackMs = 5_000
+
 // demoRun follows the scripted demo. The daemon never writes the config (the
 // CLI and the settings window do), so it never clears the armed fields: it
 // remembers the armed value it has played or let expire, and ignores that
@@ -36,7 +41,7 @@ func (f demoFrame) needsAttention() bool {
 // The demo starts when the saver shows. It ends after its seconds, when the
 // saver hides (so the menu bar never shows it while the user works), or at
 // once on a real approval, so a real agent never waits unseen. A clock that
-// jumps back, or an armed time in the future, ends it too.
+// jumps back, or an armed time well in the future, ends it too.
 func (r *demoRun) next(cfg config.Config, realApproval, saverActive bool, nowMs int64) *demoFrame {
 	armed := cfg.DemoArmedMs
 	if armed == 0 || armed == r.spentMs {
@@ -47,7 +52,7 @@ func (r *demoRun) next(cfg config.Config, realApproval, saverActive bool, nowMs 
 		r.armedMs, r.started = armed, false
 	}
 	if !r.started {
-		if nowMs-armed >= demoExpiryMs || armed > nowMs {
+		if nowMs-armed >= demoExpiryMs || armed > nowMs+demoFutureSlackMs {
 			r.spend()
 			return nil
 		}
