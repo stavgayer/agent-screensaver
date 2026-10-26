@@ -91,6 +91,7 @@ Privacy:
 
 - No network. agent-screensaver sends nothing anywhere. The only program it talks to is `codex app-server` on your Mac, which it starts to read the Codex limits and then stops.
 - No login tokens. Limits come from what the agents themselves give: the Claude Code status line, files that Claude Code and the Claude desktop app write on your disk, and the Codex app-server.
+- Transcripts are read, never sent. The service reads your agents' local transcripts only for the session name, the model and token counts (for how full the context is and the Claude "est." limit). It takes no prompt text from them.
 - Prompts are masked. A card title made from a prompt has its secrets masked and is cut to 40 characters. Privacy mode (`./agent-screensaver privacy on`) also hides card titles, requests, names and branches.
 
 ## Supported agents
