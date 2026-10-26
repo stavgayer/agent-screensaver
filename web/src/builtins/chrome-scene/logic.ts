@@ -41,14 +41,26 @@ export function labelFor(name: string): string {
 }
 
 /**
- * One sign per card, newest first, capped at MAX_SIGNS; none on a secondary
- * display. A card that just turned finished gets flashStartMs.
+ * One sign per card, capped at MAX_SIGNS; none on a secondary display. The order
+ * is stable, so a sign never jumps when its card updates: agents in the
+ * service's order (unknown sources last), then the card's start, then the
+ * session. A card that just turned finished gets flashStartMs.
  */
 export function signsFrom(state: ViewState, previous: readonly Sign[], nowMs: number): Sign[] {
   if (state.display === "secondary") return [];
   const before = new Map(previous.map((sign) => [`${sign.source}\n${sign.session}`, sign]));
+  const sourceRank = (source: string): number => {
+    const known = state.agentOrder.indexOf(source);
+    return known === -1 ? state.agentOrder.length : known;
+  };
   return [...state.cards]
-    .sort((a, b) => b.updated_at_ms - a.updated_at_ms)
+    .sort(
+      (a, b) =>
+        sourceRank(a.source) - sourceRank(b.source) ||
+        a.started_at_ms - b.started_at_ms ||
+        a.session.localeCompare(b.session) ||
+        a.source.localeCompare(b.source),
+    )
     .slice(0, MAX_SIGNS)
     .map((card) => {
       const sign: Sign = { source: card.source, session: card.session, label: labelFor(state.agents[card.source]?.name ?? card.source), state: STATES[card.kind] ?? "idle" };

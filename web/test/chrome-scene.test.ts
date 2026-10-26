@@ -51,13 +51,19 @@ describe("signsFrom", () => {
     );
   });
 
-  it("newest card comes first", () => {
-    const signs = signsFrom(
-      view([card({ session: "old", updated_at_ms: NOW_MS - 9000 }), card({ source: "codex", session: "new", updated_at_ms: NOW_MS - 10 })]),
-      [],
-      NOW_MS,
-    );
-    assert.deepEqual(signs.map((sign) => sign.session), ["new", "old"]);
+  it("signs keep a stable order: agent order, then start time, then session", () => {
+    const cards = [
+      card({ source: "aider", session: "x", started_at_ms: NOW_MS - 90_000 }),
+      card({ source: "codex", session: "b", started_at_ms: NOW_MS - 50_000 }),
+      card({ source: "claude", session: "late", started_at_ms: NOW_MS - 10_000 }),
+      card({ source: "claude", session: "early", started_at_ms: NOW_MS - 80_000 }),
+      card({ source: "claude", session: "a", started_at_ms: NOW_MS - 80_000 }),
+    ];
+    const order = (state: ViewState): string[] => signsFrom(state, [], NOW_MS).map((sign) => sign.session);
+    assert.deepEqual(order(view(cards)), ["a", "early", "late", "b", "x"]);
+    // A card that updates does not move.
+    const updated = cards.map((one) => (one.session === "late" ? { ...one, updated_at_ms: NOW_MS } : { ...one, updated_at_ms: NOW_MS - 50_000 }));
+    assert.deepEqual(order(view(updated)), ["a", "early", "late", "b", "x"]);
   });
 
   it("approval card gives an approval sign", () => {
