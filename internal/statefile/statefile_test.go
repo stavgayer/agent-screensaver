@@ -111,14 +111,17 @@ func TestReadLimits(t *testing.T) {
 		{"limits of the last run come back", "write", written, false},
 		{"no file yet is not an error", "", nil, false},
 		{"a broken file is an error", "{", nil, true},
+		{"a demo file gives back no limits", "demo", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "state.json")
 			switch tt.content {
 			case "":
-			case "write":
-				if err := WriteAtomic(path, Build(state.State{Limits: written}, view.View{}, 5000)); err != nil {
+			case "write", "demo":
+				file := Build(state.State{Limits: written}, view.View{}, 5000)
+				file.Demo = tt.content == "demo"
+				if err := WriteAtomic(path, file); err != nil {
 					t.Fatal(err)
 				}
 			default:

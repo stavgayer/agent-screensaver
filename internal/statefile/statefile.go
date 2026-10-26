@@ -28,6 +28,10 @@ type StateFile struct {
 	Limits        []state.Limit           `json:"limits"`
 	Sources       map[string]state.Source `json:"sources"`
 	View          view.View               `json:"view"`
+	// Demo marks a file whose cards and limits are the made-up demo scene,
+	// so a restarted service never takes them back as real. Internal: the
+	// saver ignores it.
+	Demo bool `json:"demo,omitempty"`
 }
 
 // Build combines state and view into a file. With privacy on it clears each
@@ -76,9 +80,13 @@ func WriteAtomic(path string, f StateFile) error {
 }
 
 // ReadLimits returns the limits of the state file at path, so a restarted
-// service shows the last readings at once. A missing file has none.
+// service shows the last readings at once. A missing file has none, and so
+// does a demo file: its limits are made up.
 func ReadLimits(path string) ([]state.Limit, error) {
 	file, err := readLast(path)
+	if file.Demo {
+		return nil, err
+	}
 	return file.Limits, err
 }
 
@@ -93,6 +101,7 @@ func ReadSources(path string) (map[string]state.Source, error) {
 type lastRun struct {
 	Limits  []state.Limit           `json:"limits"`
 	Sources map[string]state.Source `json:"sources"`
+	Demo    bool                    `json:"demo"`
 }
 
 func readLast(path string) (lastRun, error) {

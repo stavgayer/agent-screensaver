@@ -28,8 +28,9 @@ type Config struct {
 	// but print only their reply, and the daemon drops their events.
 	AgentsOff []string `json:"agents_off,omitempty"`
 	// DemoSeconds and DemoArmedMs arm the scripted demo: the daemon plays
-	// it for DemoSeconds when the saver next shows. Only the CLI writes
-	// them; DemoArmedMs is 0 when no demo is armed.
+	// it for DemoSeconds when the saver next shows. The daemon never writes
+	// the config (the CLI and the settings window do); DemoArmedMs is 0
+	// when no demo is armed.
 	DemoSeconds int   `json:"demo_seconds,omitempty"`
 	DemoArmedMs int64 `json:"demo_armed_ms,omitempty"`
 }

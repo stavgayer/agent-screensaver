@@ -9,9 +9,10 @@ import (
 // demoExpiryMs is how long an armed demo waits for the saver to show.
 const demoExpiryMs = 5 * 60_000
 
-// demoRun follows the scripted demo. Only the CLI writes the config, so the
-// daemon never clears the armed fields: it remembers the armed value it has
-// played or let expire, and ignores that value after.
+// demoRun follows the scripted demo. The daemon never writes the config (the
+// CLI and the settings window do), so it never clears the armed fields: it
+// remembers the armed value it has played or let expire, and ignores that
+// value after.
 type demoRun struct {
 	armedMs int64 // the armed value being followed
 	started bool  // the saver has shown since it was armed
@@ -32,8 +33,10 @@ func (f demoFrame) needsAttention() bool {
 }
 
 // next returns the frame to show at nowMs, or nil when the real state shows.
-// The demo starts when the saver shows and ends after its seconds, or at
-// once on a real approval, so a real agent never waits unseen.
+// The demo starts when the saver shows. It ends after its seconds, when the
+// saver hides (so the menu bar never shows it while the user works), or at
+// once on a real approval, so a real agent never waits unseen. A clock that
+// jumps back, or an armed time in the future, ends it too.
 func (r *demoRun) next(cfg config.Config, realApproval, saverActive bool, nowMs int64) *demoFrame {
 	armed := cfg.DemoArmedMs
 	if armed == 0 || armed == r.spentMs {
@@ -44,7 +47,7 @@ func (r *demoRun) next(cfg config.Config, realApproval, saverActive bool, nowMs 
 		r.armedMs, r.started = armed, false
 	}
 	if !r.started {
-		if nowMs-armed >= demoExpiryMs {
+		if nowMs-armed >= demoExpiryMs || armed > nowMs {
 			r.spend()
 			return nil
 		}
@@ -55,7 +58,7 @@ func (r *demoRun) next(cfg config.Config, realApproval, saverActive bool, nowMs 
 	}
 	totalMs := int64(demoSeconds(cfg)) * 1000
 	elapsedMs := nowMs - r.startMs
-	if realApproval || elapsedMs >= totalMs {
+	if realApproval || !saverActive || elapsedMs < 0 || elapsedMs >= totalMs {
 		r.spend()
 		return nil
 	}

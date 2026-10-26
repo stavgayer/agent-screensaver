@@ -313,11 +313,12 @@ func (d *Daemon) duePolls(nowMs int64, saverActive bool) []string {
 }
 
 // writeState writes the state file. A demo frame replaces the cards and
-// limits after Build, so privacy mode never masks the made-up text.
+// limits after Build, so privacy mode never masks the made-up text, and
+// marks the file so a restart never restores them.
 func (d *Daemon) writeState(nowMs int64, frame *demoFrame, result *StepResult) {
 	file := statefile.Build(d.state, d.view, nowMs)
 	if frame != nil {
-		file.Cards, file.Limits = frame.cards, frame.limits
+		file.Cards, file.Limits, file.Demo = frame.cards, frame.limits, true
 	}
 	if err := statefile.WriteAtomic(d.paths.StateFile, file); err != nil {
 		d.dirty = true

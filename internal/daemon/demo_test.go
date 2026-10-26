@@ -205,3 +205,106 @@ func TestDemoApprovalPlaysSound(t *testing.T) {
 		t.Errorf("sound at %v ms into the demo, want once at 10000", soundsAt)
 	}
 }
+
+func TestRestartDuringDemoRestoresNoDemoLimits(t *testing.T) {
+	d, p := newTestDaemon(t)
+	d.SetLimits("codex", []event.LimitReading{{Window: event.Week, UsedPercent: 3}}, 0)
+	armDemo(t, p, 60, 1, false)
+	d.Step(1_000, true)
+	if file := readStateFile(t, p); !file.Demo || !showsDemo(file) {
+		t.Fatalf("demo = %v, want a demo-marked file on disk", file.Demo)
+	}
+
+	restarted := New(p)
+	restarted.Logf = t.Logf
+	saveDemoConfig(t, p, config.Default()) // no demo after the restart
+	restarted.Step(2_000, false)
+
+	file := readStateFile(t, p)
+	if file.Demo || len(file.Limits) != 0 {
+		t.Errorf("demo = %v, limits = %+v; want no limits from the demo file", file.Demo, file.Limits)
+	}
+}
+
+func TestRealStateFileIsNotMarkedDemo(t *testing.T) {
+	d, p := newTestDaemon(t)
+	d.Step(1_000, true)
+	if readStateFile(t, p).Demo {
+		t.Error("a real state file is marked as a demo")
+	}
+}
+
+func TestDemoEndsWhenSaverHides(t *testing.T) {
+	d, p := newTestDaemon(t)
+	armDemo(t, p, 60, 1, false)
+	spoolEvent(t, p, "claude", "s1", event.KindStarted, 0)
+	d.Step(1_000, true)
+
+	result := d.Step(5_000, false)
+
+	if file := readStateFile(t, p); !result.StateWritten || showsDemo(file) || len(file.Cards) != 1 {
+		t.Fatalf("written = %v, cards = %+v; want the real card once the saver hides", result.StateWritten, file.Cards)
+	}
+	d.Step(6_000, true)
+	if showsDemo(readStateFile(t, p)) {
+		t.Error("the demo came back when the saver showed again")
+	}
+}
+
+// Before the fix, a demo kept playing with the saver hidden: its approval
+// at 10 s passed unheard, and showing the saver again during 10 to 18 s
+// gave an approval card with no sound.
+func TestNoSilentDemoApprovalAfterSaverHides(t *testing.T) {
+	d, p := newTestDaemon(t)
+	armDemo(t, p, 60, 1, false)
+	d.Step(1_000, true)
+	d.Step(9_000, false)
+	d.Step(11_000, false)
+
+	d.Step(12_000, true)
+
+	if file := readStateFile(t, p); showsDemo(file) {
+		t.Errorf("cards = %+v; a hidden demo approval must not show without its sound", file.Cards)
+	}
+}
+
+func TestRealEventDuringDemoShowsAfterIt(t *testing.T) {
+	d, p := newTestDaemon(t)
+	armDemo(t, p, 10, 1, false)
+	d.Step(1_000, true)
+
+	spoolEvent(t, p, "claude", "s1", event.KindStarted, 3_000)
+	d.Step(4_000, true)
+	if file := readStateFile(t, p); !showsDemo(file) || slices.ContainsFunc(file.Cards, func(card state.Card) bool { return card.Session == "s1" }) {
+		t.Fatalf("cards = %+v; want only the demo while it plays", file.Cards)
+	}
+
+	d.Step(11_000, true)
+
+	if file := readStateFile(t, p); showsDemo(file) || len(file.Cards) != 1 || file.Cards[0].Session != "s1" {
+		t.Errorf("cards = %+v; want the real card that arrived during the demo", file.Cards)
+	}
+}
+
+func TestClockJumpEndsDemo(t *testing.T) {
+	tests := []struct {
+		name    string
+		armedMs int64
+		steps   []int64 // saver shown at each
+	}{
+		{"clock goes back while playing", 10_000, []int64{11_000, 5_000, 6_000}},
+		{"armed in the future", 100_000, []int64{2_000}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, p := newTestDaemon(t)
+			armDemo(t, p, 60, tt.armedMs, false)
+			for _, nowMs := range tt.steps {
+				d.Step(nowMs, true)
+			}
+			if showsDemo(readStateFile(t, p)) {
+				t.Error("demo shown after the clock jumped")
+			}
+		})
+	}
+}
