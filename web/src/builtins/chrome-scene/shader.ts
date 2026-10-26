@@ -10,6 +10,9 @@ export const FOCAL = 2.0;
 export const ROW_Z = -0.6;
 /** Half the height of a sign before the row is shrunk to fit. */
 export const SIGN_HALF_HEIGHT = 0.21;
+/** Where the shape's centre goes while an approval is open: higher and further back. */
+export const SHAPE_LIFT_Y = 2.9;
+export const SHAPE_LIFT_Z = 4.0;
 
 /** One triangle that covers the screen, made from the vertex index: no buffers. */
 export const VERTEX_SHADER = `#version 300 es
@@ -39,6 +42,7 @@ uniform vec2 uResolution;
 uniform float uTime;      // seconds; grain and glitch noise
 uniform float uWarpTime;  // seconds; stands still under reduced motion
 uniform float uPink;      // 0 calm, 1 full pink
+uniform float uLift;      // 0 calm, 1 lifted clear of the approval card
 uniform float uGlitch;    // 0 none, 1 full burst
 uniform float uGrain;
 uniform int uCount;
@@ -53,6 +57,10 @@ out vec4 outColor;
 const vec3 LIME = vec3(0.784, 1.0, 0.18);
 const vec3 PINK = vec3(1.0, 0.16, 0.56);
 const vec3 SHAPE_CENTER = vec3(0.0, 0.62, 0.0);
+// While an approval is open the shape rises and steps back, so it sits above the
+// card (which the runtime centres on the screen) instead of being cut in half by it.
+const vec3 SHAPE_LIFTED = vec3(0.0, ${glsl(SHAPE_LIFT_Y)}, ${glsl(SHAPE_LIFT_Z)});
+const vec3 PALE = vec3(0.93, 0.95, 0.97);
 const float CAMERA_Z = ${glsl(CAMERA_Z)};
 const float FOCAL = ${glsl(FOCAL)};
 const float ROW_Z = ${glsl(ROW_Z)};
@@ -75,7 +83,7 @@ float roundBox(vec3 p, vec3 size, float radius) {
 
 float shape(vec3 p) {
   float t = uWarpTime;
-  p -= SHAPE_CENTER;
+  p -= mix(SHAPE_CENTER, SHAPE_LIFTED, uLift);
   p.xz *= rot(t * 0.06);
   p.xy *= rot(sin(t * 0.05) * 0.5);
   p.x *= 0.86;
@@ -167,8 +175,8 @@ vec3 film(float x) {
 vec3 signGlow(int index) {
   vec4 s = uSigns[index];
   if (s.x > 2.5) return PINK * (1.6 + uGlitch * hash(vec2(uTime, float(index))) * 1.5);
-  // Finished: a white-hot lime flash that settles to a calm pale lime.
-  if (s.x > 1.5) return mix(mix(vec3(1.0), LIME, 0.45) * 0.95, vec3(2.4, 2.8, 1.6), s.y);
+  // Finished: a white-hot lime flash that settles to bright pale chrome ink.
+  if (s.x > 1.5) return mix(PALE * 2.3, vec3(2.4, 2.8, 1.6), s.y);
   if (s.x > 0.5) return LIME * 1.5;
   // Idle: dark ink, as if cut into the plate.
   return vec3(0.025);
@@ -177,7 +185,8 @@ vec3 signGlow(int index) {
 float glowStrength(int index) {
   vec4 s = uSigns[index];
   if (s.x > 2.5) return 1.0;
-  if (s.x > 1.5) return 0.35 + s.y * 1.6;
+  // Finished glows only while it flashes; at rest the ink is bright enough alone.
+  if (s.x > 1.5) return s.y * 1.6;
   if (s.x > 0.5) return 0.45 + 0.35 * s.w;
   return 0.0;
 }
@@ -195,6 +204,19 @@ vec3 shadeSign(vec3 p, vec3 base, int index) {
     color += LIME * uSigns[index].y * 0.35 * (1.0 - word);
   }
   return color;
+}
+
+// The chrome at a point on (or just beside) a surface, seen along rd.
+vec3 surface(vec3 p, vec3 rd) {
+  vec3 n = normalAt(p);
+  vec3 r = reflect(rd, n);
+  float facing = max(dot(n, -rd), 0.0);
+  float fresnel = pow(1.0 - facing, 4.0);
+  vec3 base = chrome(r, 0.03 + uGlitch * 0.08) * (0.72 + 0.5 * fresnel);
+  base *= mix(vec3(1.0), film(facing * 1.6 + 0.15), 0.35 * smoothstep(0.55, 0.0, facing));
+  // Acid rim light from the strip, pink while an approval is open.
+  base += mix(LIME, PINK, uPink) * fresnel * 0.9 * smoothstep(0.1, 0.7, -n.x);
+  return base;
 }
 
 void main() {
@@ -215,11 +237,19 @@ void main() {
   vec4 hit = vec4(FAR, -2.0, FAR, -1.0);
   float nearest = FAR;
   float nearestIndex = -1.0;
+  // How close the ray came to the shape, and where: a ray that just misses it
+  // still covers part of its pixel, which softens the outline at no extra steps.
+  float edge = FAR;
+  float edgeT = 0.0;
   for (int i = 0; i < MAX_STEPS; i++) {
     vec4 h = scene(ro + rd * t);
     if (h.z < nearest) {
       nearest = h.z;
       nearestIndex = h.w;
+    }
+    if (h.y < -0.5 && h.x < edge) {
+      edge = h.x;
+      edgeT = t;
     }
     if (h.x < 0.0012) {
       hit = h;
@@ -229,22 +259,19 @@ void main() {
     if (t > FAR) break;
   }
 
+  // A ray that hit is fully covered; one that missed covers what it passed of the shape.
+  // The march scales the shape's distance by 0.65; a pixel is this wide where the ray passed.
+  float pixel = edgeT * 2.0 / (uResolution.y * FOCAL);
+  float cover = hit.y > -1.5 ? 1.0 : 1.0 - smoothstep(0.0, pixel * 1.5, edge / 0.65);
   vec3 color = vec3(0.0);
-  if (hit.y > -1.5) {
-    vec3 p = ro + rd * t;
-    vec3 n = normalAt(p);
-    vec3 r = reflect(rd, n);
-    float facing = max(dot(n, -rd), 0.0);
-    float fresnel = pow(1.0 - facing, 4.0);
-    vec3 base = chrome(r, 0.03 + uGlitch * 0.08) * (0.72 + 0.5 * fresnel);
-    base *= mix(vec3(1.0), film(facing * 1.6 + 0.15), 0.35 * smoothstep(0.55, 0.0, facing));
-    // Acid rim light from the strip, pink while an approval is open.
-    base += mix(LIME, PINK, uPink) * fresnel * 0.9 * smoothstep(0.1, 0.7, -n.x);
-    color = hit.y < -0.5 ? base : shadeSign(p, base, int(hit.y));
+  if (cover > 0.0) {
+    vec3 p = ro + rd * (hit.y > -1.5 ? t : edgeT);
+    vec3 base = surface(p, rd);
+    color = (hit.y > -0.5 ? shadeSign(p, base, int(hit.y)) : base) * cover;
   }
   if (nearestIndex > -0.5) {
     int index = int(nearestIndex);
-    float halo = exp(-nearest * 14.0) * glowStrength(index) * (hit.y > -0.5 ? 0.12 : 0.3);
+    float halo = exp(-nearest * 14.0) * glowStrength(index) * (hit.y > -0.5 ? 0.06 : 0.15);
     color += signGlow(index) * halo;
   }
 

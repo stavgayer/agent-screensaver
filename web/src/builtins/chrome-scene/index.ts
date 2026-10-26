@@ -42,7 +42,7 @@ const MAX_FRAME_MS = 250; // a long pause must not make the scene jump
 const WARP_START_S = 40;
 const STATE_CODES: Record<SignState, number> = { idle: 0, running: 1, finished: 2, approval: 3 };
 const UNIFORMS = [
-  "uResolution", "uTime", "uWarpTime", "uPink", "uGlitch", "uGrain", "uCount", "uSigns", "uSignBox", "uRowY", "uRowHalf", "uAtlas",
+  "uResolution", "uTime", "uWarpTime", "uPink", "uLift", "uGlitch", "uGrain", "uCount", "uSigns", "uSignBox", "uRowY", "uRowHalf", "uAtlas",
 ] as const;
 type UniformName = (typeof UNIFORMS)[number];
 
@@ -295,6 +295,8 @@ function createChromeScene(): BackgroundExt {
       // Start well into the warp, so the first frame is already a liquid shape, not a ball.
       gl.uniform1f(uniforms.uWarpTime ?? null, seconds + WARP_START_S);
       gl.uniform1f(uniforms.uPink ?? null, pink);
+      // The shape rises with the pink ease and settles back; under reduced motion it jumps.
+      gl.uniform1f(uniforms.uLift ?? null, reducedMotion ? pinkGoal : pink);
       gl.uniform1f(uniforms.uGlitch ?? null, glitch);
       gl.uniform1f(uniforms.uGrain ?? null, grain);
       gl.uniform1i(uniforms.uCount ?? null, signs.length);
