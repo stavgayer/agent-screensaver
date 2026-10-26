@@ -9,13 +9,13 @@
       "idle": {
         "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }],
         "top-right": [{ "id": "builtin.chrome-rings" }],
-        "bottom": [{ "id": "builtin.task-row" }]
+        "bottom": [{ "id": "builtin.chrome-tasks" }]
       },
       "attention": {
         "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "small" } }],
         "top-right": [{ "id": "builtin.chrome-rings" }],
-        "center": [{ "id": "builtin.approval-card" }],
-        "bottom": [{ "id": "builtin.task-row" }]
+        "center": [{ "id": "builtin.chrome-approval" }],
+        "bottom": [{ "id": "builtin.chrome-tasks" }]
       },
       "secondary": {
         "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }]

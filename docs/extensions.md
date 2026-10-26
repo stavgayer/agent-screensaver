@@ -125,7 +125,7 @@ Regions: `top-left`, `top-right`, `center`, `bottom`. Other names are refused. A
 
 A theme picks a background and a layout, and sets style values. It needs no entry file.
 
-Three themes are built in: `builtin.default` (Default, on the Matrix background), `builtin.calm` (Calm, on `builtin.aerials`; it shows Matrix until aerial videos are downloaded) and `builtin.chrome` (Chrome, on `builtin.chrome-scene`, with its own layout `builtin.chrome-layout` and the components `builtin.chrome-clock` and `builtin.chrome-rings`).
+Three themes are built in: `builtin.default` (Default, on the Matrix background), `builtin.calm` (Calm, on `builtin.aerials`; it shows Matrix until aerial videos are downloaded) and `builtin.chrome` (Chrome, on `builtin.chrome-scene`, with its own layout `builtin.chrome-layout` and the components `builtin.chrome-clock`, `builtin.chrome-rings`, `builtin.chrome-tasks` and `builtin.chrome-approval`). The Chrome components show the same data as `builtin.clock`, `builtin.limit-rings`, `builtin.task-row` and `builtin.approval-card`, in the Chrome look, and each loads its fonts from its own folder. Besides `--accent`, `--attention` and `--done`, `builtin.chrome-rings` reads `--warn`, the color of a ring from 50% (the Chrome theme sets it). The Default and Calm themes do not set `--warn` and do not use these components.
 
 | Field | Meaning |
 |---|---|
