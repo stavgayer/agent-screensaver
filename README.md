@@ -6,9 +6,7 @@ A macOS screen saver that shows what your AI coding agents are doing.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Works offline](https://img.shields.io/badge/works-offline-brightgreen)
 
-<!-- Hero GIF: when docs/media/demo.gif is recorded (see docs/media/README.md), move the next line out of this comment.
 ![agent-screensaver playing its demo scene](docs/media/demo.gif)
--->
 
 <!-- Hero video: paste the link GitHub gives you after you drag the .mp4 into the web editor, on its own line here. -->
 

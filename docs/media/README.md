@@ -12,7 +12,7 @@ The pictures and the video at the top of the main [README](../../README.md). Eve
 | `chrome-idle.jpg` | Chrome theme with no tasks: the clock and the rings. |
 | `matrix-working.jpg` | Default theme on the Matrix background, three agents working. |
 | `matrix-approval.jpg` | Default theme on the Matrix background, waiting for approval. |
-| `demo.gif` | Not recorded yet. A short loop of the demo scene, shown at the top of the README. See the steps below. |
+| `demo.gif` | Chrome theme playing the demo scene for 27.5 seconds: three agents working, Codex finishes, Claude Code asks for approval, then all three finish. 960 by 623, 12 frames a second, shown at the top of the README. |
 
 There is no picture of a second display: the harness window is always on the main display, and the screen saver takes the secondary role only on a second display. There is no Calm picture because the aerial footage is Apple's.
 
@@ -27,35 +27,32 @@ The stills come from the real screen saver in the screenshot harness (see [Test 
 5. Look at each picture. Redo it if it is blank or the fonts are missing.
 6. Make the JPEG: `sips --resampleWidth 1440 -s format jpeg -s formatOptions 80 shot.png --out docs/media/name.jpg`. Keep each file well under 400 KB.
 
-## Record the demo video and GIF
+## Remake the demo GIF and video
 
-You need the installed app and a free copy of [ffmpeg](https://ffmpeg.org) (`brew install ffmpeg`).
+The GIF is made the same way as the stills, but the data plays: a small program rewrites the state file from the demo scene as time goes by, and a second harness, `tools/harness/framegrab.swift`, saves a picture about 12 times a second. Nothing shows on your real screen saver, and you need no screen recording. You need [ffmpeg](https://ffmpeg.org) (`brew install ffmpeg`).
 
-1. Pick the theme you want to show, for example `./agent-screensaver theme set builtin.chrome`.
-2. Run `./agent-screensaver demo`. It prints "Demo ready. Start the screen saver now". The demo plays for 60 seconds from the moment the screen saver shows. Start it within 5 minutes.
-3. Press Cmd+Shift+5, choose "Record Entire Screen" and click Record.
-4. Start the screen saver: in the menu bar app, click "Preview screen saver". Then do not touch the mouse or the keyboard, because that stops the screen saver.
-5. Wait about 20 seconds. In that time all three cards run, Codex finishes, and Claude Code asks for approval with its sound.
-
-   The macOS screen recording does not capture the Mac's own sound, so the approval sound is not in the video.
-
-6. Press Cmd+Control+Esc to stop the recording. The key press also stops the screen saver. Open the recording in QuickTime Player and use Edit, Trim, to keep only the screen saver part. Save it as `demo.mov`.
-7. Make the GIF (12 frames a second, 960 pixels wide):
+1. Build: `cd web && npm run build`, `saver/build.sh`, `swiftc -O tools/harness/framegrab.swift -o build/framegrab`.
+2. Make a temporary data folder `D` with `runtime/` and `extensions/` copied from `build/runtime` and `build/extensions`, as for the stills.
+3. Write a small throwaway Go program inside the repo module, like the one for the stills, that writes `$D/state.json` again about five times a second. Each time it takes the cards and limits from `demo.Scene(elapsedMs, 60000, nowMs)`, where `elapsedMs` is the time since the program started, and writes the file with `statefile.Build` and `statefile.WriteAtomic`. It prints the start time in milliseconds. The theme is `builtin.chrome`, and the program sets the Chrome scene option `grain` to 0 (`cfg.Options = map[string]map[string]any{"builtin.chrome-scene": {"grain": 0}}`): the moving film grain makes a GIF many times larger. Build it to a folder outside the repo and delete it from the repo. Do not commit it.
+4. Start the program for 40 seconds, then at once start the harness for 36 seconds:
 
    ```
-   ffmpeg -i demo.mov -t 20 -vf "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse" -loop 0 docs/media/demo.gif
+   AGS_DATA_DIR="$D" build/framegrab build/AgentScreensaver.saver 36 12 frames
    ```
 
-   Keep it small, a few MB at most. If it is larger, lower `fps` or `scale`.
-8. Make the video for GitHub:
+   Each picture is named by the time it was taken, in milliseconds. The screen saver reads the state file about once a second, so a card changes up to a second after the scene says so.
+5. Make the GIF and the video. Use the start time the program printed. `2.5 30` keeps scene time 2.5 s to 30 s: the fade-in is over at 2.5 s, and at 30 s the scene starts again, so the GIF loops from "all finished" back to "all working".
 
    ```
-   ffmpeg -i demo.mov -t 20 -vf "scale=1920:-2" -c:v libx264 -pix_fmt yuv420p -movflags +faststart demo.mp4
+   tools/harness/frames-to-gif.sh frames <start ms> 2.5 30 docs/media/demo.gif demo.mp4
    ```
 
-9. Commit `docs/media/demo.gif`, and in the README move the GIF line out of its HTML comment.
-10. GitHub plays a video in a README only when you upload it in the web editor. On github.com, open `README.md`, click the pencil to edit, and drag `demo.mp4` into the editor at the "Hero video" comment. GitHub uploads it and puts a link in its place. Keep that link on its own line and commit. Do not commit `demo.mp4` or `demo.mov` to the repository.
+   The GIF is 960 wide with 160 colors, about 7.9 MB. If it grows past 8 MB, lower `max_colors` or the width in the script. The video is H.264, 1280 wide.
+6. Look at a few frames of the GIF, for example `ffmpeg -ss 13 -i docs/media/demo.gif -frames:v 1 check.png`: the Chrome scene and its fonts must show, not a black screen.
+7. Commit `docs/media/demo.gif`. Do not commit `demo.mp4` or the frames.
 
-    GitHub limits the size of a video you upload this way, and the limit may be as low as 10 MB on a free account. Keep the clip short and small. If the file is too large, cut it shorter (lower `-t`) or lower the size (for example `scale=1280:-2`).
+## Put the video in the README
 
-`./agent-screensaver demo stop` ends the demo early. A real approval request ends it at once, so record when no agent of yours is busy.
+GitHub plays a video in a README only when you upload it in the web editor. On github.com, open `README.md`, click the pencil to edit, and drag `demo.mp4` into the editor at the "Hero video" comment. GitHub uploads it and puts a link in its place. Keep that link on its own line and commit. Do not commit `demo.mp4` to the repository.
+
+GitHub limits the size of a video you upload this way, and the limit may be as low as 10 MB on a free account. The video from step 5 is about 1.2 MB.
