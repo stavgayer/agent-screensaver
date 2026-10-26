@@ -24,6 +24,8 @@ const scriptSrc = (document.currentScript as HTMLScriptElement | null)?.src ?? "
 // built-in clock, so the runtime's move scales the digits evenly. The large size is
 // capped by the width too, so on a 4:3 screen the digits stay clear of the shape.
 const STYLE = `
+:root { --chrome-clock-lime: #c8ff2e; --chrome-clock-red: #ff2d55; --chrome-clock-blue: #2d8cff; --chrome-clock-white: #fff;
+  --chrome-clock-red-fringe: rgba(255, 45, 85, 0.55); --chrome-clock-blue-fringe: rgba(45, 140, 255, 0.55); }
 .chrome-clock { --size: min(24vmin, 13.5vw); position: relative; line-height: 1; font-variant-numeric: tabular-nums;
   font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 700; font-stretch: condensed; letter-spacing: -0.01em; }
 .chrome-clock.font-ready { font-family: "${FONT_FAMILY}", "Helvetica Neue", Arial, sans-serif; font-weight: 400; }
@@ -34,14 +36,14 @@ const STYLE = `
   -webkit-backdrop-filter: blur(0.35vmin) brightness(2.6) saturate(1.7); backdrop-filter: blur(0.35vmin) brightness(2.6) saturate(1.7); }
 .chrome-clock .chrome { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .chrome-clock .face { font: inherit; letter-spacing: inherit; }
-.chrome-clock .glow { fill: var(--accent, #c8ff2e); opacity: 0.32; filter: blur(0.9vmin); }
-.chrome-clock .red { fill: #ff2d55; opacity: 0.75; transform: translateX(-0.016em); }
-.chrome-clock .blue { fill: #2d8cff; opacity: 0.75; transform: translateX(0.016em); }
+.chrome-clock .glow { fill: var(--accent, var(--chrome-clock-lime)); opacity: 0.32; filter: blur(0.9vmin); }
+.chrome-clock .red { fill: var(--chrome-clock-red); opacity: 0.75; transform: translateX(-0.016em); }
+.chrome-clock .blue { fill: var(--chrome-clock-blue); opacity: 0.75; transform: translateX(0.016em); }
 /* The scan lines are fixed pixels, so the small digits get fewer, fainter ones. */
 .chrome-clock.small .lines { opacity: 0.55; }
 .chrome-clock .date { position: absolute; top: 100%; left: 0.2em; white-space: nowrap; margin-top: 1.4vmin;
-  font-size: 2.6vmin; letter-spacing: 0.04em; color: color-mix(in srgb, var(--accent, #c8ff2e) 80%, #fff);
-  text-shadow: -0.07em 0 rgba(255, 45, 85, 0.55), 0.07em 0 rgba(45, 140, 255, 0.55), 0 0 0.6em color-mix(in srgb, var(--accent, #c8ff2e) 45%, transparent);
+  font-size: 2.6vmin; letter-spacing: 0.04em; color: color-mix(in srgb, var(--accent, var(--chrome-clock-lime)) 80%, var(--chrome-clock-white));
+  text-shadow: -0.07em 0 var(--chrome-clock-red-fringe), 0.07em 0 var(--chrome-clock-blue-fringe), 0 0 0.6em color-mix(in srgb, var(--accent, var(--chrome-clock-lime)) 45%, transparent);
   transition: opacity 200ms ease; } /* taste-skill-ignore: the fringe and glow are the scene's own chromatic look */
 .chrome-clock.small .date { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .chrome-clock .date { transition: none; } }
