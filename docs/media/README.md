@@ -23,6 +23,9 @@ You need the installed app and a free copy of [ffmpeg](https://ffmpeg.org) (`bre
 3. Press Cmd+Shift+5, choose "Record Entire Screen" and click Record.
 4. Start the screen saver: in the menu bar app, click "Preview screen saver". Then do not touch the mouse or the keyboard, because that stops the screen saver.
 5. Wait about 20 seconds. In that time all three cards run, Codex finishes, and Claude Code asks for approval with its sound.
+
+   The macOS screen recording does not capture the Mac's own sound, so the approval sound is not in the video.
+
 6. Press Cmd+Control+Esc to stop the recording. The key press also stops the screen saver. Open the recording in QuickTime Player and use Edit, Trim, to keep only the screen saver part. Save it as `demo.mov`.
 7. Make the GIF (12 frames a second, 960 pixels wide):
 
@@ -39,5 +42,7 @@ You need the installed app and a free copy of [ffmpeg](https://ffmpeg.org) (`bre
 
 9. Commit `docs/media/demo.gif`, and in the README move the GIF line out of its HTML comment.
 10. GitHub plays a video in a README only when you upload it in the web editor. On github.com, open `README.md`, click the pencil to edit, and drag `demo.mp4` into the editor at the "Hero video" comment. GitHub uploads it and puts a link in its place. Keep that link on its own line and commit. Do not commit `demo.mp4` or `demo.mov` to the repository.
+
+    GitHub limits the size of a video you upload this way, and the limit may be as low as 10 MB on a free account. Keep the clip short and small. If the file is too large, cut it shorter (lower `-t`) or lower the size (for example `scale=1280:-2`).
 
 `./agent-screensaver demo stop` ends the demo early. A real approval request ends it at once, so record when no agent of yours is busy.
