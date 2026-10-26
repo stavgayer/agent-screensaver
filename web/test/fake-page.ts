@@ -12,10 +12,18 @@ export class FakeElement {
     get: (name: string) => this.properties.get(name),
   };
   readonly classes = new Set<string>();
+  readonly attributes = new Map<string, string>();
   parentElement: FakeElement | undefined;
   textContent = "";
   constructor(tag: string) {
     this.tag = tag;
+  }
+  setAttribute(name: string, value: string): void {
+    if (name === "class") this.className = value;
+    else this.attributes.set(name, value);
+  }
+  getAttribute(name: string): string | null {
+    return name === "class" ? this.className : (this.attributes.get(name) ?? null);
   }
   get className(): string {
     return [...this.classes].join(" ");
@@ -80,6 +88,7 @@ export async function loadComponent(scriptSrc: string, importEntry: () => Promis
     currentScript: { src: scriptSrc },
     fonts: { add() {} },
     createElement: (tag: string) => new FakeElement(tag),
+    createElementNS: (_namespace: string, tag: string) => new FakeElement(tag),
   };
   globals.FontFace = FailingFontFace;
   await importEntry();

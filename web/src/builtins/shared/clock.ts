@@ -9,6 +9,8 @@ export interface ClockLook {
   className: string;
   /** Optional. Called once the box is on the page, for example to load a font. */
   onMount?(box: HTMLElement): void;
+  /** Optional. Called with the time text after mount and whenever it changes, for a look that draws the digits itself. */
+  onTime?(text: string): void;
 }
 
 /**
@@ -23,13 +25,16 @@ export function createMinuteClock(look: ClockLook): ComponentExt {
   let cancelFrame: (() => void) | undefined;
 
   // Write only on change: the tick runs every second, the text changes once a minute.
-  const show = (element: HTMLElement | undefined, text: string): void => {
-    if (element !== undefined && element.textContent !== text) element.textContent = text;
+  const show = (element: HTMLElement | undefined, text: string): boolean => {
+    if (element === undefined || element.textContent === text) return false;
+    element.textContent = text;
+    return true;
   };
 
   const tick = (nowMs: number): void => {
     const moment = new Date(nowMs);
-    show(time, formatClock(moment));
+    const clockText = formatClock(moment);
+    if (show(time, clockText)) look.onTime?.(clockText);
     show(date, formatDate(moment));
   };
 
@@ -49,10 +54,10 @@ export function createMinuteClock(look: ClockLook): ComponentExt {
     clock.append(time, date);
     root.append(style, clock);
     box = clock;
+    look.onMount?.(clock);
     setSize(ctx.options);
     tick(ctx.now());
     cancelFrame = ctx.requestFrame(() => tick(ctx.now()), 1);
-    look.onMount?.(clock);
   }
 
   function unmount(): void {
