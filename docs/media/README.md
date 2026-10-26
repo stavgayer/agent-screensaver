@@ -33,7 +33,7 @@ The GIF is made the same way as the stills, but the data plays: a small program 
 
 1. Build: `cd web && npm run build`, `saver/build.sh`, `swiftc -O tools/harness/framegrab.swift -o build/framegrab`.
 2. Make a temporary data folder `D` with `runtime/` and `extensions/` copied from `build/runtime` and `build/extensions`, as for the stills.
-3. Write a small throwaway Go program inside the repo module, like the one for the stills, that writes `$D/state.json` again about five times a second. Each time it takes the cards and limits from `demo.Scene(elapsedMs, 60000, nowMs)`, where `elapsedMs` is the time since the program started, and writes the file with `statefile.Build` and `statefile.WriteAtomic`. It prints the start time in milliseconds. The theme is `builtin.chrome`, and the program sets the Chrome scene option `grain` to 0 (`cfg.Options = map[string]map[string]any{"builtin.chrome-scene": {"grain": 0}}`): the moving film grain makes a GIF many times larger. Build it to a folder outside the repo and delete it from the repo. Do not commit it.
+3. Write a small throwaway Go program inside the repo module, like the one for the stills, that writes `$D/state.json` again about five times a second. Each time it takes the cards and limits from `demo.Scene(elapsedMs, 60000, nowMs)`, where `elapsedMs` is the time since the program started, and writes the file with `statefile.Build` and `statefile.WriteAtomic`. It prints the start time in milliseconds. The theme is `builtin.chrome`, and the program sets the Chrome scene option `grain` to 0 (a Go float, `0.0`: a plain `0` is an int and the option is ignored; `cfg.Options = map[string]map[string]any{"builtin.chrome-scene": {"grain": 0.0}}`): the moving film grain makes a GIF many times larger. Build it to a folder outside the repo and delete it from the repo. Do not commit it.
 4. Start the program for 40 seconds, then at once start the harness for 36 seconds:
 
    ```
@@ -47,7 +47,7 @@ The GIF is made the same way as the stills, but the data plays: a small program 
    tools/harness/frames-to-gif.sh frames <start ms> 2.5 30 docs/media/demo.gif demo.mp4
    ```
 
-   The GIF is 960 wide with 160 colors, about 7.9 MB. If it grows past 8 MB, lower `max_colors` or the width in the script. The video is H.264, 1280 wide.
+   The GIF is 960 wide with 160 colors, about 7.5 MB. If it grows past 8 MB, lower `max_colors` or the width in the script. The video is H.264, 1280 wide.
 6. Look at a few frames of the GIF, for example `ffmpeg -ss 13 -i docs/media/demo.gif -frames:v 1 check.png`: the Chrome scene and its fonts must show, not a black screen.
 7. Commit `docs/media/demo.gif`. Do not commit `demo.mp4` or the frames.
 
