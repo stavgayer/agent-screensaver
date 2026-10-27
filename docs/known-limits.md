@@ -7,10 +7,6 @@ These are the limits of version 1 that you can see or that change how you use it
 - **`codex exec` runs show no card.** Codex sends no transcript for them, and the built-in Codex agent ignores events without a transcript.
 - **Cursor has no usage ring and no approval cards.** Cursor keeps its usage on its server only, and it does not tell a hook whether it will ask you. See [agents.md](agents.md), "Known limits".
 
-## Cards
-
-- **A long Claude session can lose its name after a restart.** The name is read from the last 256 KB of the session's transcript. If the service restarts during a long session, the card shows the prompt until the name is written near the end of the transcript again.
-
 ## Screen and menu bar
 
 - **The menu bar icon can hide behind the notch.** See the README, "Settings window and menu bar", for how to open the settings window directly.

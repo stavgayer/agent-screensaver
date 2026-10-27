@@ -168,6 +168,7 @@ func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	if !d.restored {
 		d.restoreLimits()
 		d.restoreSources()
+		d.restoreSessionNames()
 		d.restored = true
 	}
 	// The config is read first: draining the spool needs its ignore list.

@@ -27,7 +27,11 @@ type StateFile struct {
 	Cards         []state.Card            `json:"cards"`
 	Limits        []state.Limit           `json:"limits"`
 	Sources       map[string]state.Source `json:"sources"`
-	View          view.View               `json:"view"`
+	// SessionNames is the last name of each session, so a restarted
+	// service still knows a name its files no longer show. Internal: the
+	// saver ignores it. Privacy mode leaves it out.
+	SessionNames []state.SessionName `json:"session_names,omitempty"`
+	View         view.View           `json:"view"`
 	// Demo marks a file whose cards and limits are the made-up demo scene,
 	// so a restarted service never takes them back as real. Internal: the
 	// saver ignores it.
@@ -36,7 +40,7 @@ type StateFile struct {
 
 // Build combines state and view into a file. With privacy on it clears each
 // card's title, request, conversation name and branch: each says what the
-// work is. It copies the cards, so the caller's state is
+// work is; it also leaves out the session names. It copies the cards, so the caller's state is
 // untouched, and it never leaves a nil list (which would encode as null).
 func Build(st state.State, v view.View, nowMs int64) StateFile {
 	cards := make([]state.Card, len(st.Cards))
@@ -51,6 +55,10 @@ func Build(st state.State, v view.View, nowMs int64) StateFile {
 	}
 	limits := make([]state.Limit, len(st.Limits))
 	copy(limits, st.Limits)
+	var names []state.SessionName
+	if !v.Privacy {
+		names = st.SessionNames(nowMs)
+	}
 	sources := maps.Clone(st.Sources)
 	if sources == nil {
 		sources = map[string]state.Source{}
@@ -62,6 +70,7 @@ func Build(st state.State, v view.View, nowMs int64) StateFile {
 		Cards:         cards,
 		Limits:        limits,
 		Sources:       sources,
+		SessionNames:  names,
 		View:          v,
 	}
 }
@@ -97,11 +106,20 @@ func ReadSources(path string) (map[string]state.Source, error) {
 	return file.Sources, err
 }
 
+// ReadSessionNames returns the session names of the state file at path.
+// A missing file has none. A demo file has the real names: the demo
+// replaces only the cards and limits.
+func ReadSessionNames(path string) ([]state.SessionName, error) {
+	file, err := readLast(path)
+	return file.SessionNames, err
+}
+
 // lastRun is the part of a state file the service reads back.
 type lastRun struct {
-	Limits  []state.Limit           `json:"limits"`
-	Sources map[string]state.Source `json:"sources"`
-	Demo    bool                    `json:"demo"`
+	Limits       []state.Limit           `json:"limits"`
+	Sources      map[string]state.Source `json:"sources"`
+	SessionNames []state.SessionName     `json:"session_names"`
+	Demo         bool                    `json:"demo"`
 }
 
 func readLast(path string) (lastRun, error) {

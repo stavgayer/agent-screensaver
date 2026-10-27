@@ -111,6 +111,10 @@ type State struct {
 	Cards   []Card
 	Limits  []Limit
 	Sources map[string]Source
+
+	// remembered keeps the last name of each session, also after its card
+	// is gone; see SessionNames.
+	remembered map[sessionKey]SessionName
 }
 
 // NoteEvent records that a valid event of source arrived. The latest time
@@ -179,10 +183,16 @@ func (s *State) SetDetails(source, session string, found Details) bool {
 	}
 	card := &s.Cards[index]
 	before := *card
-	if found.Name != "" {
+	switch {
+	case found.Name != "":
 		card.names.file = found.Name
-		card.Name = card.names.best()
+		s.remember(SessionName{Source: source, Session: session, Name: found.Name, SeenAtMs: card.UpdatedAtMs})
+	case card.names.file == "":
+		// The files no longer hold the name (it is before the part that
+		// is read): use the one known from before.
+		card.names.file = s.rememberedName(source, session)
 	}
+	card.Name = card.names.best()
 	if found.ContextPercent != nil && !card.contextFromEvent {
 		card.ContextPercent = copyFloat64(found.ContextPercent)
 	}

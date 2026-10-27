@@ -139,3 +139,27 @@ func TestReadLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionNamesAreWrittenAndReadBackUnlessPrivacyIsOn(t *testing.T) {
+	for _, privacy := range []bool{false, true} {
+		path := filepath.Join(t.TempDir(), "state.json")
+		if err := WriteAtomic(path, Build(sampleState(), view.View{Privacy: privacy}, 42)); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if privacy && strings.Contains(string(data), "Login fix") {
+			t.Errorf("privacy on, state.json holds the name:\n%s", data)
+		}
+		names, err := ReadSessionNames(path)
+		want := []state.SessionName{{Source: "claude", Session: "s1", Name: "Login fix"}}
+		if privacy {
+			want = nil
+		}
+		if err != nil || !reflect.DeepEqual(names, want) {
+			t.Errorf("privacy %v: names = %+v, %v, want %+v", privacy, names, err, want)
+		}
+	}
+}

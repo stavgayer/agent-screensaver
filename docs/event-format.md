@@ -78,7 +78,7 @@ A card can show a conversation name, the model, how full the context window is a
 
 When no name is known, the card shows the title made from the prompt, then the project.
 
-Where to read is declared in each agent extension (`agent.details`, see [agents.md](agents.md)). The hooks only copy the paths: they must exit fast. The service reads the files, and only the last 256 KB of a log. It reads a card after the event kinds its agent names (Claude Code: the start and the end of a turn and the end of the session; Codex: also each tool step), at most once every 5 seconds. The Claude Code status line runs on every turn of a terminal session, so it keeps the name, model and context fresh there; Claude Code's desktop app does not run it.
+Where to read is declared in each agent extension (`agent.details`, see [agents.md](agents.md)). The hooks only copy the paths: they must exit fast. The service reads the files, and only the last 256 KB of a log. It remembers the last name of each session for 7 days, also after a restart (in `state.json`, field `session_names`, which privacy mode leaves out). When the end of a long log no longer holds the name, the card keeps the remembered one. It reads a card after the event kinds its agent names (Claude Code: the start and the end of a turn and the end of the session; Codex: also each tool step), at most once every 5 seconds. The Claude Code status line runs on every turn of a terminal session, so it keeps the name, model and context fresh there; Claude Code's desktop app does not run it.
 
 In privacy mode the name and the branch are left out of `state.json`, like the title.
 

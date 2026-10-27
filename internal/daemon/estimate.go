@@ -91,3 +91,14 @@ func (d *Daemon) restoreSources() {
 		d.state.NoteEvent(source, known.LastEventMs)
 	}
 }
+
+// restoreSessionNames reads back the last name of each session, so a card
+// whose files no longer hold its name keeps it after a restart.
+func (d *Daemon) restoreSessionNames() {
+	names, err := statefile.ReadSessionNames(d.paths.StateFile)
+	if err != nil {
+		d.Logf("restore session names: %v", err)
+		return
+	}
+	d.state.RememberNames(names)
+}
