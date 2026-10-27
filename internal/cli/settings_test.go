@@ -31,7 +31,7 @@ func extensionFolder(t *testing.T, manifest string) string {
 func runSettings(t *testing.T, p paths.Paths, command string, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := Settings(command, args, &stdout, &stderr, p)
+	code := Settings(command, args, strings.NewReader(""), &stdout, &stderr, p)
 	return code, stdout.String(), stderr.String()
 }
 

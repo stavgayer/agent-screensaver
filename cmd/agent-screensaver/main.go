@@ -64,7 +64,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "agent":
 		return runAgent(args[1:], os.Stdin, stdout, stderr)
 	default: // theme, background, option, privacy, sound, fps, ext and demo
-		return runSettings(name, args[1:], stdout, stderr)
+		return runSettings(name, args[1:], os.Stdin, stdout, stderr)
 	}
 }
 
@@ -102,13 +102,13 @@ func runTool(name string, args []string, stdin io.Reader, stdout io.Writer) int 
 }
 
 // runSettings runs a settings command against the real home.
-func runSettings(name string, args []string, stdout, stderr io.Writer) int {
+func runSettings(name string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Fprintf(stderr, "agent-screensaver %s: %v\n", name, err)
 		return 1
 	}
-	return cli.Settings(name, args, stdout, stderr, paths.ForHome(home))
+	return cli.Settings(name, args, stdin, stdout, stderr, paths.ForHome(home))
 }
 
 // runAgent runs an `agent` command (the CLI side of the Agents tab)

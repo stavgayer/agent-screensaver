@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,8 +15,9 @@ import (
 	"agent-screensaver/internal/settings"
 )
 
-// commandHandler runs one subcommand and writes one line on success.
-type commandHandler func(service settings.Service, args []string, stdout io.Writer) error
+// commandHandler runs one subcommand and writes one line on success. Only
+// a command that asks a question reads stdin.
+type commandHandler func(service settings.Service, args []string, stdin io.Reader, stdout io.Writer) error
 
 // settingsCommands maps each top-level settings command to its handler.
 var settingsCommands = map[string]commandHandler{
@@ -39,13 +41,17 @@ func IsSettingsCommand(name string) bool {
 // sound, fps, ext or demo) and returns the exit code: 0 on success, 1 with a message on stderr
 // when it fails. The logic lives in settings.Service; this is only parsing
 // and printing.
-func Settings(command string, args []string, stdout, stderr io.Writer, p paths.Paths) int {
+func Settings(command string, args []string, stdin io.Reader, stdout, stderr io.Writer, p paths.Paths) int {
 	handler, ok := settingsCommands[command]
 	if !ok {
 		fmt.Fprintf(stderr, "agent-screensaver: unknown command %q\n", command)
 		return 1
 	}
-	if err := handler(settings.Service{Paths: p}, args, stdout); err != nil {
+	err := handler(settings.Service{Paths: p}, args, stdin, stdout)
+	if errors.Is(err, errCancelled) {
+		return 1 // the question already said that nothing changed
+	}
+	if err != nil {
 		fmt.Fprintf(stderr, "agent-screensaver %s: %v\n", command, err)
 		return 1
 	}
@@ -56,7 +62,7 @@ func usageError(usage string) error {
 	return fmt.Errorf("usage: %s", usage)
 }
 
-func runTheme(service settings.Service, args []string, stdout io.Writer) error {
+func runTheme(service settings.Service, args []string, _ io.Reader, stdout io.Writer) error {
 	switch {
 	case len(args) == 1 && args[0] == "list":
 		return listExtensions(service, stdout, "theme")
@@ -73,7 +79,7 @@ func runTheme(service settings.Service, args []string, stdout io.Writer) error {
 // defaultBackground is the word that goes back to the theme's background.
 const defaultBackground = "default"
 
-func runBackground(service settings.Service, args []string, stdout io.Writer) error {
+func runBackground(service settings.Service, args []string, _ io.Reader, stdout io.Writer) error {
 	switch {
 	case len(args) == 1 && args[0] == "list":
 		return listBackgrounds(service, stdout)
@@ -115,7 +121,7 @@ func listBackgrounds(service settings.Service, stdout io.Writer) error {
 	return nil
 }
 
-func runOption(service settings.Service, args []string, stdout io.Writer) error {
+func runOption(service settings.Service, args []string, _ io.Reader, stdout io.Writer) error {
 	switch {
 	case len(args) == 4 && args[0] == "set":
 		return setOption(service, args[1], args[2], args[3], stdout)
@@ -158,7 +164,7 @@ func setOption(service settings.Service, extID, key, raw string, stdout io.Write
 	return nil
 }
 
-func runPrivacy(service settings.Service, args []string, stdout io.Writer) error {
+func runPrivacy(service settings.Service, args []string, _ io.Reader, stdout io.Writer) error {
 	on, err := parseOnOff(args, "privacy on|off")
 	if err != nil {
 		return err
@@ -170,7 +176,7 @@ func runPrivacy(service settings.Service, args []string, stdout io.Writer) error
 	return nil
 }
 
-func runSound(service settings.Service, args []string, stdout io.Writer) error {
+func runSound(service settings.Service, args []string, _ io.Reader, stdout io.Writer) error {
 	const usage = "sound on|off [file]"
 	if len(args) < 1 || len(args) > 2 {
 		return usageError(usage)
@@ -190,7 +196,7 @@ func runSound(service settings.Service, args []string, stdout io.Writer) error {
 	return nil
 }
 
-func runFPS(service settings.Service, args []string, stdout io.Writer) error {
+func runFPS(service settings.Service, args []string, _ io.Reader, stdout io.Writer) error {
 	const usage = "fps max <1..240|display>"
 	if len(args) != 2 || args[0] != "max" {
 		return usageError(usage)
@@ -211,7 +217,7 @@ func runFPS(service settings.Service, args []string, stdout io.Writer) error {
 }
 
 // runDemo arms the scripted demo, or stops it with "stop".
-func runDemo(service settings.Service, args []string, stdout io.Writer) error {
+func runDemo(service settings.Service, args []string, _ io.Reader, stdout io.Writer) error {
 	const usage = "demo [--seconds N] | demo stop"
 	if len(args) == 1 && args[0] == "stop" {
 		if err := service.StopDemo(); err != nil {
@@ -233,17 +239,12 @@ func runDemo(service settings.Service, args []string, stdout io.Writer) error {
 	return nil
 }
 
-func runExt(service settings.Service, args []string, stdout io.Writer) error {
+func runExt(service settings.Service, args []string, stdin io.Reader, stdout io.Writer) error {
 	switch {
 	case len(args) == 1 && args[0] == "list":
 		return listExtensions(service, stdout, "")
-	case len(args) == 2 && args[0] == "install":
-		manifest, err := service.InstallExtension(args[1])
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "installed: %s %s\n", manifest.ID, manifest.Version)
-		return nil
+	case len(args) >= 2 && args[0] == "install":
+		return installExtension(service, args[1:], stdin, stdout)
 	case len(args) == 2 && args[0] == "remove":
 		if err := service.RemoveExtension(args[1]); err != nil {
 			return err
@@ -251,7 +252,7 @@ func runExt(service settings.Service, args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "removed: %s\n", args[1])
 		return nil
 	}
-	return usageError("ext list | ext install <path> | ext remove <id>")
+	return usageError(extUsage)
 }
 
 // listExtensions prints one "<id> <type>" line per extension, with a "*"

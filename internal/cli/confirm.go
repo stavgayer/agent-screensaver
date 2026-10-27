@@ -21,13 +21,23 @@ func Confirm(plan []install.PlannedStep, yes bool, stdin io.Reader, stdout io.Wr
 		}
 		fmt.Fprintf(stdout, "  - %s\n", step.Description)
 	}
+	return ask("Proceed?", yes, stdin, stdout)
+}
+
+// ask asks a yes or no question, unless yes is set. Only "y" or "yes"
+// agrees. A stdin that ends before an answer (not a terminal) says no.
+func ask(question string, yes bool, stdin io.Reader, stdout io.Writer) bool {
 	if yes {
 		return true
 	}
-	fmt.Fprint(stdout, "Proceed? [y/N] ")
-	answer, _ := bufio.NewReader(stdin).ReadString('\n')
-	if strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes") {
+	fmt.Fprintf(stdout, "%s [y/N] ", question)
+	answer, err := bufio.NewReader(stdin).ReadString('\n')
+	answer = strings.TrimSpace(answer)
+	if strings.EqualFold(answer, "y") || strings.EqualFold(answer, "yes") {
 		return true
+	}
+	if err != nil && answer == "" {
+		fmt.Fprintln(stdout, "\nNo answer: stdin is not a terminal.")
 	}
 	fmt.Fprintln(stdout, "Cancelled. Nothing was changed.")
 	return false
