@@ -127,8 +127,37 @@ func (o *Object) Keys() []string {
 	return keys
 }
 
-// Marshal writes the object with 2-space indentation and a trailing newline.
+// DefaultIndent is the indent of a new file, and of a file that has no
+// indented line.
+const DefaultIndent = "  "
+
+// DetectIndent returns the indent of one level in data: a tab, or the run
+// of spaces that starts the first indented line. It is DefaultIndent when
+// no line is indented.
+func DetectIndent(data []byte) string {
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		switch line[0] {
+		case '\t':
+			return "\t"
+		case ' ':
+			return string(line[:len(line)-len(bytes.TrimLeft(line, " "))])
+		}
+	}
+	return DefaultIndent
+}
+
+// Marshal writes the object with DefaultIndent and a trailing newline.
 func (o *Object) Marshal() ([]byte, error) {
+	return o.MarshalIndent(DefaultIndent)
+}
+
+// MarshalIndent writes the object with indent per level and a trailing
+// newline.
+func (o *Object) MarshalIndent(indent string) ([]byte, error) {
 	var compact bytes.Buffer
 	compact.WriteByte('{')
 	for position, e := range o.entries {
@@ -146,7 +175,7 @@ func (o *Object) Marshal() ([]byte, error) {
 	compact.WriteByte('}')
 
 	var out bytes.Buffer
-	if err := json.Indent(&out, compact.Bytes(), "", "  "); err != nil {
+	if err := json.Indent(&out, compact.Bytes(), "", indent); err != nil {
 		return nil, fmt.Errorf("jsonedit: indent: %w", err)
 	}
 	out.WriteByte('\n')

@@ -179,7 +179,7 @@ Rules the service keeps for every agent:
 
 - Install only adds. It never changes an entry it did not write. Running it twice adds nothing.
 - Every file is read and edited in memory first. If one file is invalid, nothing is written.
-- Key order stays, and values we do not touch keep their content. The file is written with two-space indentation.
+- Key order stays, and values we do not touch keep their content. The file is written with its own indent per level: a tab, or the number of spaces of its first indented line. A new file gets two spaces. Each key and each list item is on its own line, so a list written on one line is spread over several lines.
 - Before the first write to a file of the user's, the service writes `<file>.agent-screensaver.bak`, once.
 - The install record (`install-record.json`, version 2) lists per agent: the file, the shape, the events, each exact command, whether we created the file and its `new_file` keys, the status line key, command and the saved user command, and each copied file with its SHA-256.
 - Uninstall uses only the record, never the manifest. It removes exactly the recorded commands from the recorded events. A group, an event or the `hooks` key goes only when our removal emptied it. A file we created goes when only its `new_file` keys are left. A copied file goes only while it still has the recorded SHA-256.

@@ -74,7 +74,7 @@ Open System Settings, then Lock Screen. Set "Require password after screen saver
 
 Run `./agent-screensaver uninstall` and confirm the plan. Your settings and extensions in the data folder are kept.
 
-Your agents' settings files are safe. Install only adds its own hooks to files such as `~/.claude/settings.json`, and saves a copy of each file first, next to it, with the ending `.agent-screensaver.bak`. Uninstall removes only the entries that install added, so each file gets back the same content (written with two-space indents). A status line command of your own is saved at install and put back at uninstall.
+Your agents' settings files are safe. Install only adds its own hooks to files such as `~/.claude/settings.json`, and saves a copy of each file first, next to it, with the ending `.agent-screensaver.bak`. Uninstall removes only the entries that install added, so each file gets back the same content, with the same indent per level as before (tabs, or the number of spaces of its first indented line). A file that install creates gets two spaces. A status line command of your own is saved at install and put back at uninstall.
 
 ## How it works
 

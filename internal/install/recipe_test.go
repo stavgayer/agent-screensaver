@@ -604,6 +604,14 @@ func TestAgentInstall(t *testing.T) {
 					t.Errorf("after uninstall:\n%s\nwant byte for byte:\n%s", got, userFile)
 				}
 			}},
+		{name: "cursor keeps a four-space indent and uninstall gives the file back", user: reindent(t, userFile, "    "),
+			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
+				assertIndentKept(t, home, agent, rec, reindent(t, userFile, "    "), "    ")
+			}},
+		{name: "cursor keeps a tab indent and uninstall gives the file back", user: reindent(t, userFile, "\t"),
+			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
+				assertIndentKept(t, home, agent, rec, reindent(t, userFile, "\t"), "\t")
+			}},
 		{name: "cursor uninstall of a file we created removes the file",
 			check: func(t *testing.T, home string, agent agents.Agent, rec *Record) {
 				if err := RemoveAgentHooks(home, agent, rec); err != nil {
@@ -640,5 +648,32 @@ func TestAgentInstall(t *testing.T) {
 
 			tt.check(t, home, agent, &rec)
 		})
+	}
+}
+
+// reindent writes data with the given indent per level and a final newline.
+func reindent(t *testing.T, data []byte, indent string) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	if err := json.Indent(&out, bytes.TrimSpace(data), "", indent); err != nil {
+		t.Fatal(err)
+	}
+	out.WriteByte('\n')
+	return out.Bytes()
+}
+
+// assertIndentKept checks that the installed file uses indent, and that
+// uninstall gives back original byte for byte.
+func assertIndentKept(t *testing.T, home string, agent agents.Agent, rec *Record, original []byte, indent string) {
+	t.Helper()
+	installed := mustRead(t, cursorPath(home))
+	if !bytes.Equal(installed, reindent(t, installed, indent)) {
+		t.Errorf("install changed the indent to:\n%s", installed)
+	}
+	if err := RemoveAgentHooks(home, agent, rec); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustRead(t, cursorPath(home)); !bytes.Equal(got, original) {
+		t.Errorf("after uninstall:\n%s\nwant byte for byte:\n%s", got, original)
 	}
 }

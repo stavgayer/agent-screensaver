@@ -142,7 +142,7 @@ func (w *workspace) edits() ([]configEdit, error) {
 			edits = append(edits, configEdit{path: path, remove: true})
 			continue
 		}
-		updated, err := state.format.marshal(state.config)
+		updated, err := state.format.marshal(state.config, state.original)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}

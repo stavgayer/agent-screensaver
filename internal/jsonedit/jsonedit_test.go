@@ -281,3 +281,40 @@ func TestNestedObjectEditKeepsOrder(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", out, want)
 	}
 }
+
+func TestDetectIndent(t *testing.T) {
+	tests := []struct {
+		name, data, want string
+	}{
+		{"empty file gets two spaces", "", "  "},
+		{"one-line object gets two spaces", `{"a":1}`, "  "},
+		{"two spaces", "{\n  \"a\": {\n    \"b\": 1\n  }\n}\n", "  "},
+		{"four spaces", "{\n    \"a\": 1\n}\n", "    "},
+		{"tab", "{\n\t\"a\": 1\n}\n", "\t"},
+		{"first indented line wins", "{\n\n   \"a\": 1,\n  \"b\": 2\n}", "   "},
+		{"windows line ends", "{\r\n    \"a\": 1\r\n}\r\n", "    "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DetectIndent([]byte(tt.data)); got != tt.want {
+				t.Errorf("DetectIndent() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMarshalIndent(t *testing.T) {
+	object, err := Parse([]byte(`{"a":{"b":[1]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct{ indent, want string }{
+		{"\t", "{\n\t\"a\": {\n\t\t\"b\": [\n\t\t\t1\n\t\t]\n\t}\n}\n"},
+		{"    ", "{\n    \"a\": {\n        \"b\": [\n            1\n        ]\n    }\n}\n"},
+	} {
+		got, err := object.MarshalIndent(tt.indent)
+		if err != nil || string(got) != tt.want {
+			t.Errorf("MarshalIndent(%q) = %q, %v, want %q", tt.indent, got, err, tt.want)
+		}
+	}
+}

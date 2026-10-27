@@ -14,7 +14,9 @@ import (
 // the standard library has no TOML editor that keeps a file byte for byte.
 type configFormat interface {
 	parse(path string, data []byte) (*jsonedit.Object, error)
-	marshal(config *jsonedit.Object) ([]byte, error)
+	// marshal writes config in the layout of original, the user's file
+	// (nil for a new file): the same indent per level.
+	marshal(config *jsonedit.Object, original []byte) ([]byte, error)
 }
 
 const formatJSON = "json"
@@ -38,7 +40,9 @@ func (jsonFormat) parse(path string, data []byte) (*jsonedit.Object, error) {
 	return config, nil
 }
 
-func (jsonFormat) marshal(config *jsonedit.Object) ([]byte, error) { return config.Marshal() }
+func (jsonFormat) marshal(config *jsonedit.Object, original []byte) ([]byte, error) {
+	return config.MarshalIndent(jsonedit.DetectIndent(original))
+}
 
 // readConfig reads a user file. A missing file is an empty object with a nil
 // original.
