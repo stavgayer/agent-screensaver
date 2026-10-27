@@ -12,7 +12,7 @@ The pictures and the video at the top of the main [README](../../README.md). Eve
 | `chrome-idle.jpg` | Chrome theme with no tasks: the clock and the rings. |
 | `matrix-working.jpg` | Default theme on the Matrix background, three agents working. |
 | `matrix-approval.jpg` | Default theme on the Matrix background, waiting for approval. |
-| `demo.gif` | Chrome theme playing the demo scene for 30 seconds: three agents working, Codex finishes, Claude Code asks for approval, then all three finish. Made from a screen recording of the full-screen harness (below). 800 wide, 12 frames a second, shown at the top of the README. |
+| `demo.gif` | Chrome theme playing the demo scene for 30 seconds: three agents working, Codex finishes, Claude Code asks for approval, then all three finish. Made from a screen recording of the full-screen harness (below). 800 wide, 12 frames a second. The README no longer shows it: the top of the README plays the same loop as a video (below), which is smoother. |
 
 There is no picture of a second display: the harness window is always on the main display, and the screen saver takes the secondary role only on a second display. There is no Calm picture because the aerial footage is Apple's.
 
@@ -72,6 +72,6 @@ The frames above come at about 12 a second, so motion looks stepped. For a smoot
 
 ## Put the video in the README
 
-GitHub plays a video in a README only when you upload it in the web editor. On github.com, open `README.md`, click the pencil to edit, and drag `demo.mp4` into the editor at the "Hero video" comment. GitHub uploads it and puts a link in its place. Keep that link on its own line and commit. Do not commit `demo.mp4` to the repository.
+The top of the README plays the video from the screen recording above (1600 wide, 30 frames a second, about 4.2 MB). GitHub plays a video in a README only when you upload it in the web editor. To replace it, open `README.md` on github.com, click the pencil to edit, and drag the new `demo.mp4` into the editor in place of the `https://github.com/user-attachments/assets/...` line. GitHub uploads it and puts a new link there. Keep that link on its own line and commit. Do not commit `demo.mp4` to the repository.
 
-GitHub limits the size of a video you upload this way, and the limit may be as low as 10 MB on a free account. The video from step 5 is about 1.2 MB.
+GitHub limits the size of a video you upload this way, and the limit may be as low as 10 MB on a free account.
