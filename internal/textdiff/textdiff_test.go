@@ -77,6 +77,19 @@ func TestUnified(t *testing.T) {
 	}
 }
 
+func TestUnifiedWithoutACapKeepsEveryLine(t *testing.T) {
+	var new strings.Builder
+	for line := range 500 {
+		fmt.Fprintf(&new, "%d\n", line)
+	}
+
+	got, truncated := Unified("/dev/null", "b/x", nil, []byte(new.String()), 0)
+
+	if truncated || strings.Count(got, "\n") != 503 {
+		t.Errorf("truncated %v, %d lines", truncated, strings.Count(got, "\n"))
+	}
+}
+
 func TestUnifiedCapsItsLength(t *testing.T) {
 	// Given a 500-line rewrite
 	var old, new strings.Builder

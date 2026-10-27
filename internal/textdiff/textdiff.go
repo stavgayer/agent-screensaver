@@ -32,7 +32,8 @@ type edit struct {
 
 // Unified returns the diff from old to new with "--- oldName" and
 // "+++ newName" headers, or "" when the texts are the same. It holds at
-// most maxLines lines; truncated says some were cut.
+// most maxLines lines, or every line when maxLines is 0 or less; truncated
+// says some were cut.
 func Unified(oldName, newName string, old, new []byte, maxLines int) (diff string, truncated bool) {
 	edits := diffLines(splitLines(string(old)), splitLines(string(new)))
 	hunks := hunksOf(edits)
@@ -49,7 +50,7 @@ func Unified(oldName, newName string, old, new []byte, maxLines int) (diff strin
 			}
 		}
 	}
-	if len(lines) > maxLines {
+	if maxLines > 0 && len(lines) > maxLines {
 		lines, truncated = lines[:maxLines], true
 	}
 	return strings.Join(lines, "\n") + "\n", truncated
@@ -100,7 +101,9 @@ func myers(a, b []string) []edit {
 	v := make([]int, 2*limit+3)
 	var trace [][]int
 	for d := 0; d <= limit; d++ {
-		trace = append(trace, append([]int(nil), v...))
+		// Step d reads only the diagonals -d-1 to d+1, so only those are
+		// kept: the trace grows with d squared, not with d times limit.
+		trace = append(trace, append([]int(nil), v[offset-d-1:offset+d+2]...))
 		for k := -d; k <= d; k += 2 {
 			var x int
 			if k == -d || (k != d && v[offset+k-1] < v[offset+k+1]) {
@@ -114,7 +117,7 @@ func myers(a, b []string) []edit {
 			}
 			v[offset+k] = x
 			if x >= n && y >= m {
-				return backtrack(trace, offset, a, b)
+				return backtrack(trace, a, b)
 			}
 		}
 	}
@@ -128,19 +131,21 @@ func myers(a, b []string) []edit {
 	return edits
 }
 
-func backtrack(trace [][]int, offset int, a, b []string) []edit {
+// backtrack walks the trace from the end. trace[d] holds the diagonals
+// -d-1 to d+1, so diagonal k of step d is trace[d][k+d+1].
+func backtrack(trace [][]int, a, b []string) []edit {
 	x, y := len(a), len(b)
 	var reversed []edit
 	for d := len(trace) - 1; d >= 0; d-- {
-		v := trace[d]
+		v, base := trace[d], d+1
 		k := x - y
 		var previousK int
-		if k == -d || (k != d && v[offset+k-1] < v[offset+k+1]) {
+		if k == -d || (k != d && v[base+k-1] < v[base+k+1]) {
 			previousK = k + 1
 		} else {
 			previousK = k - 1
 		}
-		previousX := v[offset+previousK]
+		previousX := v[base+previousK]
 		previousY := previousX - previousK
 		for x > previousX && y > previousY {
 			reversed = append(reversed, edit{keep, a[x-1]})
