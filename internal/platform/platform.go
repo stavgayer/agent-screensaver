@@ -20,7 +20,8 @@ type SoundPlayer interface {
 // daemon and later the tray. The macOS implementation comes with the install
 // command.
 type ServiceManager interface {
-	Install(label string, args []string) (path string, err error)
+	// Install loads the service; its stderr goes to logFile.
+	Install(label string, args []string, logFile string) (path string, err error)
 	Uninstall(label string) error
 }
 

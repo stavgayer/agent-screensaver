@@ -194,10 +194,10 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager) (Record, err
 	if err := w.write(); err != nil {
 		return Record{}, err
 	}
-	if _, err := sm.Install(DaemonLabel, []string{where.bin, "daemon"}); err != nil {
+	if _, err := sm.Install(DaemonLabel, []string{where.bin, "daemon"}, where.paths.DaemonLog); err != nil {
 		return Record{}, fmt.Errorf("install service %s: %w", DaemonLabel, err)
 	}
-	if _, err := sm.Install(TrayLabel, []string{where.bin, "tray"}); err != nil {
+	if _, err := sm.Install(TrayLabel, []string{where.bin, "tray"}, where.paths.TrayLog); err != nil {
 		return Record{}, fmt.Errorf("install service %s: %w", TrayLabel, err)
 	}
 	return record, nil

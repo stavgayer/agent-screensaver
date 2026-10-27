@@ -105,7 +105,7 @@ func TestLaunchdWaitsAndRetries(t *testing.T) {
 			fake := tt.fake
 			launchd := Launchd{Home: t.TempDir(), Run: fake.run, Sleep: fake.sleep}
 
-			_, err := launchd.Install("x.y", []string{"/bin/x", "daemon"})
+			_, err := launchd.Install("x.y", []string{"/bin/x", "daemon"}, "/tmp/x.log")
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
@@ -173,7 +173,8 @@ func TestLaunchdPlistAndCommands(t *testing.T) {
 			launchd := Launchd{Home: home, Run: fake.run, Sleep: noSleep}
 			bin := filepath.Join(home, "Library", "Application Support", "agent-screensaver", "bin", "agent-screensaver")
 
-			plist, err := launchd.Install(label, []string{bin, "daemon"})
+			logFile := filepath.Join(home, "Library", "Application Support", "agent-screensaver", "some.log")
+			plist, err := launchd.Install(label, []string{bin, "daemon"}, logFile)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -194,7 +195,7 @@ func TestLaunchdPlistAndCommands(t *testing.T) {
 				"<key>KeepAlive</key>\n\t<true/>",
 				"<key>ProcessType</key>\n\t<string>Background</string>",
 				"<key>LowPriorityIO</key>\n\t<true/>",
-				"<key>StandardErrorPath</key>\n\t<string>" + filepath.Join(home, "Library", "Application Support", "agent-screensaver", "daemon.log") + "</string>",
+				"<key>StandardErrorPath</key>\n\t<string>" + logFile + "</string>",
 			} {
 				if !strings.Contains(string(content), want) {
 					t.Errorf("plist lacks %q:\n%s", want, content)
@@ -233,7 +234,7 @@ func assertCommands(t *testing.T, got, want [][]string, plist string) {
 func TestLaunchdPlistEscapesXML(t *testing.T) {
 	home := t.TempDir()
 	launchd := Launchd{Home: home, Run: (&recorder{failOn: "print"}).run, Sleep: noSleep}
-	plist, err := launchd.Install("x.y", []string{"/a&b/<bin>", "daemon"})
+	plist, err := launchd.Install("x.y", []string{"/a&b/<bin>", "daemon"}, "/tmp/x.log")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +246,7 @@ func TestLaunchdPlistEscapesXML(t *testing.T) {
 
 func TestLaunchdBootstrapFailureIsReported(t *testing.T) {
 	launchd := Launchd{Home: t.TempDir(), Run: (&recorder{failOn: "bootstrap"}).run, Sleep: noSleep}
-	if _, err := launchd.Install("x.y", []string{"/bin/x", "daemon"}); err == nil {
+	if _, err := launchd.Install("x.y", []string{"/bin/x", "daemon"}, "/tmp/x.log"); err == nil {
 		t.Error("want an error, got nil")
 	}
 }

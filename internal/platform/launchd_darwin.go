@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"agent-screensaver/internal/paths"
 )
 
 // Launchd runs a process as a launchd user agent: started at login and kept
@@ -52,10 +50,10 @@ func (l Launchd) plistPath(label string) string {
 
 func domain() string { return fmt.Sprintf("gui/%d", os.Getuid()) }
 
-// Install writes the plist and loads it. args is the full command line.
-func (l Launchd) Install(label string, args []string) (string, error) {
+// Install writes the plist and loads it. args is the full command line;
+// the service's stderr goes to logFile.
+func (l Launchd) Install(label string, args []string, logFile string) (string, error) {
 	plist := l.plistPath(label)
-	logFile := paths.ForHome(l.Home).DaemonLog
 	if err := os.MkdirAll(filepath.Dir(plist), 0o755); err != nil {
 		return "", fmt.Errorf("create LaunchAgents folder: %w", err)
 	}

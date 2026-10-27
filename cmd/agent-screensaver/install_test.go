@@ -10,8 +10,8 @@ import (
 
 type noServices struct{ installed, removed int }
 
-func (n *noServices) Install(string, []string) (string, error) { n.installed++; return "", nil }
-func (n *noServices) Uninstall(string) error                   { n.removed++; return nil }
+func (n *noServices) Install(string, []string, string) (string, error) { n.installed++; return "", nil }
+func (n *noServices) Uninstall(string) error                           { n.removed++; return nil }
 
 func writeTree(t *testing.T, root string, files map[string]string) {
 	t.Helper()

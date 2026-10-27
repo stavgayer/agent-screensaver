@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -17,14 +18,16 @@ import (
 // fakeServices records calls instead of touching launchd.
 type fakeServices struct {
 	installed   map[string][]string
+	logs        map[string]string // label: log file
 	uninstalled []string
 }
 
-func (f *fakeServices) Install(label string, args []string) (string, error) {
+func (f *fakeServices) Install(label string, args []string, logFile string) (string, error) {
 	if f.installed == nil {
-		f.installed = map[string][]string{}
+		f.installed, f.logs = map[string][]string{}, map[string]string{}
 	}
 	f.installed[label] = args
+	f.logs[label] = logFile
 	return "/fake/" + label + ".plist", nil
 }
 
@@ -188,6 +191,11 @@ func TestInstallIntoMissingFiles(t *testing.T) {
 	}
 	if got := sm.installed[DaemonLabel]; len(got) != 2 || got[0] != record.Bin || got[1] != "daemon" {
 		t.Errorf("daemon args = %v", got)
+	}
+	// The tray gets its own log, so a rotation of daemon.log never takes
+	// its lines away.
+	if got, want := sm.logs, map[string]string{DaemonLabel: paths.ForHome(home).DaemonLog, TrayLabel: paths.ForHome(home).TrayLog}; !reflect.DeepEqual(got, want) {
+		t.Errorf("service logs = %v, want %v", got, want)
 	}
 	for _, path := range []string{record.Bin, filepath.Join(paths.ForHome(home).RuntimeDir, "index.html"),
 		filepath.Join(paths.ForHome(home).ExtensionsDir, "builtin.clock", "extension.json"), record.Saver} {
@@ -517,7 +525,7 @@ func TestPlanNamesRealPaths(t *testing.T) {
 // can, leaving its plist behind.
 type failingServices struct{ fakeServices }
 
-func (f *failingServices) Install(string, []string) (string, error) {
+func (f *failingServices) Install(string, []string, string) (string, error) {
 	return "", errors.New("launchctl bootstrap: Input/output error")
 }
 
