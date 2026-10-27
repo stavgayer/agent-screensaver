@@ -280,7 +280,7 @@ A theme uses it like any other background: `"background": { "id": "builtin.aeria
 
 ## Install, list and remove
 
-Install from a folder or a `.zip` file. The service copies the extension into the extensions folder. If you install the same `id` again, the new version replaces the old one. For an agent extension that is not built in, the install first shows the converter programs and copied files that change, and asks before it replaces them. See [agents.md](agents.md), "Installing a new version".
+Install from a folder or a `.zip` file. The service copies the extension into the extensions folder. If you install the same `id` again, the new version replaces the old one. For an agent extension that is not built in, the install first shows every file that changes, the manifest included, and asks before it replaces them. See [agents.md](agents.md), "Installing a new version".
 
 An install is refused when:
 

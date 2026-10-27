@@ -20,12 +20,25 @@ Install it like any extension: `agent-screensaver ext install ./acme.opencode`, 
 
 ### Installing a new version
 
-When you install a new version of an agent extension that you did not get with agent-screensaver (the same `id` is already installed), the install first compares its runnable files with the installed copy. These are the converter programs (`agent.hooks.converter`, `agent.statusline.converter` and every details converter) and every file that `agent.install.files` copies. If one of them changed, is new, or is gone, the install shows the changes and asks before it replaces anything:
+When you install a new version of an agent extension that you did not get with agent-screensaver (the same `id` is already installed), the install first compares every file of the new folder with the installed copy. A converter can read or run any file next to it, so every file counts, not only the programs. If a file changed, is new, or is gone, the install shows the changes and asks before it replaces anything. The changes come in three groups:
 
-- `agent-screensaver ext install` prints each file by its path in the extension folder. A text file (valid UTF-8, no NUL byte, smaller than 256 KB) gets a unified diff, cut after 200 lines with a note. Any other file shows its old and new size and the first 12 digits of its SHA-256. Then it asks `Install this upgrade? [y/N]`. Any answer other than `y` or `yes`, and a stdin that gives no answer, leave the installed copy as it is. `--yes` skips the question; the changes are still printed.
-- "Install extension" in the settings window shows the same changes in a dialog, with each diff in a monospace block, and Install and Cancel buttons.
+- **Manifest**: `extension.json`, always as a text diff. It says what runs and what is read.
+- **Programs and copied files**: the converter programs (`agent.hooks.converter`, `agent.statusline.converter` and every details converter) and every file that `agent.install.files` copies.
+- **Other files**: every other file of the extension.
 
-When you confirm, the new files are checked again. If they changed after you saw them, the install is refused and the installed copy stays. When no runnable file changed, the upgrade is installed at once and says that no runnable files changed. In both cases the hooks you added stay. Built-in agents cannot be installed again, so this does not apply to them.
+A text file (valid UTF-8, no NUL byte) gets a unified diff. Any other file shows its old and new size and the first 12 digits of its SHA-256. A file whose diff is longer than 2 MB is shown as "too large to show: review the files by hand", with the paths of the installed copy and of the new one. Characters that could hide or reorder text are shown as escapes: control characters as `\x1b`, and bidi and other invisible characters as `<U+202E>`.
+
+`agent-screensaver ext install`:
+
+- Shows the first 200 lines of each diff and the first 500 characters of each line. When it cuts anything, it says so and does not ask: run it again with `--full`, which prints all of it, and then it asks.
+- Asks `Install this upgrade? [y/N]`. Any answer other than `y` or `yes`, and a stdin that gives no answer, leave the installed copy as it is.
+- `--yes` skips the question; the changes are still printed. A file too large to show needs `--yes`: read the files by hand first.
+
+"Install extension" in the settings window shows the same changes in a dialog, with the whole diff of each file in a scrollable monospace box. A line longer than 500 characters ends in a button that shows the rest. Install and Cancel close the dialog. When a file is too large to show, the button says "I reviewed the files by hand, install".
+
+When you confirm, both copies are checked again. If either changed after you saw the review, the install is refused and the installed copy stays. When no file changed at all, the install runs at once and says that no files changed. In both cases the hooks you added stay.
+
+An installed agent is not replaced by an extension of another type with the same `id`, because its hooks would stay with no agent to read them. Remove the agent first with `agent-screensaver ext remove <id>`. Built-in agents cannot be installed again, so none of this applies to them.
 
 ## The manifest
 
