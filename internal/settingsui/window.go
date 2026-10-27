@@ -235,7 +235,7 @@ func (b *bridge) setSound(p soundParams) (any, error) {
 }
 
 // installExtension reviews the picked file first. An upgrade that changes
-// runnable files is not installed here: the page shows the review and
+// any file is not installed here: the page shows the review and
 // calls confirmInstall with its hash.
 func (b *bridge) installExtension() (any, error) {
 	b.waiting = nil

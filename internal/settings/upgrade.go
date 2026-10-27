@@ -35,7 +35,7 @@ type InstallReview struct {
 	Hash string `json:"hash"`
 }
 
-// ReviewInstall checks path like an install, compares the runnable files
+// ReviewInstall checks path like an install, compares every file
 // with the installed copy and changes nothing.
 func (s Service) ReviewInstall(path string) (InstallReview, error) {
 	var review InstallReview

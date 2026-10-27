@@ -293,7 +293,7 @@ func (s Service) SetIgnoredProjects(entries []string) error {
 // InstallExtension installs an extension from a folder or a .zip file. An
 // agent extension must also pass every agent check and the recipe safety
 // rules; installing it adds no hooks (that is a separate, confirmed step).
-// An upgrade that changes an outside agent's runnable files is refused
+// An upgrade that changes any file of an outside agent is refused
 // with ErrUpgradeNotReviewed: use ReviewInstall and InstallReviewed.
 func (s Service) InstallExtension(path string) (extensions.Manifest, error) {
 	return s.InstallReviewed(path, "")
