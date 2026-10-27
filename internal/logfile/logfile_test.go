@@ -122,3 +122,30 @@ func TestALineLongerThanTheLimitIsStillWritten(t *testing.T) {
 		t.Errorf("log = %q", got)
 	}
 }
+
+func TestADeletedLogIsOpenedAgain(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "daemon.log")
+	reopened := 0
+	log, err := Open(path, 1000, func(*os.File) error { reopened++; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	if _, err := log.Write([]byte("first 789\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := log.Write([]byte("after delete\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := read(t, path); got != "after delete\n" {
+		t.Errorf("log = %q, want the line in a new daemon.log", got)
+	}
+	if reopened != 1 {
+		t.Errorf("reopen hook calls = %d, want 1 (stderr follows the new file)", reopened)
+	}
+}

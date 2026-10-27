@@ -4,6 +4,8 @@
 package logfile
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"sync"
 )
@@ -48,11 +50,14 @@ func openAppend(path string) (*os.File, int64, error) {
 
 // Write appends p. A p that would make a non-empty file pass the limit is
 // written to a new file after the rotation, so a line is never split. If
-// the rotation fails, p goes to the current file.
+// the rotation fails, p goes to the current file. When someone deleted
+// the file, a new one is opened first, so no line goes to a deleted file.
 func (r *Rotating) Write(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.size > 0 && r.size+int64(len(p)) > r.max {
+	if _, err := os.Stat(r.path); errors.Is(err, fs.ErrNotExist) {
+		r.reopen()
+	} else if r.size > 0 && r.size+int64(len(p)) > r.max {
 		r.rotate()
 	}
 	n, err := r.file.Write(p)
@@ -61,9 +66,15 @@ func (r *Rotating) Write(p []byte) (int, error) {
 }
 
 func (r *Rotating) rotate() {
-	if err := os.Rename(r.path, r.path+".1"); err != nil {
+	if err := os.Rename(r.path, r.path+".1"); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return
 	}
+	r.reopen()
+}
+
+// reopen opens path again (a new, empty file when it is gone) and points
+// the reopen hook at it.
+func (r *Rotating) reopen() {
 	file, size, err := openAppend(r.path)
 	if err != nil {
 		// The old file keeps the lines until the next try.
