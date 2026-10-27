@@ -29,6 +29,17 @@ const (
 // other packages, such as an agent's install recipe. check may be nil only
 // for extensions that are not agents.
 func InstallChecked(src, extDir string, check func(m Manifest, dir string) error) (Manifest, error) {
+	return stage(src, extDir, check, true)
+}
+
+// Inspect stages src as InstallChecked does and runs inspect on the staged
+// folder, then removes it. The installed extensions are never changed, so
+// a caller can show what an install would do before it asks.
+func Inspect(src, extDir string, inspect func(m Manifest, dir string) error) (Manifest, error) {
+	return stage(src, extDir, inspect, false)
+}
+
+func stage(src, extDir string, check func(m Manifest, dir string) error, commit bool) (Manifest, error) {
 	info, err := os.Stat(src)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("install: %w", err)
@@ -65,6 +76,9 @@ func InstallChecked(src, extDir string, check func(m Manifest, dir string) error
 		if err := check(manifest, content); err != nil {
 			return Manifest{}, fmt.Errorf("install %q: %w", manifest.ID, err)
 		}
+	}
+	if !commit {
+		return manifest, nil
 	}
 	if err := replaceFolder(content, filepath.Join(extDir, manifest.ID), staging); err != nil {
 		return Manifest{}, fmt.Errorf("install: %w", err)

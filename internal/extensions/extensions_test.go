@@ -471,3 +471,28 @@ func TestInstallKeepsTheExecuteBit(t *testing.T) {
 		})
 	}
 }
+
+func TestInspectRunsTheCheckOnAStagedCopyAndChangesNothing(t *testing.T) {
+	// Given no installed extension
+	extDir := t.TempDir()
+	var seen string
+
+	// When the valid background is inspected
+	manifest, err := Inspect(validDir, extDir, func(m Manifest, dir string) error {
+		seen = dir
+		_, statErr := os.Stat(filepath.Join(dir, ManifestFile))
+		return statErr
+	})
+
+	// Then the check saw a staged copy, and nothing is left in extDir
+	if err != nil || manifest.ID != "acme.rain" {
+		t.Fatalf("manifest = %+v, err %v", manifest, err)
+	}
+	if seen == "" || !strings.HasPrefix(seen, extDir) {
+		t.Errorf("check ran on %q", seen)
+	}
+	entries, _ := os.ReadDir(extDir)
+	if len(entries) != 0 {
+		t.Errorf("extDir holds %v after an inspect", entries)
+	}
+}
