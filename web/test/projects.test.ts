@@ -25,6 +25,9 @@ describe("withProject", () => {
   it("refuses a name already in the list", () => {
     assert.deepEqual(withProject(["scratch"], " scratch/ "), { error: "scratch is already in the list." });
   });
+  it("refuses a name already in the list in another case", () => {
+    assert.deepEqual(withProject(["My-App"], "my-app"), { error: "my-app is already in the list." });
+  });
   it("refuses a blank entry", () => {
     assert.deepEqual(withProject([], "  "), { error: "Type a folder name, for example observer-sessions." });
   });

@@ -272,7 +272,8 @@ func (s Service) StopDemo() error {
 
 // SetIgnoredProjects replaces the list of folders whose sessions get no
 // card. Each entry is stored as a folder name (a path keeps its last part,
-// which is what events carry); blanks and repeats are dropped.
+// which is what events carry); blanks and repeats are dropped. A repeat in
+// another case is a repeat too, as the match ignores case.
 func (s Service) SetIgnoredProjects(entries []string) error {
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -280,7 +281,7 @@ func (s Service) SetIgnoredProjects(entries []string) error {
 		if utf8.RuneCountInString(name) > maxFolderName {
 			return fmt.Errorf("%q is longer than a folder name can be", name)
 		}
-		if name != "" && !slices.Contains(names, name) {
+		if name != "" && !slices.ContainsFunc(names, func(kept string) bool { return strings.EqualFold(kept, name) }) {
 			names = append(names, name)
 		}
 	}

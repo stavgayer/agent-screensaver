@@ -546,6 +546,7 @@ func TestSetIgnoredProjects(t *testing.T) {
 		{"folder names are stored as typed", []string{"observer-sessions", "scratch"}, []string{"observer-sessions", "scratch"}, false},
 		{"paths become their folder name", []string{"/Users/me/tmp/scratch/", " api "}, []string{"scratch", "api"}, false},
 		{"blanks and repeats are dropped, order kept", []string{"b", "", "a", "b", "  "}, []string{"b", "a"}, false},
+		{"a repeat in another case is dropped, the first kept", []string{"My-App", "my-app", "MY-APP"}, []string{"My-App"}, false},
 		{"an empty list ignores nothing", []string{}, []string{}, false},
 		{"a name longer than a folder name can be fails", []string{strings.Repeat("a", 256)}, config.Default().IgnoredProjects, true},
 	}
