@@ -62,6 +62,9 @@ func installExtension(service settings.Service, rest []string, stdin io.Reader, 
 		return err
 	}
 	fmt.Fprintf(stdout, "installed: %s %s\n", manifest.ID, manifest.Version)
+	for _, warning := range service.WarmUpConverters(manifest.ID) {
+		fmt.Fprintf(stdout, "warning: %s\n", escapeControls(warning))
+	}
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/extensions"
@@ -24,6 +25,8 @@ type fakeService struct {
 	err   error
 	// review is what ReviewInstall answers; its Manifest is acme.rain.
 	review settings.InstallReview
+	// warmedUp, when not nil, gets the id of each WarmUpConverters call.
+	warmedUp chan string
 }
 
 func (f *fakeService) record(call string) error {
@@ -81,6 +84,15 @@ func (f *fakeService) ReviewInstall(path string) (settings.InstallReview, error)
 }
 func (f *fakeService) InstallReviewed(path, hash string) (extensions.Manifest, error) {
 	return extensions.Manifest{ID: "acme.rain"}, f.record("InstallReviewed " + path + " " + hash)
+}
+
+// WarmUpConverters runs in the background, so it reports on warmedUp, not
+// in calls.
+func (f *fakeService) WarmUpConverters(id string) []string {
+	if f.warmedUp != nil {
+		f.warmedUp <- id
+	}
+	return nil
 }
 func (f *fakeService) RemoveExtension(id string) error { return f.record("RemoveExtension " + id) }
 func (f *fakeService) Notice(extID string) string {
@@ -285,6 +297,22 @@ func TestCancelledPickerChangesNothing(t *testing.T) {
 				t.Fatalf("result = %#v, want cancelled", window.results[0])
 			}
 		})
+	}
+}
+
+func TestAnInstallFromTheWindowRunsTheConvertersOnce(t *testing.T) {
+	service := &fakeService{warmedUp: make(chan string, 1)}
+	window := &fakeWindow{calls: []call{{"installExtension", `{}`}}}
+	if err := Open(testPaths(t), service, &fakePicker{path: "/tmp/rain.zip"}, window); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case id := <-service.warmedUp:
+		if id != "acme.rain" {
+			t.Errorf("warmed up %q, want acme.rain", id)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the installed extension's converters were never run")
 	}
 }
 

@@ -4,7 +4,6 @@ These are the limits of version 1 that you can see or that change how you use it
 
 ## Agents and hooks
 
-- **A converter can time out on its first run.** macOS checks a new program the first time it starts, which can take up to a second. The first event of an agent with a converter can be lost. Later events are not affected.
 - **`codex exec` runs show no card.** Codex sends no transcript for them, and the built-in Codex agent ignores events without a transcript.
 - **Cursor has no usage ring and no approval cards.** Cursor keeps its usage on its server only, and it does not tell a hook whether it will ask you. See [agents.md](agents.md), "Known limits".
 

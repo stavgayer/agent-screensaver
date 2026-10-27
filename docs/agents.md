@@ -152,6 +152,7 @@ A converter is the escape hatch for a payload the mapping cannot describe:
 - Our hook fills `v` and `at_ms` when they are missing and always sets `source` to the manifest's source. It masks and cuts the text fields and checks each event. An invalid event is dropped.
 - `timeout_ms` is 200 by default and at most 500. On a timeout the program is killed and nothing is sent.
 - Errors go to `hook-errors.log` in the data folder. Our hook still exits 0.
+- After an install of the agent extension (with `ext install` or the settings window, also after an upgrade you confirmed), the service runs each converter program once: empty standard input, the same environment with `AGS_EVENT` empty, and up to 10 seconds. macOS checks a new program the first time it starts, which can take up to a second, so this first run keeps the first real event from timing out. Its output is ignored. If it fails, `ext install` prints a warning, and the install stays. An install that is refused runs nothing.
 
 A converter is code that you ask the user to trust. Adding its hooks shows a warning first. No built-in agent uses one.
 
@@ -241,7 +242,6 @@ A card whose source has no agent extension (any program that writes events) show
 
 - Paths in `details` are fixed. A tool that moves its folder with an environment variable is not followed: Codex's `$CODEX_HOME` is not read, so `builtin.codex` reads `~/.codex/session_index.jsonl`.
 - A new agent's `limits` provider is used after the service starts again.
-- macOS checks a new program on its first start, which can take up to a second. A converter can time out on its first run.
 - Cursor also runs Claude Code hooks from `~/.claude/settings.json`, with its own payloads (Cursor event names and fields such as `cursor_version`). `builtin.claude` ignores every payload that has `cursor_version`, so a Cursor chat gives one Cursor card, not a Claude card too.
 - Cursor never shows an approval card. Cursor sends `beforeShellExecution` and `beforeMCPExecution` before every shell command and MCP call, also when it will not ask (in its run mode "Run Everything" it never asks), and the payload does not say whether it will ask. So `builtin.cursor` maps them to `tool_intent`: the working card shows the command or the MCP tool name. Our hook prints nothing to Cursor, so Cursor decides as it would without us. (An earlier `{"permission": "ask"}` made Cursor 3.27.12 wait for an approval in "Run Everything" mode.) The live tests (24/10/2026) were done only in "Run Everything" mode; a run mode where Cursor asks was not tested.
 - No usage ring for Cursor. Cursor keeps the percent used, the limit and the reset date on its server only. Reading them would need its login token and undocumented endpoints, so there is no `limits` provider for Cursor.

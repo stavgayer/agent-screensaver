@@ -37,6 +37,7 @@ type Service interface {
 	SetIgnoredProjects(projects []string) error
 	ReviewInstall(path string) (settings.InstallReview, error)
 	InstallReviewed(path, hash string) (extensions.Manifest, error)
+	WarmUpConverters(id string) []string
 	RemoveExtension(id string) error
 	Notice(extID string) string
 	Connections(nowMs int64) ([]settings.Connection, error)
@@ -255,6 +256,7 @@ func (b *bridge) installExtension() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.warmUp(manifest.ID)
 	return pickResult{Manifest: &manifest, Unchanged: review.Upgrade}, nil
 }
 
@@ -270,7 +272,15 @@ func (b *bridge) confirmInstall(hash string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.warmUp(manifest.ID)
 	return pickResult{Manifest: &manifest}, nil
+}
+
+// warmUp runs the converters of a new install once, in the background, so
+// the window does not wait up to settings.WarmUpTimeout. A failure only
+// means the first event may be lost, so it is not shown.
+func (b *bridge) warmUp(id string) {
+	go b.svc.WarmUpConverters(id)
 }
 
 // isFileOption reports whether the option is of kind file. An option the

@@ -224,7 +224,7 @@ The contract:
 - Environment: only `HOME`, `PATH`, `AGS_SOURCE` (the source) and `AGS_EVENT` (the `--event` value, or empty).
 - Standard output: zero to 4 events, one JSON object per line, in the [event format](../event-format.md), at most 64 KiB. Empty output means ignore.
 - Our hook fills `v` and `at_ms` when missing, forces `source`, masks and cuts the text fields, and drops an invalid event.
-- `timeout_ms` is 200 by default and at most 500. On a timeout nothing is sent. The first start of a new program can be slow on macOS, so the first event after an install can time out. Send it again.
+- `timeout_ms` is 200 by default and at most 500. On a timeout nothing is sent. The install runs each converter once, so the slow first start of a new program on macOS does not make the first event time out (see [agents.md](../agents.md), "Converter programs"). On that run your converter gets empty input; what it prints is ignored.
 - A converter replaces `session`, `common` and `rules`. Use one or the other.
 
 A converter is code you ask the user to trust. The plan shows a warning line for it, and the settings window asks the user to confirm with "I trust <name>, add hooks". Prefer a mapping when it can do the job.
