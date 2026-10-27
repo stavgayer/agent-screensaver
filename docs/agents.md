@@ -18,6 +18,15 @@ acme.opencode/
 
 Install it like any extension: `agent-screensaver ext install ./acme.opencode`, or "Install extension" in the settings window. Installing checks the manifest and the recipe and copies the folder. It does not add hooks. Add them as a second step: `agent-screensaver agent hooks add <id>` (or "Add hooks" in the Agents tab). It shows its plan first and needs the install record that `agent-screensaver install` writes.
 
+### Installing a new version
+
+When you install a new version of an agent extension that you did not get with agent-screensaver (the same `id` is already installed), the install first compares its runnable files with the installed copy. These are the converter programs (`agent.hooks.converter`, `agent.statusline.converter` and every details converter) and every file that `agent.install.files` copies. If one of them changed, is new, or is gone, the install shows the changes and asks before it replaces anything:
+
+- `agent-screensaver ext install` prints each file by its path in the extension folder. A text file (valid UTF-8, no NUL byte, smaller than 256 KB) gets a unified diff, cut after 200 lines with a note. Any other file shows its old and new size and the first 12 digits of its SHA-256. Then it asks `Install this upgrade? [y/N]`. Any answer other than `y` or `yes`, and a stdin that gives no answer, leave the installed copy as it is. `--yes` skips the question; the changes are still printed.
+- "Install extension" in the settings window shows the same changes in a dialog, with each diff in a monospace block, and Install and Cancel buttons.
+
+When you confirm, the new files are checked again. If they changed after you saw them, the install is refused and the installed copy stays. When no runnable file changed, the upgrade is installed at once and says that no runnable files changed. In both cases the hooks you added stay. Built-in agents cannot be installed again, so this does not apply to them.
+
 ## The manifest
 
 `extension.json` has the common fields of [extensions.md](extensions.md) (`id`, `name`, `version`, `type`, `api`) with `"type": "agent"`, and one `agent` object. An agent has no `entry` and no `options`.

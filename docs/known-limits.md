@@ -4,7 +4,6 @@ These are the limits of version 1 that you can see or that change how you use it
 
 ## Agents and hooks
 
-- **Reinstalling an outside agent does not ask again.** When you install a new version of an agent extension that you did not get with agent-screensaver, its new converter program or plugin files take the place of the old ones, and its hooks stay. The first install asks you to confirm; an upgrade does not. Read what changed before you install a new version.
 - **Edited settings files get two-space indents.** When agent-screensaver adds or removes its hooks in a file such as `~/.claude/settings.json`, it writes the file back with two spaces per level. The keys, their order and every value it did not touch stay the same. Uninstall gives the file back with the same content, in the same two-space layout.
 - **A converter can time out on its first run.** macOS checks a new program the first time it starts, which can take up to a second. The first event of an agent with a converter can be lost. Later events are not affected.
 - **`codex exec` runs show no card.** Codex sends no transcript for them, and the built-in Codex agent ignores events without a transcript.
