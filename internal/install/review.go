@@ -20,6 +20,12 @@ import (
 // hand.
 const MaxDiffBytes = 2 << 20
 
+// MaxDiffInput is the largest old plus new size that is diffed at all. A
+// larger pair is TooLarge at once: the diff would not fit MaxDiffBytes
+// anyway, and building it would cost time and memory twice (review and
+// confirm).
+const MaxDiffInput = 4 << 20
+
 // ChangeKind says what an upgrade does to one file.
 type ChangeKind string
 
@@ -212,6 +218,10 @@ func compareFile(path string, old, new []byte, inOld, inNew bool) (FileChange, b
 	}
 	if path != extensions.ManifestFile && (!isText(old) || !isText(new)) {
 		change.Binary = true
+		return change, true
+	}
+	if len(old)+len(new) > MaxDiffInput {
+		change.TooLarge = true
 		return change, true
 	}
 	diff, _ := textdiff.Unified(oldName, newName, old, new, 0)

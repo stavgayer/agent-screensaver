@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"agent-screensaver/internal/agents"
 )
@@ -224,5 +226,31 @@ func TestReviewUpgradeOverAnUnreadableInstallShowsEveryFileAsAdded(t *testing.T)
 	}
 	if changes[0].Path != "extension.json" || changes[1].Path != "bin/convert" || changes[2].Path != "plugin/acme.js" || changes[3].Path != "mark.svg" {
 		t.Errorf("changes = %+v, err %v", changes, err)
+	}
+}
+
+func TestCompareFileMarksHugeTextTooLargeWithoutDiffing(t *testing.T) {
+	// Given two text files of 3 MB each, over the 4 MB diff input cap
+	old := bytes.Repeat([]byte("old line\n"), 3<<20/9)
+	new := bytes.Repeat([]byte("new line\n"), 3<<20/9)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+
+	// When they are compared
+	change, changed := compareFile("bin/convert", old, new, true, true)
+
+	// Then the file is too large, with sizes and hashes, and no diff was built
+	elapsed := time.Since(start)
+	runtime.ReadMemStats(&after)
+	if !changed || !change.TooLarge || change.Diff != "" || change.OldSHA256 == "" || change.NewSHA256 == "" || change.NewSize != int64(len(new)) {
+		t.Errorf("change = %+v", change)
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
+		t.Errorf("allocated %d bytes, want no diff built", allocated)
+	}
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("took %v", elapsed)
 	}
 }
