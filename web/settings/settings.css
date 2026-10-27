@@ -417,6 +417,20 @@ input[type="color"] { width: 44px; height: 24px; padding: 0; border: 0; backgrou
 .plan-lines li { padding: 6px 10px; border-radius: var(--radius-control); background: var(--ground); overflow-wrap: anywhere; }
 .plan-lines li.warning { background: var(--notice-ground); color: var(--notice-ink); font-weight: 500; }
 .plan-hint { color: var(--secondary); font-size: 12px; }
+.upgrade-file { display: grid; gap: 6px; }
+.upgrade-heading { font-weight: 500; }
+.upgrade-note { color: var(--secondary); }
+.plan-diff {
+  margin: 0;
+  padding: 8px;
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  font: 11px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 320px;
+  overflow-y: auto;
+}
 .plan-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .button:disabled { opacity: 0.6; }
 

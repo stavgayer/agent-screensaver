@@ -2,6 +2,7 @@ import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
 import { withProject, withoutProject } from "./projects.ts";
 import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning } from "./preview-url.ts";
+import { upgradeDialog, type InstallReview } from "./upgrade.ts";
 import { connectionRows, focusAfterPlan, hookButtonId, isPlanChanged, planDialog, powerButtonId, type Connection, type ConnectionRow, type HookAction, type Plan } from "./connections.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
@@ -37,6 +38,10 @@ interface ExtensionInfo {
 interface PickResult {
   cancelled: boolean;
   manifest?: { id: string; name?: string };
+  /** An upgrade that changes an outside agent's runnable files: nothing is installed until confirmInstall. */
+  review?: InstallReview;
+  /** An upgrade installed because none of its runnable files changed. */
+  unchanged?: boolean;
 }
 
 type View = "appearance" | "options" | "extensions" | "connections" | "general";
@@ -375,7 +380,70 @@ function extensionsView(): Node[] {
 
 async function installExtension(): Promise<void> {
   const result = (await change("installExtension", {}, "install", 0)) as PickResult | undefined;
-  if (result?.manifest !== undefined) showStatus(`Installed ${result.manifest.name || result.manifest.id}`, "saved");
+  if (result?.review !== undefined) {
+    showUpgradeDialog(result.review);
+    return;
+  }
+  if (result?.manifest === undefined) return;
+  const name = result.manifest.name || result.manifest.id;
+  showStatus(result.unchanged ? `Installed ${name}. No runnable files changed.` : `Installed ${name}`, "saved");
+}
+
+/**
+ * Shows the runnable files an upgrade changes, as Go reviewed them. The
+ * installed version stays until Install is pressed; Go then reviews the
+ * file again and refuses it when it changed in between.
+ */
+function showUpgradeDialog(review: InstallReview): void {
+  const content = upgradeDialog(review);
+  const dialog = h("dialog", { class: "plan-dialog", "aria-labelledby": "upgrade-title" });
+  const close = () => dialog.close();
+  const cancel = button("Cancel", close, "plain", "upgrade-cancel");
+  const confirm = button(content.confirmLabel, () => void confirmUpgrade(review, dialog, close), "primary", "upgrade-confirm");
+  dialog.append(
+    h("h2", { id: "upgrade-title" }, content.title),
+    h("p", { class: "plan-trust" }, content.intro),
+    h(
+      "ul",
+      { class: "plan-lines" },
+      ...content.files.map((file) =>
+        h(
+          "li",
+          { class: "upgrade-file" },
+          h("span", { class: "upgrade-heading" }, file.heading),
+          file.diff === null ? null : h("pre", { class: "plan-diff" }, file.diff),
+          ...file.notes.map((note) => h("span", { class: "upgrade-note" }, note)),
+        ),
+      ),
+    ),
+    h("p", { class: "plan-hint" }, `Nothing changes until you press ${content.confirmLabel}.`),
+    h("div", { class: "plan-buttons" }, cancel, confirm),
+  );
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+    // After Install the bridge holds nothing any more, so this is harmless.
+    void bridge.call("cancelInstall", {}).catch(() => undefined);
+    (document.getElementById("install") ?? document.getElementById("install-agent"))?.focus();
+  });
+  document.body.append(dialog);
+  dialog.showModal();
+  cancel.focus();
+}
+
+async function confirmUpgrade(review: InstallReview, dialog: HTMLDialogElement, close: () => void): Promise<void> {
+  for (const control of Array.from(dialog.querySelectorAll("button"))) control.disabled = true;
+  errors = {};
+  try {
+    await bridge.call("confirmInstall", { hash: review.hash }, 0);
+    close();
+    showStatus(`Installed ${review.manifest.name || review.manifest.id}`, "saved");
+  } catch (err) {
+    close();
+    const message = err instanceof Error ? err.message : String(err);
+    errors["install"] = isPlanChanged(message) ? "The files changed after the review. Install the upgrade again to see the new changes." : message;
+    showStatus("Not saved", "error");
+  }
+  await refresh();
 }
 
 // ---------- Agents ----------
