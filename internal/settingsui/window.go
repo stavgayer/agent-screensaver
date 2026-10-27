@@ -47,9 +47,9 @@ type Service interface {
 
 // pickResult answers a call that shows a file dialog first. An install
 // answers with Manifest when it is done, or with Review when it is an
-// upgrade that changes an outside agent's runnable files: then nothing is
+// upgrade that changes any file of an outside agent: then nothing is
 // installed until confirmInstall. Unchanged marks an upgrade that was
-// installed because no runnable file changed.
+// installed because no file changed.
 type pickResult struct {
 	Cancelled bool                    `json:"cancelled"`
 	Manifest  *extensions.Manifest    `json:"manifest,omitempty"`

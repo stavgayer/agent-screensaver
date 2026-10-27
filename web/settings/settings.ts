@@ -2,7 +2,7 @@ import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
 import { withProject, withoutProject } from "./projects.ts";
 import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning } from "./preview-url.ts";
-import { upgradeDialog, type InstallReview } from "./upgrade.ts";
+import { upgradeDialog, type DiffLine, type InstallReview } from "./upgrade.ts";
 import { connectionRows, focusAfterPlan, hookButtonId, isPlanChanged, planDialog, powerButtonId, type Connection, type ConnectionRow, type HookAction, type Plan } from "./connections.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
@@ -38,9 +38,9 @@ interface ExtensionInfo {
 interface PickResult {
   cancelled: boolean;
   manifest?: { id: string; name?: string };
-  /** An upgrade that changes an outside agent's runnable files: nothing is installed until confirmInstall. */
+  /** An upgrade that changes an outside agent's files: nothing is installed until confirmInstall. */
   review?: InstallReview;
-  /** An upgrade installed because none of its runnable files changed. */
+  /** An upgrade installed because none of its files changed. */
   unchanged?: boolean;
 }
 
@@ -386,7 +386,7 @@ async function installExtension(): Promise<void> {
   }
   if (result?.manifest === undefined) return;
   const name = result.manifest.name || result.manifest.id;
-  showStatus(result.unchanged ? `Installed ${name}. No runnable files changed.` : `Installed ${name}`, "saved");
+  showStatus(result.unchanged ? `Installed ${name}. No files changed.` : `Installed ${name}`, "saved");
 }
 
 /**
@@ -404,15 +404,22 @@ function showUpgradeDialog(review: InstallReview): void {
     h("h2", { id: "upgrade-title" }, content.title),
     h("p", { class: "plan-trust" }, content.intro),
     h(
-      "ul",
-      { class: "plan-lines" },
-      ...content.files.map((file) =>
+      "div",
+      { class: "plan-lines upgrade-groups" },
+      ...content.groups.map((group) =>
         h(
-          "li",
-          { class: "upgrade-file" },
-          h("span", { class: "upgrade-heading" }, file.heading),
-          file.diff === null ? null : h("pre", { class: "plan-diff" }, file.diff),
-          ...file.notes.map((note) => h("span", { class: "upgrade-note" }, note)),
+          "section",
+          { class: "upgrade-group" },
+          h("h3", { class: "upgrade-group-heading" }, group.heading),
+          ...group.files.map((file) =>
+            h(
+              "div",
+              { class: "upgrade-file" },
+              h("span", { class: "upgrade-heading" }, file.heading),
+              file.lines === null ? null : diffBlock(file.lines),
+              ...file.notes.map((note) => h("span", { class: "upgrade-note" }, note)),
+            ),
+          ),
         ),
       ),
     ),
@@ -428,6 +435,26 @@ function showUpgradeDialog(review: InstallReview): void {
   document.body.append(dialog);
   dialog.showModal();
   cancel.focus();
+}
+
+/**
+ * The whole diff in a scrollable monospace box. A line cut for length
+ * ends in a button that shows the rest in place, so every byte can be read
+ * before Install.
+ */
+function diffBlock(lines: DiffLine[]): HTMLElement {
+  const block = h("pre", { class: "plan-diff" });
+  for (const line of lines) {
+    block.append(line.text);
+    if (line.rest !== null) {
+      const rest = line.rest;
+      const more = button(line.cutNote ?? "", () => more.replaceWith(rest), "plain");
+      more.classList.add("line-cut");
+      block.append(more);
+    }
+    block.append("\n");
+  }
+  return block;
 }
 
 async function confirmUpgrade(review: InstallReview, dialog: HTMLDialogElement, close: () => void): Promise<void> {
