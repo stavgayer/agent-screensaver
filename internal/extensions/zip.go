@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -177,12 +179,20 @@ func unzip(archive, dest string) error {
 	if err := checkZipEntries(reader.File); err != nil {
 		return err
 	}
+	top, err := topFolder(reader.File)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return err
 	}
 	budget := int64(maxZipBytes)
 	for _, file := range reader.File {
-		written, err := extractEntry(file, dest, budget)
+		name := zipPath(file.Name)
+		if isMacJunk(name) {
+			continue
+		}
+		written, err := extractEntry(file, strings.TrimPrefix(name, top), dest, budget)
 		if err != nil {
 			return err
 		}
@@ -231,8 +241,66 @@ func checkZipName(name string) error {
 	return nil
 }
 
-func extractEntry(file *zip.File, dest string, budget int64) (int64, error) {
-	relative := filepath.FromSlash(strings.ReplaceAll(file.Name, `\`, "/"))
+// zipPath is an entry name with Windows style separators turned into "/".
+func zipPath(name string) string {
+	return strings.ReplaceAll(name, `\`, "/")
+}
+
+// isMacJunk reports whether a (zipPath) name is one of the entries macOS
+// adds to the zips it makes: the __MACOSX folder and .DS_Store files. They
+// are never extracted.
+func isMacJunk(name string) bool {
+	return name == "__MACOSX" || strings.HasPrefix(name, "__MACOSX/") ||
+		path.Base(name) == ".DS_Store"
+}
+
+// topFolder returns the prefix ("name/") to strip from every entry when the
+// manifest sits inside the archive's only top folder, as in a zip made with
+// Finder's Compress on a folder. It is "" when extension.json is at the top
+// or there is no single top folder. macOS junk entries do not count. Every
+// name was already checked by checkZipEntries, so the stripped names are
+// as safe as the full ones.
+func topFolder(files []*zip.File) (string, error) {
+	folders := map[string]bool{}
+	hasTopFile := false
+	names := map[string]bool{}
+	for _, file := range files {
+		name := zipPath(file.Name)
+		if isMacJunk(name) {
+			continue
+		}
+		names[name] = true
+		first, _, nested := strings.Cut(name, "/")
+		switch {
+		case name == "extension.json":
+			return "", nil
+		case nested:
+			folders[first] = true
+		default:
+			hasTopFile = true
+		}
+	}
+	if hasTopFile || len(folders) == 0 {
+		return "", nil
+	}
+	if len(folders) > 1 {
+		listed := slices.Sorted(maps.Keys(folders))
+		return "", fmt.Errorf("archive has no extension.json at the top and %d top folders (%s): zip one folder, or put extension.json at the top of the zip",
+			len(folders), strings.Join(listed, ", "))
+	}
+	for folder := range folders {
+		if names[folder+"/extension.json"] {
+			return folder + "/", nil
+		}
+	}
+	return "", nil
+}
+
+func extractEntry(file *zip.File, name, dest string, budget int64) (int64, error) {
+	if name == "" {
+		return 0, nil // the top folder itself
+	}
+	relative := filepath.FromSlash(name)
 	if !filepath.IsLocal(relative) {
 		return 0, fmt.Errorf("entry %q has an unsafe path", file.Name)
 	}

@@ -169,7 +169,7 @@ Add its folder name under General, Ignored projects. Upper and lower case do not
 It can hide behind the notch. Run `./agent-screensaver settings`.
 
 **Can I install an extension from a zip?**
-Yes, if `extension.json` is at the top of the zip. A zip made with Finder's Compress on a folder has one top folder and cannot be installed.
+Yes, if `extension.json` is at the top of the zip or inside its only top folder. A zip made with Finder's Compress on a folder works.
 
 More in [Known limits](docs/known-limits.md). The reasons behind the bigger choices are in [docs/decisions/](docs/decisions/).
 

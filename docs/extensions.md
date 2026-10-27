@@ -17,7 +17,7 @@ A source is not an extension folder. It is any program that sends events. See [e
 
 ## The folder
 
-An extension is a folder. The folder holds a file named `extension.json` and any files it needs. Install it from a folder or from a `.zip` file. The `extension.json` file must be at the top of the folder or the zip, not inside a sub-folder.
+An extension is a folder. The folder holds a file named `extension.json` and any files it needs. Install it from a folder or from a `.zip` file. The `extension.json` file must be at the top of the folder. In a zip it must be at the top, or inside the zip's only top folder (a zip made with "Compress" in Finder has one). The `__MACOSX` folder and `.DS_Store` files in a zip are not installed.
 
 ```
 acme.rain/
@@ -289,6 +289,7 @@ An install is refused when:
 - A `.zip` has more than 1000 entries, or is more than 50 MiB when unpacked.
 - A `.zip` has an entry with an absolute path or a `..` in its path.
 - A `.zip` or a folder holds a symlink.
+- A `.zip` has no `extension.json` at the top and more than one top folder.
 
 When an install is refused, nothing is left behind.
 

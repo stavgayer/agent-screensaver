@@ -114,7 +114,7 @@ Nothing is left behind when an install is refused. The message says why:
 | An option default is not valid | `option "count": default: 999 is above the maximum 300` |
 | A color is not six hex digits | `must be a color like #rrggbb, got #6cb` |
 | A layout has a wrong region or no `attention` mode | `layout: unknown region "left" in mode "idle"`, `layout: missing mode "attention"` |
-| The zip holds your folder, not its contents | `read manifest: ... extension.json: no such file or directory` |
+| The zip has no `extension.json` at the top and more than one top folder | `archive has no extension.json at the top and 2 top folders (one, two): ...` |
 | The id does not look like `author.name` | `id "..." must look like "author.name"` |
 
 A zip is also refused when it:
@@ -130,14 +130,14 @@ A folder is also skipped, without an error, when the service lists extensions an
 
 ## 6. Make a zip
 
-The `extension.json` file must be at the top of the zip. It cannot be inside a sub-folder. Zip the contents of your folder, not the folder:
+The `extension.json` file must be at the top of the zip, or inside the zip's only top folder. So you can zip the contents of your folder:
 
 ```
 cd acme.drift
 zip -r ../acme.drift.zip .
 ```
 
-Do not use "Compress" in Finder: it puts the folder at the top and the install is refused. Keep the zip small: only the files the extension needs. Check it with a temporary home before you share it:
+Or you can zip the folder itself, for example with "Compress" in Finder. The install then uses that one folder. The `__MACOSX` folder and the `.DS_Store` files that macOS adds are left out, and they do not count as folders. Keep the zip small: only the files the extension needs. Check it with a temporary home before you share it:
 
 ```
 HOME=$(mktemp -d) agent-screensaver ext install ./acme.drift.zip

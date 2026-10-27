@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -191,6 +192,31 @@ func TestInstallFrom(t *testing.T) {
 		{"zip without manifest rejected", func(t *testing.T) string {
 			return writeZip(t, []zipEntry{{name: "main.js", content: "x"}})
 		}, "manifest", ""},
+		{"zip with one top folder installs", func(t *testing.T) string { return finderZip(t) }, "", "acme.zipped"},
+		{"zip with two top folders rejected", func(t *testing.T) string {
+			return writeZip(t, []zipEntry{
+				{name: "one/extension.json", content: manifestJSON(t, "acme.zipped", "1.0.0")},
+				{name: "two/main.js", content: "x"},
+			})
+		}, "2 top folders", ""},
+		{"traversal inside the top folder rejected", func(t *testing.T) string {
+			return writeZip(t, []zipEntry{
+				{name: "rain/extension.json", content: manifestJSON(t, "acme.zipped", "1.0.0")},
+				{name: "rain/../../evil", content: "x"},
+			})
+		}, "unsafe", ""},
+		{"symlink inside the top folder rejected", func(t *testing.T) string {
+			return writeZip(t, []zipEntry{
+				{name: "rain/extension.json", content: manifestJSON(t, "acme.zipped", "1.0.0")},
+				{name: "rain/main.js", content: "/etc/passwd", mode: os.ModeSymlink | 0o777},
+			})
+		}, "symlink", ""},
+		{"too large inside the top folder rejected", func(t *testing.T) string {
+			return writeZip(t, []zipEntry{
+				{name: "rain/extension.json", content: manifestJSON(t, "acme.zipped", "1.0.0")},
+				{name: "rain/big.bin", content: strings.Repeat("a", maxZipBytes+1)},
+			})
+		}, "large", ""},
 		{"missing source", func(t *testing.T) string { return filepath.Join(t.TempDir(), "nope") }, "no such file", ""},
 		{"too many entries", func(t *testing.T) string {
 			entries := make([]zipEntry, maxZipEntries+1)
@@ -221,6 +247,39 @@ func TestInstallFrom(t *testing.T) {
 			}
 			assertNoLeftovers(t, extDir, tt.wantID)
 		})
+	}
+}
+
+// finderZip makes a zip like Finder's Compress on a folder: one top
+// folder, plus the __MACOSX and .DS_Store entries macOS adds.
+func finderZip(t *testing.T) string {
+	t.Helper()
+	return writeZip(t, []zipEntry{
+		{name: "rain/"},
+		{name: "rain/extension.json", content: manifestJSON(t, "acme.zipped", "1.0.0")},
+		{name: "rain/main.js", content: "// 1.0.0"},
+		{name: "rain/.DS_Store", content: "junk"},
+		{name: "__MACOSX/"},
+		{name: "__MACOSX/rain/._extension.json", content: "junk"},
+		{name: ".DS_Store", content: "junk"},
+	})
+}
+
+func TestInstallFromZipWithOneTopFolderUnwrapsIt(t *testing.T) {
+	extDir := filepath.Join(t.TempDir(), "extensions")
+	if _, err := InstallFrom(finderZip(t), extDir); err != nil {
+		t.Fatal(err)
+	}
+	installed := filepath.Join(extDir, "acme.zipped")
+	for _, file := range []string{"extension.json", "main.js"} {
+		if _, err := os.Stat(filepath.Join(installed, file)); err != nil {
+			t.Errorf("%s not at the top of the extension: %v", file, err)
+		}
+	}
+	for _, junk := range []string{"rain", "__MACOSX", ".DS_Store"} {
+		if _, err := os.Stat(filepath.Join(installed, junk)); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("%s was installed, want it left out (err %v)", junk, err)
+		}
 	}
 }
 

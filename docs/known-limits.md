@@ -13,10 +13,6 @@ These are the limits of version 1 that you can see or that change how you use it
 
 - **A long Claude session can lose its name after a restart.** The name is read from the last 256 KB of the session's transcript. If the service restarts during a long session, the card shows the prompt until the name is written near the end of the transcript again.
 
-## Extensions
-
-- **A zip with one top folder cannot be installed.** Finder's Compress on a folder makes such a zip. The install then fails with `read manifest: ... extension.json: no such file or directory`. Make the zip from the files inside the folder, so `extension.json` is at the top of the zip.
-
 ## Screen and menu bar
 
 - **The menu bar icon can hide behind the notch.** See the README, "Settings window and menu bar", for how to open the settings window directly.
