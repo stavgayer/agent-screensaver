@@ -15,13 +15,14 @@ import (
 	"agent-screensaver/internal/install"
 )
 
-// ErrUpgradeNotReviewed is returned when an install would replace the
-// runnable files of an installed outside agent and no review was shown.
-var ErrUpgradeNotReviewed = errors.New("this upgrade changes the agent's runnable files; review the changes and confirm them first")
+// ErrUpgradeNotReviewed is returned when an install would change any file
+// of an installed outside agent and no review was shown.
+var ErrUpgradeNotReviewed = errors.New("this upgrade changes the agent's files; review the changes and confirm them first")
 
 // InstallReview is what installing a folder or a .zip file would replace.
-// Only an upgrade of an outside agent has changes: its converter programs
-// and the files its recipe copies are its code that runs on this Mac.
+// Only an upgrade of an outside agent has changes: every file of its
+// folder, because its programs can read or run any of them, and its
+// manifest says what runs.
 type InstallReview struct {
 	Manifest extensions.Manifest `json:"manifest"`
 	// Upgrade is true when an extension with this id is installed (at
@@ -43,7 +44,7 @@ func (s Service) ReviewInstall(path string) (InstallReview, error) {
 			return err
 		}
 		var err error
-		review, err = s.reviewStaged(m, dir)
+		review, err = s.reviewStaged(path, m, dir)
 		return err
 	})
 	return review, err
@@ -57,7 +58,7 @@ func (s Service) InstallReviewed(path, reviewed string) (extensions.Manifest, er
 		if err := s.checkAgent(m, dir); err != nil {
 			return err
 		}
-		review, err := s.reviewStaged(m, dir)
+		review, err := s.reviewStaged(path, m, dir)
 		switch {
 		case err != nil:
 			return err
@@ -71,15 +72,20 @@ func (s Service) InstallReviewed(path, reviewed string) (extensions.Manifest, er
 	})
 }
 
-// reviewStaged compares the staged agent in dir with the installed one.
-// An installed folder that is not a valid agent counts as having no
-// runnable files, so every file of the new version is shown as added.
-func (s Service) reviewStaged(m extensions.Manifest, dir string) (InstallReview, error) {
+// reviewStaged compares every file of the staged agent in dir with the
+// installed copy. src is what the user installs from, for the paths of a
+// file too large to show. An installed agent is never replaced by another
+// type: its hooks would stay with no agent to read them.
+func (s Service) reviewStaged(src string, m extensions.Manifest, dir string) (InstallReview, error) {
 	review := InstallReview{Manifest: m, Changes: []install.FileChange{}}
+	if ext, err := s.find(m.ID); err == nil && ext.Manifest.Type == extensions.TypeAgent && m.Type != extensions.TypeAgent {
+		return InstallReview{}, fmt.Errorf("%s is installed as an agent and this is a %s; remove the agent first with: agent-screensaver ext remove %s", m.ID, m.Type, m.ID)
+	}
 	if m.Type != extensions.TypeAgent {
 		return review, nil
 	}
-	if _, err := os.Stat(filepath.Join(s.Paths.ExtensionsDir, m.ID)); errors.Is(err, fs.ErrNotExist) {
+	installedDir := filepath.Join(s.Paths.ExtensionsDir, m.ID)
+	if _, err := os.Stat(installedDir); errors.Is(err, fs.ErrNotExist) {
 		return review, nil
 	} else if err != nil {
 		return InstallReview{}, err
@@ -96,9 +102,14 @@ func (s Service) reviewStaged(m extensions.Manifest, dir string) (InstallReview,
 			installed = &agent
 		}
 	}
-	changes, err := install.ReviewUpgrade(installed, staged)
+	changes, err := install.ReviewUpgrade(installedDir, installed, staged)
 	if err != nil {
 		return InstallReview{}, err
+	}
+	for index, change := range changes {
+		if change.NewPath != "" {
+			changes[index].NewPath = sourcePath(src, change.Path)
+		}
 	}
 	if len(changes) > 0 {
 		review.Changes = changes
@@ -109,13 +120,31 @@ func (s Service) reviewStaged(m extensions.Manifest, dir string) (InstallReview,
 	return review, nil
 }
 
-// reviewHash covers the id, both versions and every change with the full
-// hashes of both sides, so any other bytes give another hash.
+// sourcePath names a file of what the user installs from: a path in the
+// folder, or the file's name inside the .zip.
+func sourcePath(src, relative string) string {
+	if info, err := os.Stat(src); err == nil && info.IsDir() {
+		return filepath.Join(src, filepath.FromSlash(relative))
+	}
+	return relative + " inside " + src
+}
+
+// reviewHash covers the id, both versions and every changed file by path,
+// kind, group and the full hashes of both sides (the manifest included),
+// so any other bytes on either side give another hash. Display paths are
+// left out: the staged copy lives in a new temp folder each time.
 func reviewHash(review InstallReview) (string, error) {
+	type fileState struct {
+		Path, Kind, Group, Old, New string
+	}
+	files := make([]fileState, 0, len(review.Changes))
+	for _, change := range review.Changes {
+		files = append(files, fileState{change.Path, string(change.Kind), string(change.Group), change.OldSHA256, change.NewSHA256})
+	}
 	data, err := json.Marshal(struct {
 		ID, From, To string
-		Changes      []install.FileChange
-	}{review.Manifest.ID, review.FromVersion, review.Manifest.Version, review.Changes})
+		Files        []fileState
+	}{review.Manifest.ID, review.FromVersion, review.Manifest.Version, files})
 	if err != nil {
 		return "", fmt.Errorf("encode review: %w", err)
 	}
