@@ -6,9 +6,9 @@ A macOS screen saver that shows what your AI coding agents are doing.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Works offline](https://img.shields.io/badge/works-offline-brightgreen)
 
-![agent-screensaver playing its demo scene](docs/media/demo.gif)
 
-<!-- Hero video: paste the link GitHub gives you after you drag the .mp4 into the web editor, on its own line here. -->
+https://github.com/user-attachments/assets/588e6f6f-617a-4842-9c8f-d854756a434b
+
 
 You start a long task in Claude Code, Codex or Cursor and walk away. When you come back, you see from across the room if an agent needs you, which tasks finished, which are still running and for how long, and how much of your usage limits is left. The screen saver shows the time anyway while you are away, so it is the right place to show this too.
 
