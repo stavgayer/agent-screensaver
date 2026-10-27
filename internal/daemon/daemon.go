@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"agent-screensaver/internal/agents"
@@ -81,6 +82,11 @@ type Daemon struct {
 	// Estimator keeps one source's limits live between exact readings.
 	// Without one, limits change only when a reading arrives.
 	Estimator LimitEstimator
+	// LimitsProviders builds the limit providers of the installed agents.
+	// When set, Run builds them again each time the agents or their
+	// limits change, so a new agent is polled without a restart and a
+	// removed one stops. Without it, Run keeps the providers it was given.
+	LimitsProviders func(installed []agents.Agent) []limits.Provider
 
 	paths     paths.Paths
 	state     state.State
@@ -334,12 +340,10 @@ func (d *Daemon) writeState(nowMs int64, frame *demoFrame, result *StepResult) {
 // own goroutines, one per provider at a time, and come back through a channel
 // so only this goroutine touches the daemon.
 func Run(ctx context.Context, d *Daemon, w platform.SaverWatcher, s platform.SoundPlayer, providers []limits.Provider) error {
-	var sources []string
-	for _, provider := range providers {
-		sources = append(sources, provider.Source())
-	}
-	d.Logf("limit providers: %v", sources)
 	loop := newLoop(ctx, d, w, s, providers)
+	if d.LimitsProviders == nil {
+		d.Logf("limit providers: %v", d.sources)
+	}
 	loop.step()
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
@@ -373,10 +377,13 @@ type loop struct {
 	sound     platform.SoundPlayer
 	providers map[string]limits.Provider
 	inFlight  map[string]bool
-	results   chan readResult // buffered for every provider, so a read never blocks
-	saver     bool
-	writeErr  string
-	lastKind  map[string]readKind // per source, to log only changes
+	results   chan readResult // buffered, so a read rarely waits for the loop
+	// providersKey names the agents the providers were built for, when
+	// the daemon builds them (LimitsProviders); "" before the first build.
+	providersKey string
+	saver        bool
+	writeErr     string
+	lastKind     map[string]readKind // per source, to log only changes
 }
 
 // readKind is the outcome of a provider read, for the change-only log.
@@ -399,20 +406,59 @@ func kindOf(read readResult) readKind {
 	}
 }
 
+// minResultsBuffer is the smallest results buffer; providers can be added
+// while the loop runs.
+const minResultsBuffer = 8
+
 func newLoop(ctx context.Context, d *Daemon, w platform.SaverWatcher, s platform.SoundPlayer, providers []limits.Provider) *loop {
-	byName := make(map[string]limits.Provider, len(providers))
-	sources := make([]string, 0, len(providers))
-	for _, provider := range providers {
-		byName[provider.Source()] = provider
-		sources = append(sources, provider.Source())
-	}
-	d.SetSources(sources...)
-	return &loop{
-		ctx: ctx, daemon: d, watcher: w, sound: s, providers: byName,
+	l := &loop{
+		ctx: ctx, daemon: d, watcher: w, sound: s,
 		inFlight: map[string]bool{},
 		lastKind: map[string]readKind{},
-		results:  make(chan readResult, len(providers)),
+		results:  make(chan readResult, max(len(providers), minResultsBuffer)),
 	}
+	l.setProviders(providers)
+	return l
+}
+
+// setProviders replaces the providers. A read still running for a removed
+// one finishes, and its answer is used once.
+func (l *loop) setProviders(providers []limits.Provider) {
+	l.providers = make(map[string]limits.Provider, len(providers))
+	sources := make([]string, 0, len(providers))
+	for _, provider := range providers {
+		l.providers[provider.Source()] = provider
+		sources = append(sources, provider.Source())
+	}
+	l.daemon.SetSources(sources...)
+}
+
+// refreshProviders builds the providers again when the agents with a
+// limits provider changed since the last build.
+func (l *loop) refreshProviders() {
+	if l.daemon.LimitsProviders == nil {
+		return
+	}
+	key := limitsKey(l.daemon.agents)
+	if key == l.providersKey {
+		return
+	}
+	l.providersKey = key
+	l.setProviders(l.daemon.LimitsProviders(slices.Clone(l.daemon.agents)))
+	l.daemon.Logf("limit providers: %v", l.daemon.sources)
+}
+
+// limitsKey names each agent that declares limits, by id, source and
+// provider. It is never "", so the first refresh always builds.
+func limitsKey(installed []agents.Agent) string {
+	var parts []string
+	for _, agent := range installed {
+		if agent.Limits != "" {
+			parts = append(parts, agent.ID+"|"+agent.Source+"|"+string(agent.Limits))
+		}
+	}
+	slices.Sort(parts)
+	return "limits:" + strings.Join(parts, ",")
 }
 
 func (l *loop) step() {
@@ -423,6 +469,7 @@ func (l *loop) step() {
 		l.daemon.Logf("saver active: %t", active)
 	}
 	result := l.daemon.Step(nowMs, active)
+	l.refreshProviders()
 	l.reportWriteError(result.WriteErr)
 	if result.PlaySound {
 		if err := l.sound.Play(l.daemon.SoundFile()); err != nil {
@@ -450,8 +497,11 @@ func (l *loop) startRead(source string) {
 	if l.inFlight[source] {
 		return
 	}
+	provider, ok := l.providers[source]
+	if !ok {
+		return
+	}
 	l.inFlight[source] = true
-	provider := l.providers[source]
 	go func() {
 		ctx, cancel := context.WithTimeout(l.ctx, limits.ReadTimeout)
 		defer cancel()

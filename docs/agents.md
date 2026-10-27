@@ -52,7 +52,7 @@ An installed agent is not replaced by an extension of another type with the same
 | `agent.install` | yes | How to add and remove our hooks. See "The install recipe". |
 | `agent.statusline` | no | A mapping for a status line payload, for a tool that has a status line command. |
 | `agent.details` | no | Where the service reads extra details for a card. See "Details". |
-| `agent.limits` | no | `{ "provider": "<id>" }`, a limits reader built into the service. Known ids: `codex-app-server` (Codex) and `claude-usage-estimate` (the live Claude estimate, see [event-format.md](event-format.md)). Any other id is refused. |
+| `agent.limits` | no | `{ "provider": "<id>" }`, a limits reader built into the service. Known ids: `codex-app-server` (Codex) and `claude-usage-estimate` (the live Claude estimate, see [event-format.md](event-format.md)). Any other id is refused. The service reads the `codex-app-server` provider of an agent as soon as the agent is installed, and stops when it is removed. |
 
 Unknown fields are refused, so a typo is an error and not a rule that silently does nothing.
 
@@ -241,7 +241,7 @@ A card whose source has no agent extension (any program that writes events) show
 ## Known limits
 
 - Paths in `details` are fixed. A tool that moves its folder with an environment variable is not followed: Codex's `$CODEX_HOME` is not read, so `builtin.codex` reads `~/.codex/session_index.jsonl`.
-- A new agent's `limits` provider is used after the service starts again.
+- The `claude-usage-estimate` provider is chosen when the service starts. An agent that adds it is used after the service starts again. A `codex-app-server` provider needs no restart.
 - Cursor also runs Claude Code hooks from `~/.claude/settings.json`, with its own payloads (Cursor event names and fields such as `cursor_version`). `builtin.claude` ignores every payload that has `cursor_version`, so a Cursor chat gives one Cursor card, not a Claude card too.
 - Cursor never shows an approval card. Cursor sends `beforeShellExecution` and `beforeMCPExecution` before every shell command and MCP call, also when it will not ask (in its run mode "Run Everything" it never asks), and the payload does not say whether it will ask. So `builtin.cursor` maps them to `tool_intent`: the working card shows the command or the MCP tool name. Our hook prints nothing to Cursor, so Cursor decides as it would without us. (An earlier `{"permission": "ask"}` made Cursor 3.27.12 wait for an approval in "Run Everything" mode.) The live tests (24/10/2026) were done only in "Run Everything" mode; a run mode where Cursor asks was not tested.
 - No usage ring for Cursor. Cursor keeps the percent used, the limit and the reset date on its server only. Reading them would need its login token and undocumented endpoints, so there is no `limits` provider for Cursor.

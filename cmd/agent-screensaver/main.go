@@ -151,14 +151,15 @@ func runDaemon(args []string, stderr io.Writer) int {
 	}
 	service.ContextSizes = contextSizes
 	service.Details = sessioninfo.Reader{Home: home, ContextSizes: contextSizes}
-	providers := limitsProviders(home, p, service, stderr)
+	service.Estimator = claudeEstimator(home, p, stderr)
+	service.LimitsProviders = limitsProviders(home)
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.
 	finished := make(chan struct{})
 	var runErr error
 	go func() {
 		defer close(finished)
-		runErr = daemon.Run(ctx, service, platform.NewSaverWatcher(), platform.NewSoundPlayer(), providers)
+		runErr = daemon.Run(ctx, service, platform.NewSaverWatcher(), platform.NewSoundPlayer(), nil)
 	}()
 	platform.RunMainLoop(finished)
 	if runErr != nil {
@@ -168,27 +169,39 @@ func runDaemon(args []string, stderr io.Writer) int {
 	return 0
 }
 
-// limitsProviders builds the Go limits providers that the installed agent
-// extensions name (agent.limits). A new agent extension with limits is
-// picked up when the daemon starts again.
-func limitsProviders(home string, p paths.Paths, service *daemon.Daemon, stderr io.Writer) []limits.Provider {
+// limitsProviders returns how to build the Go limits providers that the
+// installed agent extensions name (agent.limits). The daemon builds them
+// again when the agents change, so a new agent is polled without a restart.
+func limitsProviders(home string) func(installed []agents.Agent) []limits.Provider {
+	lookPath := limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob))
+	return func(installed []agents.Agent) []limits.Provider {
+		var providers []limits.Provider
+		for _, agent := range installed {
+			if agent.Limits != agents.LimitsCodexAppServer {
+				continue
+			}
+			if provider, ok := limits.NewCodex(agent.Source, lookPath, os.Environ()); ok {
+				providers = append(providers, provider)
+			}
+		}
+		return providers
+	}
+}
+
+// claudeEstimator keeps the limits of the agent that asks for the Claude
+// usage estimate live between exact readings. It is chosen when the daemon
+// starts.
+func claudeEstimator(home string, p paths.Paths, stderr io.Writer) daemon.LimitEstimator {
 	installed, err := agents.Load(p.ExtensionsDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "agent-screensaver daemon: %v\n", err)
 	}
-	lookPath := limits.WithFallbackDirs(exec.LookPath, limits.ToolDirs(home, filepath.Glob))
-	var providers []limits.Provider
 	for _, agent := range installed {
-		switch agent.Limits {
-		case agents.LimitsCodexAppServer:
-			if provider, ok := limits.NewCodex(agent.Source, lookPath, os.Environ()); ok {
-				providers = append(providers, provider)
-			}
-		case agents.LimitsClaudeUsageEstimate:
-			service.Estimator = usage.NewForMac(os.DirFS(home), p.UsageFile, agent.Source)
+		if agent.Limits == agents.LimitsClaudeUsageEstimate {
+			return usage.NewForMac(os.DirFS(home), p.UsageFile, agent.Source)
 		}
 	}
-	return providers
+	return nil
 }
 
 // runTray shows the menu bar icon until the user quits it or the process gets
