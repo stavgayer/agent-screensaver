@@ -10,6 +10,9 @@ export interface FileChange {
   too_large?: boolean;
   old_path?: string;
   new_path?: string;
+  /** Set when the new copy is inside a .zip: the archive and the entry's name in it. */
+  new_archive?: string;
+  new_entry?: string;
   old_size: number;
   new_size: number;
   old_sha256?: string;
@@ -109,6 +112,11 @@ export function diffLines(diff: string): DiffLine[] {
   });
 }
 
+const shellQuote = (text: string): string => `'${text.replaceAll("'", "'\\''")}'`;
+
+/** Prints one entry of a .zip to a pager, as the CLI says it (cli.UnzipCommand). */
+export const unzipCommand = (archive: string, entry: string): string => `unzip -p ${shellQuote(archive)} ${shellQuote(entry)} | less`;
+
 function fileOf(change: FileChange): UpgradeFile {
   const notes: string[] = [];
   if (change.binary) {
@@ -119,6 +127,7 @@ function fileOf(change: FileChange): UpgradeFile {
     notes.push("Too large to show: review the files by hand.");
     if (change.old_path) notes.push(`Old: ${escapeControls(change.old_path)}`);
     if (change.new_path) notes.push(`New: ${escapeControls(change.new_path)}`);
+    if (change.new_archive) notes.push(`Extract it with: ${escapeControls(unzipCommand(change.new_archive, change.new_entry ?? ""))}`);
   }
   return {
     heading: `${KIND_NAMES[change.kind]}: ${escapeControls(change.path)}${change.binary ? " (binary)" : ""}`,

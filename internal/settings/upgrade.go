@@ -109,6 +109,9 @@ func (s Service) reviewStaged(src string, m extensions.Manifest, dir string) (In
 	for index, change := range changes {
 		if change.NewPath != "" {
 			changes[index].NewPath = sourcePath(src, change.Path)
+			if info, err := os.Stat(src); err == nil && !info.IsDir() {
+				changes[index].NewArchive, changes[index].NewEntry = src, change.Path
+			}
 		}
 	}
 	if len(changes) > 0 {

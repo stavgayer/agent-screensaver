@@ -68,6 +68,10 @@ type FileChange struct {
 	TooLarge bool   `json:"too_large,omitempty"`
 	OldPath  string `json:"old_path,omitempty"`
 	NewPath  string `json:"new_path,omitempty"`
+	// NewArchive and NewEntry are set when the new copy is inside a .zip:
+	// the archive and the entry's name in it, to extract it for reading.
+	NewArchive string `json:"new_archive,omitempty"`
+	NewEntry   string `json:"new_entry,omitempty"`
 	// The sizes and hashes are set for every change; a missing side has
 	// size 0 and no hash.
 	OldSize   int64  `json:"old_size"`

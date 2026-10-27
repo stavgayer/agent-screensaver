@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"archive/zip"
 	"bytes"
 	"fmt"
 	"os"
@@ -276,5 +277,65 @@ func TestEscapeControlsCoversFormatAndSelectorCharacters(t *testing.T) {
 		if got := escapeControls(input); got != want {
 			t.Errorf("escapeControls(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+// zipFolder packs the files of dir, with extension.json at the top.
+func zipFolder(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "it's acme.zip")
+	out, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := zip.NewWriter(out)
+	err = filepath.WalkDir(dir, func(file string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		relative, _ := filepath.Rel(dir, file)
+		info, _ := entry.Info()
+		header := &zip.FileHeader{Name: filepath.ToSlash(relative), Method: zip.Deflate}
+		header.SetMode(info.Mode())
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		_, err = writer.Write(data)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := out.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestExtInstallOfATooLargeFileInAZipSaysHowToExtractIt(t *testing.T) {
+	p := withInstalledAgent(t)
+	upgrade := zipFolder(t, cliAgentFolder(t, "1.1.0", "#!/bin/sh\n"+strings.Repeat("# filler line\n", 160_000)))
+
+	code, stdout, _ := runSettingsWithInput(t, p, "y\n", "ext", "install", upgrade)
+
+	quoted := "'" + strings.ReplaceAll(upgrade, "'", `'\''`) + "'"
+	for _, want := range []string{
+		"    new: bin/convert inside " + upgrade + "\n",
+		"    extract it with: unzip -p " + quoted + " 'bin/convert' | less\n",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, stdout)
+		}
+	}
+	if code != 1 {
+		t.Errorf("code = %d, want a refusal without --yes", code)
 	}
 }

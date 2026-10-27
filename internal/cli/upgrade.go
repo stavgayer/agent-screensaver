@@ -128,6 +128,9 @@ func FormatUpgradeReview(review settings.InstallReview, full bool) (text string,
 			if change.NewPath != "" {
 				fmt.Fprintf(&out, "    new: %s\n", escapeControls(change.NewPath))
 			}
+			if change.NewArchive != "" {
+				fmt.Fprintf(&out, "    extract it with: %s\n", escapeControls(UnzipCommand(change.NewArchive, change.NewEntry)))
+			}
 		default:
 			fmt.Fprintf(&out, "  %s: %s\n", change.Kind, path)
 			if writeDiff(&out, change.Diff, full) {
@@ -191,6 +194,15 @@ func escapeControls(text string) string {
 func isHiddenFormat(r rune) bool {
 	return (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r) || r == 0x2028 || r == 0x2029 ||
 		(r >= 0xfe00 && r <= 0xfe0f) || (r >= 0xe0000 && r <= 0xe007f) || (r >= 0xe0100 && r <= 0xe01ef)
+}
+
+// UnzipCommand prints one entry of a .zip to a pager, for reading by hand.
+func UnzipCommand(archive, entry string) string {
+	return "unzip -p " + shellQuote(archive) + " " + shellQuote(entry) + " | less"
+}
+
+func shellQuote(text string) string {
+	return "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
 }
 
 func short(hash string) string {

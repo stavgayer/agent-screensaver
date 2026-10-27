@@ -26,7 +26,7 @@ When you install a new version of an agent extension that you did not get with a
 - **Programs and copied files**: the converter programs (`agent.hooks.converter`, `agent.statusline.converter` and every details converter) and every file that `agent.install.files` copies.
 - **Other files**: every other file of the extension.
 
-A text file (valid UTF-8, no NUL byte) gets a unified diff. Any other file shows its old and new size and the first 12 digits of its SHA-256. A file whose diff is longer than 2 MB is shown as "too large to show: review the files by hand", with the paths of the installed copy and of the new one. Characters that could hide or reorder text are shown as escapes: control characters as `\x1b`, and bidi and other invisible characters as `<U+202E>`.
+A text file (valid UTF-8, no NUL byte) gets a unified diff. Any other file shows its old and new size and the first 12 digits of its SHA-256. A file whose diff is longer than 2 MB, or whose old and new copies together pass 4 MB, is shown as "too large to show: review the files by hand", with the paths of the installed copy and of the new one. When the new copy is inside a `.zip`, the review names the entry and the command that shows it, such as `unzip -p 'acme.zip' 'bin/convert' | less`. Characters that could hide or reorder text are shown as escapes: control characters as `\x1b`, and bidi and other invisible characters as `<U+202E>`.
 
 `agent-screensaver ext install`:
 

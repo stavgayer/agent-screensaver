@@ -64,6 +64,14 @@ describe("upgradeDialog", () => {
     assert.equal(dialog.confirmLabel, "I reviewed the files by hand, install");
   });
 
+  it("says how to extract a too-large file from a zip", () => {
+    const dialog = upgradeDialog(review([{
+      path: "bin/convert", kind: "changed", group: "runnable", too_large: true, old_size: 1, new_size: 3_000_000,
+      new_path: "bin/convert inside /tmp/it's.zip", new_archive: "/tmp/it's.zip", new_entry: "bin/convert",
+    }]));
+    assert.equal(dialog.groups[0]!.files[0]!.notes.at(-1), "Extract it with: unzip -p '/tmp/it'\\''s.zip' 'bin/convert' | less");
+  });
+
   it("escapes control characters in names and paths", () => {
     const dialog = upgradeDialog(review([{ path: "bin/‮convert", kind: "added", group: "runnable", diff: "+x\n", old_size: 0, new_size: 2 }]));
     assert.equal(dialog.groups[0]!.files[0]!.heading, "Added: bin/<U+202E>convert");
