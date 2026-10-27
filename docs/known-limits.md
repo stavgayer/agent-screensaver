@@ -19,7 +19,6 @@ These are the limits of version 1 that you can see or that change how you use it
 
 ## Screen and menu bar
 
-- **A second display was not tested on a real Mac.** It should show only the background and the clock.
 - **The menu bar icon can hide behind the notch.** See the README, "Settings window and menu bar", for how to open the settings window directly.
 
 ## Themes

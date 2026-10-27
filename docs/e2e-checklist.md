@@ -11,7 +11,7 @@ Run this on a real Mac after installing the release zip. Tick each box only afte
 - [ ] Mac locks: the password is asked when you come back.
 - [ ] After the saver stops: no `WebContent` process of ours and no `legacyScreenSaver` left after 10 seconds.
 - [ ] CPU while showing Matrix stays near the spike's ~6.5% of one core, all processes together ("Spike results", section 8 of [the design](superpowers/specs/2026-10-20-agent-screensaver-design.md); [decision 0002](decisions/0002-video-cost.md) says how to measure).
-- [ ] Second display shows only the background and the clock.
+- [x] Second display shows only the background and the clock. Verified 2026-10-25 by the owner (Calm theme): the main display showed the clock, the limit rings and the task card; the second display showed only the same aerial and the clock.
 - [ ] Existing status line still prints the same as before install.
 - [ ] Menu bar icon changes when an agent waits; menu lines match the screen saver.
 - [ ] Settings window: a theme change shows in the preview and in the real screen saver.
