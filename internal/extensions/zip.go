@@ -241,6 +241,21 @@ func checkZipName(name string) error {
 	return nil
 }
 
+// ZipTopFolder returns the folder prefix ("name/") that an install strips
+// from the entries of archive, or "" when extension.json is at its top.
+// Callers use it to name an entry inside the zip, for example in a review.
+func ZipTopFolder(archive string) (string, error) {
+	reader, err := zip.OpenReader(archive)
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+	if err := checkZipEntries(reader.File); err != nil {
+		return "", err
+	}
+	return topFolder(reader.File)
+}
+
 // zipPath is an entry name with Windows style separators turned into "/".
 func zipPath(name string) string {
 	return strings.ReplaceAll(name, `\`, "/")

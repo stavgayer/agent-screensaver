@@ -106,11 +106,17 @@ func (s Service) reviewStaged(src string, m extensions.Manifest, dir string) (In
 	if err != nil {
 		return InstallReview{}, err
 	}
+	top := ""
+	if info, err := os.Stat(src); err == nil && !info.IsDir() {
+		if top, err = extensions.ZipTopFolder(src); err != nil {
+			return InstallReview{}, err
+		}
+	}
 	for index, change := range changes {
 		if change.NewPath != "" {
-			changes[index].NewPath = sourcePath(src, change.Path)
+			changes[index].NewPath = sourcePath(src, top+change.Path)
 			if info, err := os.Stat(src); err == nil && !info.IsDir() {
-				changes[index].NewArchive, changes[index].NewEntry = src, change.Path
+				changes[index].NewArchive, changes[index].NewEntry = src, top+change.Path
 			}
 		}
 	}

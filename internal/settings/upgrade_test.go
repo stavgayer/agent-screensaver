@@ -161,6 +161,13 @@ func TestReviewInstallUsesTheRecipeFiles(t *testing.T) {
 // zipOf packs the files of dir, with extension.json at the top.
 func zipOf(t *testing.T, dir string) string {
 	t.Helper()
+	return zipUnder(t, dir, "")
+}
+
+// zipUnder packs the files of dir under top ("" or "name/"), as Finder's
+// Compress does with a folder.
+func zipUnder(t *testing.T, dir, top string) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "acme.zip")
 	out, err := os.Create(path)
 	if err != nil {
@@ -173,7 +180,7 @@ func zipOf(t *testing.T, dir string) string {
 		}
 		relative, _ := filepath.Rel(dir, file)
 		info, _ := entry.Info()
-		header := &zip.FileHeader{Name: filepath.ToSlash(relative), Method: zip.Deflate}
+		header := &zip.FileHeader{Name: top + filepath.ToSlash(relative), Method: zip.Deflate}
 		header.SetMode(info.Mode())
 		writer, err := archive.CreateHeader(header)
 		if err != nil {
@@ -214,6 +221,33 @@ func TestAnUpgradeFromAZipIsReviewedLikeAFolder(t *testing.T) {
 	}
 	if _, err := service.InstallReviewed(upgrade, review.Hash); err != nil {
 		t.Errorf("reviewed zip err = %v", err)
+	}
+}
+
+func TestAnUpgradeFromAZipWithOneTopFolderNamesTheRealEntry(t *testing.T) {
+	service := newService(t)
+	if _, err := service.InstallExtension(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
+		t.Fatal(err)
+	}
+	tooLargeToShow := "#!/bin/sh\n" + strings.Repeat("# filler line\n", 160_000)
+	upgrade := zipUnder(t, upgradeFolder(t, "1.1.0", tooLargeToShow), "acme/")
+
+	review, err := service.ReviewInstall(upgrade)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, change := range review.Changes {
+		if change.Path != "bin/convert" {
+			continue
+		}
+		found = true
+		if change.NewEntry != "acme/bin/convert" || change.NewPath != "acme/bin/convert inside "+upgrade {
+			t.Errorf("entry = %q, new path = %q, want the name inside the zip", change.NewEntry, change.NewPath)
+		}
+	}
+	if !found {
+		t.Fatalf("no bin/convert change in %+v", review.Changes)
 	}
 }
 
