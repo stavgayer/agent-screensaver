@@ -262,3 +262,19 @@ func TestExtInstallOfATooLargeDiffNeedsYes(t *testing.T) {
 		t.Errorf("--yes code %d", code)
 	}
 }
+
+func TestEscapeControlsCoversFormatAndSelectorCharacters(t *testing.T) {
+	tests := map[string]string{
+		"soft\u00adhyphen": "soft<U+00AD>hyphen",
+		"a\u180eb":         "a<U+180E>b",
+		"heart\ufe0f":      "heart<U+FE0F>",
+		"tag\U000E0041":    "tag<U+E0041>",
+		"sel\U000E0100":    "sel<U+E0100>",
+		"plain é 日本\t":     "plain é 日本\t",
+	}
+	for input, want := range tests {
+		if got := escapeControls(input); got != want {
+			t.Errorf("escapeControls(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

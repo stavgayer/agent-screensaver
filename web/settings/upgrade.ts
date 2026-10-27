@@ -85,9 +85,13 @@ export function escapeControls(text: string): string {
   return out;
 }
 
+/** Unicode format characters (category Cf): bidi marks, zero-width characters, the BOM, the soft hyphen, tags. */
+const FORMAT_CHARACTER = /^\p{Cf}$/u;
+
+/** C1 controls, every format character, the line and paragraph separators and the variation selectors, as in Go. */
 function isHiddenFormat(code: number): boolean {
-  return (code >= 0x80 && code <= 0x9f) || code === 0x061c || (code >= 0x200b && code <= 0x200f) ||
-    (code >= 0x2028 && code <= 0x202e) || (code >= 0x2060 && code <= 0x2069) || code === 0xfeff;
+  return (code >= 0x80 && code <= 0x9f) || FORMAT_CHARACTER.test(String.fromCodePoint(code)) || code === 0x2028 || code === 0x2029 ||
+    (code >= 0xfe00 && code <= 0xfe0f) || (code >= 0xe0000 && code <= 0xe007f) || (code >= 0xe0100 && code <= 0xe01ef);
 }
 
 /** Every line of a diff, escaped, with lines over MAX_LINE_CHARACTERS cut. */

@@ -6,6 +6,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"agent-screensaver/internal/install"
@@ -183,11 +184,13 @@ func escapeControls(text string) string {
 	return out.String()
 }
 
-// isHiddenFormat: C1 controls, bidi embeddings, overrides, isolates and
-// marks, zero-width characters, line and paragraph separators and the BOM.
+// isHiddenFormat: C1 controls, every format character (Unicode category
+// Cf: bidi marks, embeddings, overrides and isolates, zero-width
+// characters, the BOM, the soft hyphen, tag characters), the line and
+// paragraph separators, and the variation selectors.
 func isHiddenFormat(r rune) bool {
-	return (r >= 0x80 && r <= 0x9f) || r == 0x061c || (r >= 0x200b && r <= 0x200f) ||
-		(r >= 0x2028 && r <= 0x202e) || (r >= 0x2060 && r <= 0x2069) || r == 0xfeff
+	return (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r) || r == 0x2028 || r == 0x2029 ||
+		(r >= 0xfe00 && r <= 0xfe0f) || (r >= 0xe0000 && r <= 0xe007f) || (r >= 0xe0100 && r <= 0xe01ef)
 }
 
 func short(hash string) string {

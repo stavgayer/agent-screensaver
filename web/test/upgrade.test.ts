@@ -76,6 +76,14 @@ describe("escapeControls", () => {
     assert.equal(escapeControls("‮evil⁦‏\u0085﻿"), "<U+202E>evil<U+2066><U+200F><U+0085><U+FEFF>");
     assert.equal(escapeControls("plain é 日本"), "plain é 日本");
   });
+
+  it("shows every format character, variation selector and tag character as an escape", () => {
+    assert.equal(escapeControls("soft\u00adhyphen"), "soft<U+00AD>hyphen");
+    assert.equal(escapeControls("a\u180eb"), "a<U+180E>b");
+    assert.equal(escapeControls("heart\ufe0f"), "heart<U+FE0F>");
+    assert.equal(escapeControls("tag\u{E0041}"), "tag<U+E0041>");
+    assert.equal(escapeControls("sel\u{E0100}"), "sel<U+E0100>");
+  });
 });
 
 describe("diffLines", () => {
