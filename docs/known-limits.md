@@ -4,6 +4,7 @@ These are the limits of version 1 that you can see or that change how you use it
 
 ## Agents and hooks
 
+- **An edited settings file can change its layout.** When agent-screensaver adds or removes its hooks in a file such as `~/.claude/settings.json`, it keeps the keys, their order, every value it did not touch, the indent per level and the final newline. It writes every key and every list item on its own line, so a list or object written on one line is spread over several lines. Windows line ends (CRLF) come back as plain line ends (LF), and the spaces around `:` and `,` become the standard ones. So uninstall gives a file back byte for byte only when it already had that layout.
 - **`codex exec` runs show no card.** Codex sends no transcript for them, and the built-in Codex agent ignores events without a transcript.
 - **Cursor has no usage ring and no approval cards.** Cursor keeps its usage on its server only, and it does not tell a hook whether it will ask you. See [agents.md](agents.md), "Known limits".
 
