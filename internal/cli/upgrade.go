@@ -62,10 +62,18 @@ func installExtension(service settings.Service, rest []string, stdin io.Reader, 
 		return err
 	}
 	fmt.Fprintf(stdout, "installed: %s %s\n", manifest.ID, manifest.Version)
-	for _, warning := range service.WarmUpConverters(manifest.ID) {
-		fmt.Fprintf(stdout, "warning: %s\n", escapeControls(warning))
+	if len(review.Changes) > 0 {
+		// An approved upgrade of an agent whose hooks are in place: its
+		// new converter runs on the next event, so run it once now.
+		printWarnings(stdout, service.WarmUpIfHooked(manifest.ID))
 	}
 	return nil
+}
+
+func printWarnings(stdout io.Writer, warnings []string) {
+	for _, warning := range warnings {
+		fmt.Fprintf(stdout, "warning: %s\n", escapeControls(warning))
+	}
 }
 
 // refusal says why the install cannot be confirmed yet, or "".

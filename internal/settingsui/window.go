@@ -38,6 +38,7 @@ type Service interface {
 	ReviewInstall(path string) (settings.InstallReview, error)
 	InstallReviewed(path, hash string) (extensions.Manifest, error)
 	WarmUpConverters(id string) []string
+	WarmUpIfHooked(id string) []string
 	RemoveExtension(id string) error
 	Notice(extID string) string
 	Connections(nowMs int64) ([]settings.Connection, error)
@@ -147,14 +148,8 @@ func (b *bridge) methods() map[string]method {
 		}) (any, error) {
 			return nil, b.svc.SetAgentOn(p.ID, p.On)
 		}),
-		"planAgentHooks": withParams(b.planAgentHooks),
-		"applyAgentHooks": withParams(func(p struct {
-			ID   string
-			Add  bool
-			Hash string
-		}) (any, error) {
-			return nil, b.svc.ApplyAgentHooks(p.ID, p.Add, p.Hash)
-		}),
+		"planAgentHooks":  withParams(b.planAgentHooks),
+		"applyAgentHooks": withParams(b.applyAgentHooks),
 	}
 }
 
@@ -256,7 +251,6 @@ func (b *bridge) installExtension() (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	b.warmUp(manifest.ID)
 	return pickResult{Manifest: &manifest, Unchanged: review.Upgrade}, nil
 }
 
@@ -272,15 +266,29 @@ func (b *bridge) confirmInstall(hash string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	b.warmUp(manifest.ID)
+	// An approved upgrade: run the new converters once if the user
+	// already trusts the agent (its hooks are in place).
+	go b.svc.WarmUpIfHooked(manifest.ID)
 	return pickResult{Manifest: &manifest}, nil
 }
 
-// warmUp runs the converters of a new install once, in the background, so
-// the window does not wait up to settings.WarmUpTimeout. A failure only
-// means the first event may be lost, so it is not shown.
-func (b *bridge) warmUp(id string) {
-	go b.svc.WarmUpConverters(id)
+// applyAgentHooks applies a hook plan the page showed. After hooks are
+// added, which is where the user trusts the agent, its converters run once
+// in the background, so the window does not wait up to
+// settings.WarmUpTimeout. A failure only means the first event may be
+// lost, so it is not shown.
+func (b *bridge) applyAgentHooks(p struct {
+	ID   string
+	Add  bool
+	Hash string
+}) (any, error) {
+	if err := b.svc.ApplyAgentHooks(p.ID, p.Add, p.Hash); err != nil {
+		return nil, err
+	}
+	if p.Add {
+		go b.svc.WarmUpConverters(p.ID)
+	}
+	return nil, nil
 }
 
 // isFileOption reports whether the option is of kind file. An option the

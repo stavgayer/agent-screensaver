@@ -19,8 +19,10 @@ const WarmUpTimeout = 10 * time.Second
 // WarmUpConverters runs each converter program of the installed agent id
 // once, with empty input and the environment the hook gives it, so macOS
 // has checked the program before the first real event. The output is
-// ignored. It returns one warning per program that failed; a failure here
-// does not undo the install. Other extensions have no programs.
+// ignored. It returns one warning per program that failed. Call it only
+// once the user trusts the agent: right after its hooks were added
+// (ApplyAgentHooks), or through WarmUpIfHooked after a reviewed upgrade.
+// A plain install never runs it. Other extensions have no programs.
 func (s Service) WarmUpConverters(id string) []string {
 	ext, err := s.find(id)
 	if err != nil || ext.Manifest.Type != extensions.TypeAgent {
@@ -39,4 +41,19 @@ func (s Service) WarmUpConverters(id string) []string {
 		}
 	}
 	return warnings
+}
+
+// WarmUpIfHooked runs WarmUpConverters only when the install record lists
+// hooks for the agent id, as after an approved upgrade of an agent the
+// user already trusts. An agent without hooks runs nothing.
+func (s Service) WarmUpIfHooked(id string) []string {
+	loaded, _ := agents.Load(s.Paths.ExtensionsDir)
+	record, err := s.record(loaded)
+	if err != nil {
+		return nil
+	}
+	if _, added := record.Agent(id); !added {
+		return nil
+	}
+	return s.WarmUpConverters(id)
 }

@@ -86,13 +86,20 @@ func (f *fakeService) InstallReviewed(path, hash string) (extensions.Manifest, e
 	return extensions.Manifest{ID: "acme.rain"}, f.record("InstallReviewed " + path + " " + hash)
 }
 
-// WarmUpConverters runs in the background, so it reports on warmedUp, not
-// in calls.
+// The warm-ups run in the background, so they report on warmedUp, not in
+// calls.
 func (f *fakeService) WarmUpConverters(id string) []string {
-	if f.warmedUp != nil {
-		f.warmedUp <- id
-	}
+	f.warmUp("WarmUpConverters " + id)
 	return nil
+}
+func (f *fakeService) WarmUpIfHooked(id string) []string {
+	f.warmUp("WarmUpIfHooked " + id)
+	return nil
+}
+func (f *fakeService) warmUp(call string) {
+	if f.warmedUp != nil {
+		f.warmedUp <- call
+	}
 }
 func (f *fakeService) RemoveExtension(id string) error { return f.record("RemoveExtension " + id) }
 func (f *fakeService) Notice(extID string) string {
@@ -300,19 +307,47 @@ func TestCancelledPickerChangesNothing(t *testing.T) {
 	}
 }
 
-func TestAnInstallFromTheWindowRunsTheConvertersOnce(t *testing.T) {
-	service := &fakeService{warmedUp: make(chan string, 1)}
-	window := &fakeWindow{calls: []call{{"installExtension", `{}`}}}
+// warmUps runs calls and returns the warm-ups they started, waiting a
+// little for the background ones.
+func warmUps(t *testing.T, service *fakeService, calls ...call) []string {
+	t.Helper()
+	service.warmedUp = make(chan string, 4)
+	window := &fakeWindow{calls: calls}
 	if err := Open(testPaths(t), service, &fakePicker{path: "/tmp/rain.zip"}, window); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case id := <-service.warmedUp:
-		if id != "acme.rain" {
-			t.Errorf("warmed up %q, want acme.rain", id)
+	var started []string
+	for {
+		select {
+		case warmUp := <-service.warmedUp:
+			started = append(started, warmUp)
+		case <-time.After(300 * time.Millisecond):
+			return started
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the installed extension's converters were never run")
+	}
+}
+
+func TestWarmUpsFromTheWindowNeedTrust(t *testing.T) {
+	tests := []struct {
+		name   string
+		review settings.InstallReview
+		calls  []call
+		want   []string
+	}{
+		{"a plain install runs nothing", settings.InstallReview{}, []call{{"installExtension", `{}`}}, nil},
+		{"an approved upgrade runs the converters only if hooked", changedConverter,
+			[]call{{"installExtension", `{}`}, {"confirmInstall", `{"hash":"review-1"}`}}, []string{"WarmUpIfHooked acme.rain"}},
+		{"adding hooks runs the converters", settings.InstallReview{},
+			[]call{{"applyAgentHooks", `{"id":"acme.agent","add":true,"hash":"hash-1"}`}}, []string{"WarmUpConverters acme.agent"}},
+		{"removing hooks runs nothing", settings.InstallReview{},
+			[]call{{"applyAgentHooks", `{"id":"acme.agent","add":false,"hash":"hash-1"}`}}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := warmUps(t, &fakeService{review: tt.review}, tt.calls...); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("warm-ups = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

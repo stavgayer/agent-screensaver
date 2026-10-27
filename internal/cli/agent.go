@@ -64,6 +64,10 @@ func agentHooks(service settings.Service, add bool, rest []string, stdin io.Read
 		verb = "added"
 	}
 	fmt.Fprintf(stdout, "hooks %s: %s\n", verb, id)
+	if add {
+		// The user now trusts the agent; run its converters once.
+		printWarnings(stdout, service.WarmUpConverters(id))
+	}
 	return 0
 }
 
