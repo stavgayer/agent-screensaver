@@ -22,7 +22,3 @@ These are the limits of version 1 that you can see or that change how you use it
 - **The Chrome theme needs WebGL2.** Without it, the background is only black with grain and scan lines: no chrome shape and no agent signs. The clock, the rings and the cards still show.
 - **The Chrome theme uses more CPU than the others.** On the owner's Mac it used about 14% of one core, measured once while the machine was under heavy load ([how it was measured](decisions/0002-video-cost.md#addendum-chrome-theme-2026-10-26)). Matrix uses about 5.9%, measured in a different session ([decision 0002](decisions/0002-video-cost.md)), so compare the two only roughly. To keep it low, it draws 30 frames a second at half the screen size by default.
 - **The live preview in the settings window is less smooth than the screen saver.** It gets about 22 frames a second, in uneven steps. WebKit slows animation inside sandboxed frames from another origin, and the preview runs in one so that extension code cannot reach the settings page. The real screen saver is not affected. This shows most with the animated themes (Chrome, Matrix).
-
-## Files
-
-- **`daemon.log` has no size limit.** It is in the data folder. The service writes a line only when something changes, so it grows slowly. You can delete it at any time.

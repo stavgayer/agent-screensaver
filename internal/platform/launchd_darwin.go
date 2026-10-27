@@ -55,7 +55,7 @@ func domain() string { return fmt.Sprintf("gui/%d", os.Getuid()) }
 // Install writes the plist and loads it. args is the full command line.
 func (l Launchd) Install(label string, args []string) (string, error) {
 	plist := l.plistPath(label)
-	logFile := filepath.Join(paths.ForHome(l.Home).DataDir, "daemon.log")
+	logFile := paths.ForHome(l.Home).DaemonLog
 	if err := os.MkdirAll(filepath.Dir(plist), 0o755); err != nil {
 		return "", fmt.Errorf("create LaunchAgents folder: %w", err)
 	}

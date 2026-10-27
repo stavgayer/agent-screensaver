@@ -22,6 +22,8 @@ type Paths struct {
 	RuntimeDir    string
 	MediaDir      string
 	InstallRecord string
+	// DaemonLog is where launchd sends the service's stderr.
+	DaemonLog string
 	// UsageFile keeps what the Claude limits estimate learned.
 	UsageFile string
 	// ContextSizesFile keeps the context window size of each model.
@@ -53,6 +55,7 @@ func ForHome(home string) Paths {
 		RuntimeDir:       filepath.Join(dataDir, "runtime"),
 		MediaDir:         mediaDir,
 		InstallRecord:    filepath.Join(dataDir, "install-record.json"),
+		DaemonLog:        filepath.Join(dataDir, "daemon.log"),
 		UsageFile:        filepath.Join(dataDir, "claude-usage.json"),
 		ContextSizesFile: filepath.Join(dataDir, "context-windows.json"),
 

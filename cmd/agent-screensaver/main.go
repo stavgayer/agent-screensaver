@@ -138,6 +138,11 @@ func runDaemon(args []string, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	p := paths.ForHome(home)
+	if stderr == io.Writer(os.Stderr) {
+		var closeLog func()
+		stderr, closeLog = useServiceLog(p.DaemonLog)
+		defer closeLog()
+	}
 	service := daemon.New(p)
 	service.Cloner = platform.NewFileCloner()
 	contextSizes, err := sessioninfo.LoadContextSizes(p.ContextSizesFile)
