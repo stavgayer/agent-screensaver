@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 const (
@@ -19,6 +20,9 @@ const (
 	maxZipBytes   = 50 << 20
 
 	stagingPrefix = ".install-"
+	// staleStaging is the age after which a staging folder is a left over
+	// of a crash and not of an install that still runs.
+	staleStaging = time.Hour
 )
 
 // InstallChecked installs an extension from a folder or a .zip file into
@@ -47,6 +51,7 @@ func stage(src, extDir string, check func(m Manifest, dir string) error, commit 
 	if err := os.MkdirAll(extDir, 0o755); err != nil {
 		return Manifest{}, fmt.Errorf("install: %w", err)
 	}
+	removeStaleStaging(extDir, time.Now())
 	staging, err := os.MkdirTemp(extDir, stagingPrefix)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("install: %w", err)
@@ -84,6 +89,24 @@ func stage(src, extDir string, check func(m Manifest, dir string) error, commit 
 		return Manifest{}, fmt.Errorf("install: %w", err)
 	}
 	return manifest, nil
+}
+
+// removeStaleStaging deletes the staging folders older than staleStaging.
+// A crash in the middle of an install leaves one; Scan already skips them.
+// It is best effort: a folder that cannot be removed is tried next time.
+func removeStaleStaging(extDir string, now time.Time) {
+	entries, err := os.ReadDir(extDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), stagingPrefix) {
+			continue
+		}
+		if info, err := entry.Info(); err == nil && now.Sub(info.ModTime()) > staleStaging {
+			_ = os.RemoveAll(filepath.Join(extDir, entry.Name()))
+		}
+	}
 }
 
 // replaceFolder moves content to target. An existing target is parked in
