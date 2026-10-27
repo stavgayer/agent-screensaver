@@ -35,7 +35,8 @@ type Service interface {
 	SetSound(on bool, file string) error
 	SetMaxFPS(fps int) error
 	SetIgnoredProjects(projects []string) error
-	InstallExtension(path string) (extensions.Manifest, error)
+	ReviewInstall(path string) (settings.InstallReview, error)
+	InstallReviewed(path, hash string) (extensions.Manifest, error)
 	RemoveExtension(id string) error
 	Notice(extID string) string
 	Connections(nowMs int64) ([]settings.Connection, error)
@@ -44,10 +45,16 @@ type Service interface {
 	ApplyAgentHooks(id string, add bool, hash string) error
 }
 
-// pickResult answers a call that shows a file dialog first.
+// pickResult answers a call that shows a file dialog first. An install
+// answers with Manifest when it is done, or with Review when it is an
+// upgrade that changes an outside agent's runnable files: then nothing is
+// installed until confirmInstall. Unchanged marks an upgrade that was
+// installed because no runnable file changed.
 type pickResult struct {
-	Cancelled bool                 `json:"cancelled"`
-	Manifest  *extensions.Manifest `json:"manifest,omitempty"`
+	Cancelled bool                    `json:"cancelled"`
+	Manifest  *extensions.Manifest    `json:"manifest,omitempty"`
+	Review    *settings.InstallReview `json:"review,omitempty"`
+	Unchanged bool                    `json:"unchanged,omitempty"`
 }
 
 var (
@@ -77,6 +84,13 @@ type bridge struct {
 	// delivers the page's messages, so a call could arrive in the middle of
 	// another; those calls are refused instead of nesting.
 	picking bool
+	// waiting is the picked file of an upgrade whose review the page
+	// shows. The page confirms it by hash and never sends the path.
+	waiting *waitingInstall
+}
+
+type waitingInstall struct {
+	path, hash string
 }
 
 func (b *bridge) handle(method string, params json.RawMessage) (any, error) {
@@ -112,6 +126,11 @@ func (b *bridge) methods() map[string]method {
 			return nil, b.svc.SetIgnoredProjects(p.Projects)
 		}),
 		"installExtension": withParams(func(struct{}) (any, error) { return b.installExtension() }),
+		"confirmInstall":   withParams(func(p struct{ Hash string }) (any, error) { return b.confirmInstall(p.Hash) }),
+		"cancelInstall": withParams(func(struct{}) (any, error) {
+			b.waiting = nil
+			return nil, nil
+		}),
 		"removeExtension": withParams(func(p struct{ ID string }) (any, error) {
 			return nil, b.svc.RemoveExtension(p.ID)
 		}),
@@ -215,12 +234,39 @@ func (b *bridge) setSound(p soundParams) (any, error) {
 	return nil, b.svc.SetSound(p.On, file)
 }
 
+// installExtension reviews the picked file first. An upgrade that changes
+// runnable files is not installed here: the page shows the review and
+// calls confirmInstall with its hash.
 func (b *bridge) installExtension() (any, error) {
+	b.waiting = nil
 	path, ok, err := b.pick(extensionFiles)
 	if err != nil || !ok {
 		return pickResult{Cancelled: err == nil}, err
 	}
-	manifest, err := b.svc.InstallExtension(path)
+	review, err := b.svc.ReviewInstall(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(review.Changes) > 0 {
+		b.waiting = &waitingInstall{path: path, hash: review.Hash}
+		return pickResult{Review: &review}, nil
+	}
+	manifest, err := b.svc.InstallReviewed(path, "")
+	if err != nil {
+		return nil, err
+	}
+	return pickResult{Manifest: &manifest, Unchanged: review.Upgrade}, nil
+}
+
+// confirmInstall installs the upgrade whose review the page showed. The
+// service reviews the file again and refuses it when it changed since.
+func (b *bridge) confirmInstall(hash string) (any, error) {
+	waiting := b.waiting
+	if waiting == nil || waiting.hash != hash {
+		return nil, errors.New("no upgrade with this review waits to be installed; install it again")
+	}
+	b.waiting = nil
+	manifest, err := b.svc.InstallReviewed(waiting.path, hash)
 	if err != nil {
 		return nil, err
 	}

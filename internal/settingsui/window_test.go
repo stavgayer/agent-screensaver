@@ -22,6 +22,8 @@ import (
 type fakeService struct {
 	calls []string
 	err   error
+	// review is what ReviewInstall answers; its Manifest is acme.rain.
+	review settings.InstallReview
 }
 
 func (f *fakeService) record(call string) error {
@@ -72,8 +74,13 @@ func (f *fakeService) SetMaxFPS(fps int) error {
 func (f *fakeService) SetIgnoredProjects(projects []string) error {
 	return f.record("SetIgnoredProjects " + strings.Join(projects, ","))
 }
-func (f *fakeService) InstallExtension(path string) (extensions.Manifest, error) {
-	return extensions.Manifest{ID: "acme.rain"}, f.record("InstallExtension " + path)
+func (f *fakeService) ReviewInstall(path string) (settings.InstallReview, error) {
+	review := f.review
+	review.Manifest = extensions.Manifest{ID: "acme.rain"}
+	return review, f.record("ReviewInstall " + path)
+}
+func (f *fakeService) InstallReviewed(path, hash string) (extensions.Manifest, error) {
+	return extensions.Manifest{ID: "acme.rain"}, f.record("InstallReviewed " + path + " " + hash)
 }
 func (f *fakeService) RemoveExtension(id string) error { return f.record("RemoveExtension " + id) }
 func (f *fakeService) Notice(extID string) string {
@@ -199,7 +206,6 @@ func TestOpenCallsTheService(t *testing.T) {
 		{"max fps", "setMaxFps", `{"fps":3}`, "", "SetMaxFPS |||", nil},
 		{"ignored projects", "setIgnoredProjects", `{"projects":["observer-sessions","scratch"]}`, "", "SetIgnoredProjects observer-sessions,scratch", nil},
 		{"no ignored projects", "setIgnoredProjects", `{"projects":[]}`, "", "SetIgnoredProjects ", nil},
-		{"install with the picker", "installExtension", `{}`, "/tmp/rain.zip", "InstallExtension /tmp/rain.zip", pickResult{Manifest: &extensions.Manifest{ID: "acme.rain"}}},
 		{"remove", "removeExtension", `{"id":"acme.rain"}`, "", "RemoveExtension acme.rain", nil},
 		{"notice", "notice", `{"extension":"builtin.aerials"}`, "", "Notice builtin.aerials", "notice for builtin.aerials"},
 		{"connections", "connections", `{}`, "", "Connections now", []settings.Connection{{ID: "builtin.claude", State: settings.StateIdle}}},
@@ -387,7 +393,7 @@ func TestNoCallsWhileTheDialogIsOpen(t *testing.T) {
 	if picker.nestedErr == nil || !strings.Contains(picker.nestedErr.Error(), "file dialog is open") {
 		t.Fatalf("nested call error = %v, want a refusal", picker.nestedErr)
 	}
-	want := []string{"InstallExtension /tmp/rain.zip", "SetPrivacy on"} // calls work again once it closes
+	want := []string{"ReviewInstall /tmp/rain.zip", "InstallReviewed /tmp/rain.zip ", "SetPrivacy on"} // calls work again once it closes
 	if !reflect.DeepEqual(service.changes(), want) {
 		t.Fatalf("changes = %q, want %q", service.changes(), want)
 	}
@@ -433,7 +439,7 @@ func TestBridgeRefusesWhilePicking(t *testing.T) {
 			if picker.nestedErr == nil || !strings.Contains(picker.nestedErr.Error(), "file dialog is open") {
 				t.Fatalf("nested call error = %v, want a refusal", picker.nestedErr)
 			}
-			if want := []string{"InstallExtension /tmp/acme.zip"}; !reflect.DeepEqual(service.changes(), want) {
+			if want := []string{"ReviewInstall /tmp/acme.zip", "InstallReviewed /tmp/acme.zip "}; !reflect.DeepEqual(service.changes(), want) {
 				t.Fatalf("changes = %q, want %q", service.changes(), want)
 			}
 		})
