@@ -98,7 +98,7 @@ The `SubagentStart` and `SubagentStop` hooks are not used. `SubagentStart` carri
 
 ## Ignored projects
 
-The service drops every event whose `project` is in the `ignored_projects` list of the settings (General, Ignored projects, in the settings window). Such an event never makes or changes a card, never asks for approval and never plays the sound. An entry matches when it equals the project exactly, case included; an entry written as a path matches by its last folder name. The default list is `["observer-sessions"]`, the folder where the claude-mem plugin runs hidden Claude sessions. A settings file without the field gets the default. Events without a project are never dropped.
+The service drops every event whose `project` is in the `ignored_projects` list of the settings (General, Ignored projects, in the settings window). Such an event never makes or changes a card, never asks for approval and never plays the sound. An entry matches when it equals the project with upper and lower case not counted (`My-App` matches `my-app`); an entry written as a path matches by its last folder name. The default list is `["observer-sessions"]`, the folder where the claude-mem plugin runs hidden Claude sessions. A settings file without the field gets the default. Events without a project are never dropped.
 
 ## Limits
 

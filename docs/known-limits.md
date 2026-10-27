@@ -11,7 +11,6 @@ These are the limits of version 1 that you can see or that change how you use it
 
 ## Cards
 
-- **Ignored projects match the exact folder name.** Upper and lower case count: `My-App` does not hide `my-app`.
 - **A long Claude session can lose its name after a restart.** The name is read from the last 256 KB of the session's transcript. If the service restarts during a long session, the card shows the prompt until the name is written near the end of the transcript again.
 
 ## Extensions

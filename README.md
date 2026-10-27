@@ -163,7 +163,7 @@ Yes. The desktop app runs no status line, so between exact readings the Claude r
 Cursor sends the same hook event before every command, also when it will not ask you, and does not say which. So Cursor cards show the command as working.
 
 **How do I hide one project?**
-Add its folder name under General, Ignored projects. The name must match exactly, upper and lower case included.
+Add its folder name under General, Ignored projects. Upper and lower case do not count: `My-App` also hides `my-app`.
 
 **The menu bar icon is gone.**
 It can hide behind the notch. Run `./agent-screensaver settings`.

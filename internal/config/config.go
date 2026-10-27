@@ -60,13 +60,14 @@ func Default() Config {
 
 // IgnoresProject reports whether events of project (the base name of the
 // session's folder) must be dropped. Entries match by their base name,
-// exactly, so a full path in the file works too.
+// ignoring case (Unicode simple folding), so a full path in the file works
+// too and "My-App" hides "my-app".
 func (c Config) IgnoresProject(project string) bool {
 	if project == "" {
 		return false
 	}
 	return slices.ContainsFunc(c.IgnoredProjects, func(entry string) bool {
-		return ProjectName(entry) == project
+		return strings.EqualFold(ProjectName(entry), project)
 	})
 }
 
