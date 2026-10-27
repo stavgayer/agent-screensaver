@@ -6,26 +6,34 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"agent-screensaver/internal/install"
 	"agent-screensaver/internal/settings"
 )
 
-const extUsage = "ext list | ext install [--yes] <path> | ext remove <id>"
+const extUsage = "ext list | ext install [--yes] [--full] <path> | ext remove <id>"
 
-// errCancelled: the user said no to a question, which already printed that
-// nothing changed.
+// errCancelled: the install stopped after it printed why and that nothing
+// changed.
 var errCancelled = errors.New("cancelled")
 
-// shortHash is how many hex digits of a SHA-256 the review prints.
-const shortHash = 12
+const (
+	// shortHash is how many hex digits of a SHA-256 the review prints.
+	shortHash = 12
+	// previewLines and maxLineRunes cut the review unless --full is given.
+	previewLines = 200
+	maxLineRunes = 500
+)
 
 // installExtension installs a folder or a .zip file. An upgrade of an
-// outside agent that changes its runnable files prints the changes and
-// asks first; --yes skips the question, not the list.
+// outside agent that changes any of its files prints the changes and asks
+// first. --yes skips the question, not the list. A review that had to be
+// cut is refused until --full prints all of it, and a file too large to
+// show needs --yes after the user read it by hand.
 func installExtension(service settings.Service, rest []string, stdin io.Reader, stdout io.Writer) error {
-	yes := slices.Contains(rest, "--yes")
-	sources := slices.DeleteFunc(slices.Clone(rest), func(arg string) bool { return arg == "--yes" })
+	yes, full := slices.Contains(rest, "--yes"), slices.Contains(rest, "--full")
+	sources := slices.DeleteFunc(slices.Clone(rest), func(arg string) bool { return arg == "--yes" || arg == "--full" })
 	if len(sources) != 1 {
 		return usageError(extUsage)
 	}
@@ -35,12 +43,18 @@ func installExtension(service settings.Service, rest []string, stdin io.Reader, 
 	}
 	switch {
 	case len(review.Changes) > 0:
-		fmt.Fprint(stdout, FormatUpgradeReview(review))
+		text, cut, tooLarge := FormatUpgradeReview(review, full)
+		fmt.Fprint(stdout, text)
+		if refused := refusal(cut, tooLarge, yes); refused != "" {
+			fmt.Fprintln(stdout, refused)
+			fmt.Fprintln(stdout, "Cancelled. Nothing was changed.")
+			return errCancelled
+		}
 		if !ask("Install this upgrade?", yes, stdin, stdout) {
 			return errCancelled
 		}
 	case review.Upgrade:
-		fmt.Fprintf(stdout, "%s: no runnable files changed.\n", upgradeTitle(review))
+		fmt.Fprintf(stdout, "%s: no files changed.\n", upgradeTitle(review))
 	}
 	manifest, err := service.InstallReviewed(sources[0], review.Hash)
 	if err != nil {
@@ -50,8 +64,20 @@ func installExtension(service settings.Service, rest []string, stdin io.Reader, 
 	return nil
 }
 
+// refusal says why the install cannot be confirmed yet, or "".
+func refusal(cut, tooLarge, yes bool) string {
+	switch {
+	case cut:
+		return "Part of the review was cut. Read all of it before you install: run again with --full."
+	case tooLarge && !yes:
+		return "A file is too large to show. Review the files by hand, then run again with --yes to install."
+	}
+	return ""
+}
+
 func upgradeTitle(review settings.InstallReview) string {
-	return fmt.Sprintf("Upgrade %s from %s to %s", review.Manifest.ID, versionText(review.FromVersion), versionText(review.Manifest.Version))
+	return fmt.Sprintf("Upgrade %s from %s to %s", escapeControls(review.Manifest.ID),
+		escapeControls(versionText(review.FromVersion)), escapeControls(versionText(review.Manifest.Version)))
 }
 
 func versionText(version string) string {
@@ -61,35 +87,107 @@ func versionText(version string) string {
 	return version
 }
 
+var groupHeadings = map[install.ChangeGroup]string{
+	install.GroupManifest: "Manifest:",
+	install.GroupRunnable: "Programs and copied files (these run on your Mac or go into the agent's folder):",
+	install.GroupOther:    "Other files (a program of the agent can read or run these too):",
+}
+
 // FormatUpgradeReview is the text the CLI prints for an upgrade with
-// changes: one block per file, a text diff indented under it, or the sizes
-// and hashes of a binary file.
-func FormatUpgradeReview(review settings.InstallReview) string {
+// changes: the files under their group, each with its diff indented under
+// it, or the sizes and hashes of a binary file. Unless full is set, a diff
+// stops after previewLines lines and a line after maxLineRunes characters;
+// cut says that happened. tooLarge says a file is shown only by its paths.
+// Control characters are shown as escapes, never sent to the terminal.
+func FormatUpgradeReview(review settings.InstallReview, full bool) (text string, cut, tooLarge bool) {
 	var out strings.Builder
-	fmt.Fprintf(&out, "%s. These files run on your Mac or are copied into the agent's folder, and they change:\n", upgradeTitle(review))
+	fmt.Fprintf(&out, "%s. These files of the extension change:\n", upgradeTitle(review))
+	var group install.ChangeGroup
 	for _, change := range review.Changes {
-		if change.Binary {
-			fmt.Fprintf(&out, "  %s: %s (binary)\n", change.Kind, change.Path)
+		if change.Group != group {
+			group = change.Group
+			fmt.Fprintln(&out, groupHeadings[group])
+		}
+		path := escapeControls(change.Path)
+		switch {
+		case change.Binary:
+			fmt.Fprintf(&out, "  %s: %s (binary)\n", change.Kind, path)
 			if change.Kind != install.FileAdded {
 				fmt.Fprintf(&out, "    old: %d bytes, sha256 %s\n", change.OldSize, short(change.OldSHA256))
 			}
 			if change.Kind != install.FileRemoved {
 				fmt.Fprintf(&out, "    new: %d bytes, sha256 %s\n", change.NewSize, short(change.NewSHA256))
 			}
-			continue
-		}
-		fmt.Fprintf(&out, "  %s: %s\n", change.Kind, change.Path)
-		for _, line := range strings.SplitAfter(change.Diff, "\n") {
-			if line != "" {
-				fmt.Fprintf(&out, "    %s", line)
+		case change.TooLarge:
+			tooLarge = true
+			fmt.Fprintf(&out, "  %s: %s\n    too large to show: review the files by hand\n", change.Kind, path)
+			if change.OldPath != "" {
+				fmt.Fprintf(&out, "    old: %s\n", escapeControls(change.OldPath))
+			}
+			if change.NewPath != "" {
+				fmt.Fprintf(&out, "    new: %s\n", escapeControls(change.NewPath))
+			}
+		default:
+			fmt.Fprintf(&out, "  %s: %s\n", change.Kind, path)
+			if writeDiff(&out, change.Diff, full) {
+				cut = true
 			}
 		}
-		if change.Truncated {
-			fmt.Fprintf(&out, "    (diff truncated after %d lines)\n", install.MaxDiffLines)
-		}
 	}
-	fmt.Fprintln(&out, "The installed version stays until you answer y.")
+	fmt.Fprintln(&out, "The installed version stays until you confirm.")
+	return out.String(), cut, tooLarge
+}
+
+// writeDiff writes the diff indented, cut unless full, and says whether it
+// cut anything.
+func writeDiff(out *strings.Builder, diff string, full bool) bool {
+	lines := strings.Split(strings.TrimSuffix(diff, "\n"), "\n")
+	cut := false
+	for index, line := range lines {
+		if !full && index == previewLines {
+			fmt.Fprintf(out, "    (diff cut after %d lines, %d more)\n", previewLines, len(lines)-previewLines)
+			return true
+		}
+		line = escapeControls(line)
+		if count := utf8.RuneCountInString(line); !full && count > maxLineRunes {
+			line = string([]rune(line)[:maxLineRunes]) + fmt.Sprintf(" (line cut, %d more characters)", count-maxLineRunes)
+			cut = true
+		}
+		fmt.Fprintf(out, "    %s\n", line)
+	}
+	return cut
+}
+
+// escapeControls shows every character that could move the cursor,
+// recolor, hide or reorder text as a visible escape: C0 controls but tab,
+// DEL and bytes that are not UTF-8 as \xNN; C1 controls and the bidi and
+// invisible format characters as <U+NNNN>.
+func escapeControls(text string) string {
+	var out strings.Builder
+	for index := 0; index < len(text); {
+		r, size := utf8.DecodeRuneInString(text[index:])
+		switch {
+		case r == utf8.RuneError && size == 1:
+			fmt.Fprintf(&out, `\x%02x`, text[index])
+		case r == '\t':
+			out.WriteRune(r)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&out, `\x%02x`, r)
+		case isHiddenFormat(r):
+			fmt.Fprintf(&out, "<U+%04X>", r)
+		default:
+			out.WriteRune(r)
+		}
+		index += size
+	}
 	return out.String()
+}
+
+// isHiddenFormat: C1 controls, bidi embeddings, overrides, isolates and
+// marks, zero-width characters, line and paragraph separators and the BOM.
+func isHiddenFormat(r rune) bool {
+	return (r >= 0x80 && r <= 0x9f) || r == 0x061c || (r >= 0x200b && r <= 0x200f) ||
+		(r >= 0x2028 && r <= 0x202e) || (r >= 0x2060 && r <= 0x2069) || r == 0xfeff
 }
 
 func short(hash string) string {
