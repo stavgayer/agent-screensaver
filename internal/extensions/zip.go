@@ -183,11 +183,17 @@ func unzip(archive, dest string) error {
 	if err != nil {
 		return err
 	}
+	return extractAll(reader.File, top, dest)
+}
+
+// extractAll writes every entry but the macOS junk into dest, with top
+// stripped from the names. All entries share one size budget.
+func extractAll(files []*zip.File, top, dest string) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return err
 	}
 	budget := int64(maxZipBytes)
-	for _, file := range reader.File {
+	for _, file := range files {
 		name := zipPath(file.Name)
 		if isMacJunk(name) {
 			continue
