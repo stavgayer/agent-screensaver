@@ -51,17 +51,23 @@ func InstallPack(src, extDir string, check func(m Manifest, dir string) error) (
 	if err != nil {
 		return nil, fmt.Errorf("install: %w", err)
 	}
-	defer os.RemoveAll(staging)
+	keepStaging := false
+	defer func() {
+		if !keepStaging {
+			os.RemoveAll(staging)
+		}
+	}()
 
 	content := filepath.Join(staging, "new")
-	if err := copyPack(src, base, content); err != nil {
+	if err := copyPack(src, base, parts, content); err != nil {
 		return nil, fmt.Errorf("install: %w", err)
 	}
 	manifests, err := checkParts(content, parts, check)
 	if err != nil {
 		return nil, err
 	}
-	if err := commitParts(content, parts, manifests, extDir, staging); err != nil {
+	if keep, err := commitParts(content, parts, manifests, extDir, staging); err != nil {
+		keepStaging = keep
 		return nil, err
 	}
 	return manifests, nil
@@ -164,14 +170,21 @@ func findPack(names []string) (string, []string) {
 	return base, parts
 }
 
-// copyPack copies the pack folder base of src into dest.
-func copyPack(src, base, dest string) error {
+// copyPack copies only the part folders of the pack folder base of src
+// into dest, so other files next to them are never read.
+func copyPack(src, base string, parts []string, dest string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
 	if info.IsDir() {
-		return copyFolder(filepath.Join(src, filepath.FromSlash(base)), dest)
+		for _, part := range parts {
+			from := filepath.Join(src, filepath.FromSlash(base), filepath.FromSlash(part))
+			if err := copyFolder(from, filepath.Join(dest, filepath.FromSlash(part))); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	reader, err := zip.OpenReader(src)
 	if err != nil {
@@ -181,7 +194,10 @@ func copyPack(src, base, dest string) error {
 	if err := checkZipEntries(reader.File); err != nil {
 		return err
 	}
-	return extractAll(reader.File, base, dest)
+	return extractSome(reader.File, base, dest, func(name string) bool {
+		part, _, _ := strings.Cut(name, "/")
+		return slices.Contains(parts, part)
+	})
 }
 
 // checkParts reads and checks every staged part before any is installed.
@@ -213,8 +229,10 @@ func checkParts(content string, parts []string, check func(m Manifest, dir strin
 }
 
 // commitParts moves every checked part to extDir/<id>. When one move
-// fails, the parts moved before it are put back as they were.
-func commitParts(content string, parts []string, manifests []Manifest, extDir, staging string) error {
+// fails, the parts moved before it are put back as they were. When a put
+// back fails too, keep is true: the old copy is still in staging, and the
+// error says where.
+func commitParts(content string, parts []string, manifests []Manifest, extDir, staging string) (keep bool, err error) {
 	type moved struct{ target, spare string }
 	var done []moved
 	for index, manifest := range manifests {
@@ -224,16 +242,28 @@ func commitParts(content string, parts []string, manifests []Manifest, extDir, s
 		if err == nil {
 			err = replaceFolder(filepath.Join(content, filepath.FromSlash(parts[index])), target, spare)
 		}
-		if err != nil {
-			for _, back := range slices.Backward(done) {
-				_ = os.RemoveAll(back.target)
-				_ = os.Rename(filepath.Join(back.spare, "old"), back.target)
-			}
-			return fmt.Errorf("install %q: %w", manifest.ID, err)
+		if err == nil {
+			done = append(done, moved{target, spare})
+			continue
 		}
-		done = append(done, moved{target, spare})
+		var lost []string
+		for _, back := range slices.Backward(done) {
+			old := filepath.Join(back.spare, "old")
+			if _, statErr := os.Stat(old); statErr != nil {
+				_ = os.RemoveAll(back.target) // the part was new: nothing to put back
+				continue
+			}
+			if removeErr := os.RemoveAll(back.target); removeErr != nil || rename(old, back.target) != nil {
+				lost = append(lost, filepath.Base(back.target))
+			}
+		}
+		if len(lost) > 0 {
+			return true, fmt.Errorf("install %q: %w; the old version of %s could not be put back, it is kept in %s",
+				manifest.ID, err, strings.Join(lost, ", "), staging)
+		}
+		return false, fmt.Errorf("install %q: %w", manifest.ID, err)
 	}
-	return nil
+	return false, nil
 }
 
 // KeptPart is a part of a theme that stays because another extension
@@ -250,11 +280,14 @@ type ThemeRemoval struct {
 }
 
 // PlanThemeRemoval says what removing id removes. For a theme that is the
-// theme, its layout, its background and the widgets of that layout, except
-// built-ins, parts that are not installed and parts another installed
-// theme or layout still uses. Any other id removes only itself. Nothing is
-// changed.
-func PlanThemeRemoval(id string, installed []Installed) (ThemeRemoval, error) {
+// theme, its layout, its background and the widgets of that layout. A part
+// is taken only when its installed type fits its place (a background, a
+// layout, a component), so an agent or another theme is never removed as
+// a part. Built-ins, parts that are not installed and parts another
+// installed theme or layout still uses stay, and so do the ids in inUse
+// (an id to what uses it, such as the user's background setting). Any
+// other id removes only itself. Nothing is changed.
+func PlanThemeRemoval(id string, installed []Installed, inUse map[string]string) (ThemeRemoval, error) {
 	byID := make(map[string]Manifest, len(installed))
 	for _, ext := range installed {
 		byID[ext.Manifest.ID] = ext.Manifest
@@ -263,22 +296,24 @@ func PlanThemeRemoval(id string, installed []Installed) (ThemeRemoval, error) {
 	if !ok {
 		return ThemeRemoval{}, fmt.Errorf("extension %q is not installed", id)
 	}
-	if target.Type != TypeTheme {
+	if target.Type != TypeTheme || target.Theme == nil {
 		return ThemeRemoval{Remove: []string{id}}, nil
 	}
 	removing := map[string]bool{id: true}
 	var candidates []string
-	add := func(ids ...string) {
+	add := func(kind Type, ids ...string) {
 		for _, part := range ids {
-			if _, ok := byID[part]; ok && !removing[part] && !strings.HasPrefix(part, builtinPrefix) {
+			manifest, ok := byID[part]
+			if ok && manifest.Type == kind && !removing[part] && !strings.HasPrefix(part, builtinPrefix) {
 				removing[part] = true
 				candidates = append(candidates, part)
 			}
 		}
 	}
-	add(References(target)...)
-	if target.Theme != nil {
-		add(References(byID[target.Theme.Layout])...)
+	add(TypeLayout, target.Theme.Layout)
+	add(TypeBackground, target.Theme.Background.ID)
+	if layout := byID[target.Theme.Layout]; layout.Type == TypeLayout {
+		add(TypeComponent, References(layout)...)
 	}
 	// A kept part keeps what it uses, so repeat until nothing changes.
 	var kept []KeptPart
@@ -288,7 +323,11 @@ func PlanThemeRemoval(id string, installed []Installed) (ThemeRemoval, error) {
 			if !removing[part] {
 				continue
 			}
-			if user := usedBy(part, installed, removing); user != "" {
+			user := inUse[part]
+			if user == "" {
+				user = usedBy(part, installed, removing)
+			}
+			if user != "" {
 				delete(removing, part)
 				kept = append(kept, KeptPart{ID: part, UsedBy: user})
 				changed = true

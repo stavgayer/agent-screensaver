@@ -44,7 +44,7 @@ type Removal struct {
 // longer the user's choice either. When a remove fails, Removed lists
 // what was removed before it.
 func (s Service) RemoveTheme(id string) (Removal, error) {
-	plan, err := extensions.PlanThemeRemoval(id, extensions.Scan(s.Paths.ExtensionsDir))
+	plan, err := extensions.PlanThemeRemoval(id, extensions.Scan(s.Paths.ExtensionsDir), nil)
 	if err != nil {
 		// Not a valid installed extension: RemoveExtension gives the same
 		// answer as before (a built-in, a bad id, or a broken folder).

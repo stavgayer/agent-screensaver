@@ -236,31 +236,42 @@ func TestPlanThemeRemoval(t *testing.T) {
 	tests := []struct {
 		name       string
 		installed  []Installed
+		inUse      map[string]string
 		wantRemove []string
 		wantKept   []KeptPart
 	}{
 		{"every part of the theme",
 			installed(theme("acme.dark", "acme.rain", "acme.layout"), part("acme.rain", TypeBackground),
 				layoutOf("acme.layout", "acme.clock", "acme.cards"), part("acme.clock", TypeComponent), part("acme.cards", TypeComponent)),
-			[]string{"acme.dark", "acme.layout", "acme.rain", "acme.cards", "acme.clock"}, nil},
+			nil, []string{"acme.dark", "acme.layout", "acme.rain", "acme.cards", "acme.clock"}, nil},
 		{"built-ins and missing parts are left alone",
 			installed(theme("acme.dark", "builtin.matrix", "acme.layout"), layoutOf("acme.layout", "builtin.clock", "acme.gone")),
-			[]string{"acme.dark", "acme.layout"}, nil},
+			nil, []string{"acme.dark", "acme.layout"}, nil},
 		{"a background another theme uses stays",
 			installed(theme("acme.dark", "acme.rain", "builtin.layout"), theme("acme.light", "acme.rain", "builtin.layout"), part("acme.rain", TypeBackground)),
-			[]string{"acme.dark"}, []KeptPart{{ID: "acme.rain", UsedBy: "acme.light"}}},
+			nil, []string{"acme.dark"}, []KeptPart{{ID: "acme.rain", UsedBy: "acme.light"}}},
 		{"a widget another layout uses stays",
 			installed(theme("acme.dark", "builtin.matrix", "acme.layout"), layoutOf("acme.layout", "acme.clock", "acme.cards"),
 				layoutOf("other.layout", "acme.clock"), part("acme.clock", TypeComponent), part("acme.cards", TypeComponent)),
-			[]string{"acme.dark", "acme.layout", "acme.cards"}, []KeptPart{{ID: "acme.clock", UsedBy: "other.layout"}}},
+			nil, []string{"acme.dark", "acme.layout", "acme.cards"}, []KeptPart{{ID: "acme.clock", UsedBy: "other.layout"}}},
 		{"a layout another theme uses keeps its widgets",
 			installed(theme("acme.dark", "builtin.matrix", "acme.layout"), theme("other.theme", "builtin.matrix", "acme.layout"),
 				layoutOf("acme.layout", "acme.clock"), part("acme.clock", TypeComponent)),
-			[]string{"acme.dark"}, []KeptPart{{ID: "acme.clock", UsedBy: "acme.layout"}, {ID: "acme.layout", UsedBy: "other.theme"}}},
+			nil, []string{"acme.dark"}, []KeptPart{{ID: "acme.clock", UsedBy: "acme.layout"}, {ID: "acme.layout", UsedBy: "other.theme"}}},
+		{"an agent or another theme is never a part",
+			installed(theme("acme.dark", "acme.bot", "acme.layout"), part("acme.bot", TypeAgent),
+				layoutOf("acme.layout", "other.theme", "acme.clock"), theme("other.theme", "builtin.matrix", "builtin.layout"), part("acme.clock", TypeComponent)),
+			nil, []string{"acme.dark", "acme.layout", "acme.clock"}, nil},
+		{"a part in the wrong slot stays",
+			installed(theme("acme.dark", "acme.layout", "acme.clock"), layoutOf("acme.layout"), part("acme.clock", TypeComponent)),
+			nil, []string{"acme.dark"}, nil},
+		{"a part the user picked stays",
+			installed(theme("acme.dark", "acme.rain", "builtin.layout"), part("acme.rain", TypeBackground)),
+			map[string]string{"acme.rain": "the background setting"}, []string{"acme.dark"}, []KeptPart{{ID: "acme.rain", UsedBy: "the background setting"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan, err := PlanThemeRemoval("acme.dark", tt.installed)
+			plan, err := PlanThemeRemoval("acme.dark", tt.installed, tt.inUse)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -275,7 +286,7 @@ func TestPlanThemeRemoval(t *testing.T) {
 }
 
 func TestPlanThemeRemovalOfAnotherTypeRemovesOnlyIt(t *testing.T) {
-	plan, err := PlanThemeRemoval("acme.layout", installed(theme("acme.dark", "acme.rain", "acme.layout"), layoutOf("acme.layout", "acme.clock")))
+	plan, err := PlanThemeRemoval("acme.layout", installed(theme("acme.dark", "acme.rain", "acme.layout"), layoutOf("acme.layout", "acme.clock")), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,6 +296,115 @@ func TestPlanThemeRemovalOfAnotherTypeRemovesOnlyIt(t *testing.T) {
 }
 
 func TestPlanThemeRemovalOfAnUnknownIDFails(t *testing.T) {
-	_, err := PlanThemeRemoval("acme.none", nil)
+	_, err := PlanThemeRemoval("acme.none", nil, nil)
 	assertError(t, err, "not installed")
+}
+
+func TestInstallPackFromAFolderCopiesOnlyTheParts(t *testing.T) {
+	pack := packFolder(t, twoParts(t))
+	writeFile(t, filepath.Join(pack, "notes.txt"), "not a part")
+	if err := os.MkdirAll(filepath.Join(pack, "other"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/hosts", filepath.Join(pack, "other", "link")); err != nil {
+		t.Fatal(err)
+	}
+	extDir := filepath.Join(t.TempDir(), "extensions")
+	if _, err := InstallPack(pack, extDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	assertNoLeftovers(t, extDir, "acme.dark", "acme.rain")
+}
+
+func TestInstallPackRefusesUnsafeZipEntries(t *testing.T) {
+	tests := map[string]zipEntry{
+		"a path out of the folder": {name: "rain/../../evil", content: "x"},
+		"a symlink":                {name: "rain/link", content: "/etc/hosts", mode: os.ModeSymlink | 0o777},
+	}
+	for name, bad := range tests {
+		t.Run(name, func(t *testing.T) {
+			var entries []zipEntry
+			for part, manifest := range twoParts(t) {
+				entries = append(entries, zipEntry{name: part + "/extension.json", content: manifest}, zipEntry{name: part + "/main.js", content: "//"})
+			}
+			root := t.TempDir()
+			extDir := filepath.Join(root, "a", "extensions")
+			_, err := InstallPack(writeZip(t, append(entries, bad)), extDir, nil)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			assertNoLeftovers(t, extDir)
+			if _, err := os.Stat(filepath.Join(root, "evil")); !os.IsNotExist(err) {
+				t.Fatalf("a file escaped: %v", err)
+			}
+		})
+	}
+}
+
+// failRename makes rename fail for the moves that fails picks.
+func failRename(t *testing.T, fails func(from, to string) bool) {
+	t.Helper()
+	t.Cleanup(func() { rename = os.Rename })
+	rename = func(from, to string) error {
+		if fails(from, to) {
+			return errors.New("disk said no")
+		}
+		return os.Rename(from, to)
+	}
+}
+
+func installOldRain(t *testing.T) string {
+	t.Helper()
+	extDir := filepath.Join(t.TempDir(), "extensions")
+	if _, err := InstallFrom(validZip(t, "acme.rain", "0.9.0"), extDir); err != nil {
+		t.Fatal(err)
+	}
+	return extDir
+}
+
+func rainVersion(t *testing.T, extDir string) string {
+	t.Helper()
+	for _, ext := range Scan(extDir) {
+		if ext.Manifest.ID == "acme.rain" {
+			return ext.Manifest.Version
+		}
+	}
+	return ""
+}
+
+func TestInstallPackPutsBackThePartsWhenACommitFails(t *testing.T) {
+	extDir := installOldRain(t)
+	failRename(t, func(from, to string) bool { return to == filepath.Join(extDir, "acme.dark") })
+
+	_, err := InstallPack(packFolder(t, twoParts(t)), extDir, nil)
+
+	assertError(t, err, "disk said no")
+	if version := rainVersion(t, extDir); version != "0.9.0" {
+		t.Errorf("acme.rain is at %q, want the old 0.9.0 back", version)
+	}
+	assertNoLeftovers(t, extDir, "acme.rain")
+}
+
+func TestInstallPackKeepsTheStagingFolderWhenAPutBackFails(t *testing.T) {
+	extDir := installOldRain(t)
+	failRename(t, func(from, to string) bool {
+		return to == filepath.Join(extDir, "acme.dark") || (filepath.Base(from) == "old" && to == filepath.Join(extDir, "acme.rain"))
+	})
+
+	_, err := InstallPack(packFolder(t, twoParts(t)), extDir, nil)
+
+	assertError(t, err, stagingPrefix)
+	entries, _ := os.ReadDir(extDir)
+	var staging string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), stagingPrefix) {
+			staging = filepath.Join(extDir, entry.Name())
+		}
+	}
+	if staging == "" || !strings.Contains(err.Error(), staging) {
+		t.Fatalf("error %v does not name a kept staging folder (found %q)", err, staging)
+	}
+	if _, err := os.Stat(filepath.Join(staging, "spare-0", "old", ManifestFile)); err != nil {
+		t.Errorf("the old acme.rain is not in the staging folder: %v", err)
+	}
 }

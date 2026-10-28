@@ -111,21 +111,24 @@ func removeStaleStaging(extDir string, now time.Time) {
 	}
 }
 
+// rename is os.Rename; tests replace it to make a move fail.
+var rename = os.Rename
+
 // replaceFolder moves content to target. An existing target is parked in
 // spare first and put back if the move fails, so a failed upgrade never loses
 // the old version. (A directory cannot be renamed over a non-empty one.)
 func replaceFolder(content, target, spare string) error {
 	parked := filepath.Join(spare, "old")
 	hadOld := true
-	if err := os.Rename(target, parked); err != nil {
+	if err := rename(target, parked); err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 		hadOld = false
 	}
-	if err := os.Rename(content, target); err != nil {
+	if err := rename(content, target); err != nil {
 		if hadOld {
-			_ = os.Rename(parked, target)
+			_ = rename(parked, target)
 		}
 		return err
 	}
@@ -189,13 +192,19 @@ func unzip(archive, dest string) error {
 // extractAll writes every entry but the macOS junk into dest, with top
 // stripped from the names. All entries share one size budget.
 func extractAll(files []*zip.File, top, dest string) error {
+	return extractSome(files, top, dest, func(string) bool { return true })
+}
+
+// extractSome is extractAll for the entries whose stripped name keep
+// accepts.
+func extractSome(files []*zip.File, top, dest string, keep func(name string) bool) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return err
 	}
 	budget := int64(maxZipBytes)
 	for _, file := range files {
 		name := zipPath(file.Name)
-		if isMacJunk(name) {
+		if isMacJunk(name) || !keep(strings.TrimPrefix(name, top)) {
 			continue
 		}
 		written, err := extractEntry(file, strings.TrimPrefix(name, top), dest, budget)
