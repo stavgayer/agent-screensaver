@@ -12,12 +12,13 @@ typedef struct {
 	void *body;
 	long long length, start, size;
 } PreviewReply;
-void RunSettingsWindow(const char *title, const char *page, const char *readAccess);
+void RunSettingsWindow(const char *title, const char *page, const char *readAccess, const void *icon, long long iconLength);
 void EvaluateInSettingsWindow(const char *script);
 */
 import "C"
 
 import (
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -28,6 +29,13 @@ import (
 // the main goroutine there, which Run relies on.
 
 const settingsWindowTitle = "Agent Screen Saver"
+
+// appIcon is the Dock icon while the window is open. The binary has no app
+// bundle, so without it the Dock shows the generic executable icon.
+// appicon.svg is its source.
+//
+//go:embed appicon.png
+var appIcon []byte
 
 // pageHandler and previewRoot serve the one settings window a process can
 // have. They are only touched on the main thread.
@@ -52,7 +60,7 @@ func (webKitWindow) Run(page, readAccess string, handle PageHandler) error {
 	defer C.free(unsafe.Pointer(title))
 	defer C.free(unsafe.Pointer(cPage))
 	defer C.free(unsafe.Pointer(cAccess))
-	C.RunSettingsWindow(title, cPage, cAccess)
+	C.RunSettingsWindow(title, cPage, cAccess, unsafe.Pointer(&appIcon[0]), C.longlong(len(appIcon)))
 	return nil
 }
 
