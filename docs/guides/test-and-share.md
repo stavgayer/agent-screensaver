@@ -99,7 +99,7 @@ agent-screensaver ext remove acme.drift
 
 `ext list` shows `<id> <type>` for every extension. `ext remove` prints `removed: <id>`. A built-in id cannot be removed. An agent extension has its hooks removed first.
 
-When you remove a theme, `ext remove` also removes its layout, its background and the widgets of that layout. A built-in part stays, and so does a part that another installed theme or layout uses: the command prints `kept: <id> (used by <other id>)` for it. To remove only the theme, use `ext remove --only <id>`.
+When you remove a theme, `ext remove` also removes its layout, its background and the widgets of that layout. A built-in part stays, and so does a part that another installed theme or layout uses, or the background you chose with `background set`. The command prints `kept: <id> (used by ...)` for it. An agent or another theme is never removed as a part. To remove only the theme, use `ext remove --only <id>`.
 
 If you remove the theme that is in use, the settings go back to `builtin.default`.
 

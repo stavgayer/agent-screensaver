@@ -315,12 +315,13 @@ It prints `installed: <id> <version>` for each part, in the order of the folder 
 
 ### Remove
 
-`agent-screensaver ext remove <id>` removes one extension. If the extension is a theme, it also removes the parts the theme uses: its layout, its background and the widgets of that layout. It does not remove:
+`agent-screensaver ext remove <id>` removes one extension. If the extension is a theme, it also removes the parts the theme uses: its layout, its background and the widgets of that layout. A part is removed only when its type fits its place: a background, a layout, or a component for a widget. So an agent or another theme is never removed as a part. It does not remove:
 
 - built-in extensions,
-- a part that another installed theme or layout still uses. The command prints `kept: <id> (used by <other id>)` for it.
+- a part that another installed theme or layout still uses,
+- the background you chose with `background set`.
 
-It prints `removed: <id>` for each extension it removes. `ext remove --only <id>` removes only that id. If the removed theme was in use, the settings go back to `builtin.default`, and the command says so. If you chose a background that was removed, the theme's background is used again.
+It prints `removed: <id>` for each extension it removes, and `kept: <id> (used by <other id>)` for a part that stays. `ext remove --only <id>` removes only that id. If the removed theme was in use, the settings go back to `builtin.default`, and the command says so. This also happens with `--only`, and when a later part cannot be removed.
 
 The Remove button in the settings window removes only the one extension.
 
