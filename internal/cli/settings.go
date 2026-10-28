@@ -248,34 +248,35 @@ func runExt(service settings.Service, args []string, stdin io.Reader, stdout io.
 	case len(args) == 2 && args[0] == "remove":
 		return removeTheme(service, args[1], stdout)
 	case len(args) == 3 && args[0] == "remove" && args[1] == "--only":
-		if err := service.RemoveExtension(args[2]); err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "removed: %s\n", args[2])
-		return nil
+		removal, err := service.RemoveOnly(args[2])
+		return printRemoval(stdout, removal, err)
 	}
 	return usageError(extUsage)
 }
 
 // removeTheme removes an extension, and for a theme also the parts it
-// brought that nothing else uses. It prints one line per removed id, then
-// one per part that stays. The removed lines come first even when a later
-// remove fails, so the user sees what is gone.
+// brought that nothing else uses.
 func removeTheme(service settings.Service, id string, stdout io.Writer) error {
 	removal, err := service.RemoveTheme(id)
+	return printRemoval(stdout, removal, err)
+}
+
+// printRemoval prints one line per removed id, then one per part that
+// stays. The removed lines and the theme line come even when a later
+// remove failed, so the user sees what is gone, and err is returned after.
+func printRemoval(stdout io.Writer, removal settings.Removal, err error) error {
 	for _, removed := range removal.Removed {
 		fmt.Fprintf(stdout, "removed: %s\n", removed)
 	}
-	if err != nil {
-		return err
-	}
-	for _, kept := range removal.Kept {
-		fmt.Fprintf(stdout, "kept: %s (used by %s)\n", kept.ID, kept.UsedBy)
+	if err == nil {
+		for _, kept := range removal.Kept {
+			fmt.Fprintf(stdout, "kept: %s (used by %s)\n", kept.ID, kept.UsedBy)
+		}
 	}
 	if removal.ThemeReset {
 		fmt.Fprintln(stdout, "The removed theme was in use, so the screen saver now uses the default theme.")
 	}
-	return nil
+	return err
 }
 
 // listExtensions prints one "<id> <type>" line per extension, with a "*"

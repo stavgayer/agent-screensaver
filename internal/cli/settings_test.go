@@ -226,9 +226,14 @@ func TestExtRemoveOnlyRemovesOneID(t *testing.T) {
 		t.Fatal(stderr)
 	}
 
+	if code, _, stderr := runSettings(t, p, "theme", "set", "acme.dark"); code != 0 {
+		t.Fatal(stderr)
+	}
+
 	code, stdout, stderr := runSettings(t, p, "ext", "remove", "--only", "acme.dark")
 
-	if code != 0 || stdout != "removed: acme.dark\n" {
+	want := "removed: acme.dark\nThe removed theme was in use, so the screen saver now uses the default theme.\n"
+	if code != 0 || stdout != want {
 		t.Fatalf("exit %d, stdout %q (stderr %q)", code, stdout, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(p.ExtensionsDir, "acme.layout")); err != nil {

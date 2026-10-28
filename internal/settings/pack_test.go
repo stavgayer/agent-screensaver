@@ -93,8 +93,8 @@ func TestRemoveTheme(t *testing.T) {
 			[]string{"acme.dark", "acme.layout", "acme.rain", "acme.clock"}, nil, "builtin.default"},
 		{"another active theme stays", []string{lightTheme}, false, "", "acme.dark",
 			[]string{"acme.dark", "acme.layout", "acme.clock"}, []extensions.KeptPart{{ID: "acme.rain", UsedBy: "acme.light"}}, "acme.light"},
-		{"a removed background stops being the user's", nil, false, "acme.rain", "acme.dark",
-			[]string{"acme.dark", "acme.layout", "acme.rain", "acme.clock"}, nil, "builtin.default"},
+		{"a background the user picked stays", nil, false, "acme.rain", "acme.dark",
+			[]string{"acme.dark", "acme.layout", "acme.clock"}, []extensions.KeptPart{{ID: "acme.rain", UsedBy: "the background setting"}}, "builtin.default"},
 		{"not a theme removes only it", nil, false, "", "acme.clock", []string{"acme.clock"}, nil, "builtin.default"},
 	}
 	for _, tt := range tests {
@@ -136,8 +136,8 @@ func TestRemoveTheme(t *testing.T) {
 				}
 			}
 			cfg := loadConfig(service)
-			if cfg.Theme != tt.wantTheme || cfg.Background != "" {
-				t.Errorf("config theme %q background %q, want %q and none", cfg.Theme, cfg.Background, tt.wantTheme)
+			if cfg.Theme != tt.wantTheme || cfg.Background != tt.background {
+				t.Errorf("config theme %q background %q, want %q and %q", cfg.Theme, cfg.Background, tt.wantTheme, tt.background)
 			}
 		})
 	}
@@ -149,5 +149,75 @@ func TestRemoveThemeKeepsTheErrorsOfRemove(t *testing.T) {
 		if _, err := service.RemoveTheme(id); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("RemoveTheme(%s) error = %v, want %q", id, err, want)
 		}
+	}
+}
+
+func TestRemoveThemeThatFailsPartwayStillResetsTheTheme(t *testing.T) {
+	service := newService(t)
+	installPack(t, service)
+	if err := service.SetTheme("acme.dark"); err != nil {
+		t.Fatal(err)
+	}
+	clock := filepath.Join(service.Paths.ExtensionsDir, "acme.clock")
+	if err := os.Chmod(clock, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(clock, 0o755) })
+
+	removal, err := service.RemoveTheme("acme.dark")
+
+	if err == nil {
+		t.Fatal("expected the remove of acme.clock to fail")
+	}
+	if want := []string{"acme.dark", "acme.layout", "acme.rain"}; !reflect.DeepEqual(removal.Removed, want) || !removal.ThemeReset {
+		t.Errorf("removal = %+v, want removed %v and the theme reset", removal, want)
+	}
+	if theme := loadConfig(service).Theme; theme != "builtin.default" {
+		t.Errorf("theme = %q, want builtin.default", theme)
+	}
+}
+
+func TestRemoveOnlyTheActiveThemeResetsTheTheme(t *testing.T) {
+	service := newService(t)
+	installPack(t, service)
+	if err := service.SetTheme("acme.dark"); err != nil {
+		t.Fatal(err)
+	}
+
+	removal, err := service.RemoveOnly("acme.dark")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(removal.Removed, []string{"acme.dark"}) || !removal.ThemeReset {
+		t.Errorf("removal = %+v, want only acme.dark and the theme reset", removal)
+	}
+	if theme := loadConfig(service).Theme; theme != "builtin.default" {
+		t.Errorf("theme = %q, want builtin.default", theme)
+	}
+	if _, err := os.Stat(filepath.Join(service.Paths.ExtensionsDir, "acme.layout")); err != nil {
+		t.Errorf("acme.layout was removed: %v", err)
+	}
+}
+
+func TestInstallPackRefusesToReplaceAnInstalledAgent(t *testing.T) {
+	service := newService(t)
+	if _, err := service.InstallExtension(upgradeFolder(t, "1.0.0", "#!/bin/sh\ncat\n")); err != nil {
+		t.Fatal(err)
+	}
+	pack := writePack(t)
+	writeFile(t, filepath.Join(pack, "clock", "extension.json"),
+		`{"id":"acme.agent","name":"Clock","version":"1.0.0","type":"component","api":1,"entry":"main.js"}`)
+
+	_, err := service.InstallPack(pack)
+
+	if err == nil || !strings.Contains(err.Error(), "remove the agent first") {
+		t.Fatalf("err = %v, want the agent to be kept", err)
+	}
+	if string(installedConverter(t, service)) != "#!/bin/sh\ncat\n" {
+		t.Error("the agent was replaced")
+	}
+	if _, err := os.Stat(filepath.Join(service.Paths.ExtensionsDir, "acme.dark")); !os.IsNotExist(err) {
+		t.Errorf("acme.dark was installed (err %v), want nothing", err)
 	}
 }
