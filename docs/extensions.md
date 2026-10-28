@@ -289,8 +289,39 @@ An install is refused when:
 - A `.zip` has more than 1000 entries, or is more than 50 MiB when unpacked.
 - A `.zip` has an entry with an absolute path or a `..` in its path.
 - A `.zip` or a folder holds a symlink.
-- A `.zip` has no `extension.json` at the top and more than one top folder.
+- A `.zip` has no `extension.json` at the top and more than one top folder, and it is not a pack.
 
 When an install is refused, nothing is left behind.
+
+### Packs
+
+A pack holds several extensions, so people can install a whole theme with one command. It is a folder or a `.zip` file with no `extension.json` at its top. Instead it has two or more folders, and each of them holds one extension:
+
+```
+acme.dusk-pack/
+  theme/extension.json
+  layout/extension.json
+  background/extension.json
+  clock/extension.json
+```
+
+In a `.zip`, the part folders can be at the top, or inside the zip's only top folder. Install a pack like one extension:
+
+```
+agent-screensaver ext install ./acme.dusk-pack.zip
+```
+
+It prints `installed: <id> <version>` for each part, in the order of the folder names. Every part gets the same checks as an extension installed alone. If one part is refused, no part is installed, and the message names the part folder. The zip limits apply to the whole pack. A pack cannot hold an agent extension: install an agent alone, so you see its review. The settings window installs a pack too, with "Install…".
+
+### Remove
+
+`agent-screensaver ext remove <id>` removes one extension. If the extension is a theme, it also removes the parts the theme uses: its layout, its background and the widgets of that layout. It does not remove:
+
+- built-in extensions,
+- a part that another installed theme or layout still uses. The command prints `kept: <id> (used by <other id>)` for it.
+
+It prints `removed: <id>` for each extension it removes. `ext remove --only <id>` removes only that id. If the removed theme was in use, the settings go back to `builtin.default`, and the command says so. If you chose a background that was removed, the theme's background is used again.
+
+The Remove button in the settings window removes only the one extension.
 
 When the extensions are listed, an extension is skipped if its manifest is not valid, or if its folder name is not the same as its `id`. An install always names the folder after the `id`.

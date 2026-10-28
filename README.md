@@ -147,7 +147,7 @@ You can also change settings with `agent-screensaver` commands, run from the unz
 | `privacy` | `./agent-screensaver privacy on` |
 | `sound` | `./agent-screensaver sound on` |
 | `fps` | `./agent-screensaver fps max 30` |
-| `ext` | `./agent-screensaver ext install ./my-extension` |
+| `ext` | `./agent-screensaver ext install ./my-theme-pack.zip` |
 | `demo` | `./agent-screensaver demo --seconds 60` |
 
 Run `./agent-screensaver theme list` to see the themes you can use.
