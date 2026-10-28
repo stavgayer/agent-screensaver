@@ -13,7 +13,7 @@ import (
 	"agent-screensaver/internal/settings"
 )
 
-const extUsage = "ext list | ext install [--yes] [--full] <path> | ext remove <id>"
+const extUsage = "ext list | ext install [--yes] [--full] <path> | ext remove [--only] <id>"
 
 // errCancelled: the install stopped after it printed why and that nothing
 // changed.
@@ -37,6 +37,9 @@ func installExtension(service settings.Service, rest []string, stdin io.Reader, 
 	sources := slices.DeleteFunc(slices.Clone(rest), func(arg string) bool { return arg == "--yes" || arg == "--full" })
 	if len(sources) != 1 {
 		return usageError(extUsage)
+	}
+	if pack, err := service.IsPack(sources[0]); err == nil && pack {
+		return installPack(service, sources[0], stdout)
 	}
 	review, err := service.ReviewInstall(sources[0])
 	if err != nil {
@@ -66,6 +69,19 @@ func installExtension(service settings.Service, rest []string, stdin io.Reader, 
 		// An approved upgrade of an agent whose hooks are in place: its
 		// new converter runs on the next event, so run it once now.
 		printWarnings(stdout, service.WarmUpIfHooked(manifest.ID))
+	}
+	return nil
+}
+
+// installPack installs every part of a pack and prints one line per part.
+// A pack holds no agent, so there is nothing to review or confirm.
+func installPack(service settings.Service, source string, stdout io.Writer) error {
+	manifests, err := service.InstallPack(source)
+	if err != nil {
+		return err
+	}
+	for _, manifest := range manifests {
+		fmt.Fprintf(stdout, "installed: %s %s\n", manifest.ID, manifest.Version)
 	}
 	return nil
 }
