@@ -37,6 +37,8 @@ type Service interface {
 	SetIgnoredProjects(projects []string) error
 	ReviewInstall(path string) (settings.InstallReview, error)
 	InstallReviewed(path, hash string) (extensions.Manifest, error)
+	IsPack(path string) (bool, error)
+	InstallPack(path string) ([]extensions.Manifest, error)
 	WarmUpConverters(id string) []string
 	WarmUpIfHooked(id string) []string
 	RemoveExtension(id string) error
@@ -239,6 +241,9 @@ func (b *bridge) installExtension() (any, error) {
 	if err != nil || !ok {
 		return pickResult{Cancelled: err == nil}, err
 	}
+	if pack, err := b.svc.IsPack(path); err == nil && pack {
+		return b.installPack(path)
+	}
 	review, err := b.svc.ReviewInstall(path)
 	if err != nil {
 		return nil, err
@@ -252,6 +257,24 @@ func (b *bridge) installExtension() (any, error) {
 		return nil, err
 	}
 	return pickResult{Manifest: &manifest, Unchanged: review.Upgrade}, nil
+}
+
+// installPack installs every part of a pack. The page names one
+// extension, so the result carries the pack's theme, or its first part
+// when it has no theme.
+func (b *bridge) installPack(path string) (any, error) {
+	manifests, err := b.svc.InstallPack(path)
+	if err != nil {
+		return nil, err
+	}
+	shown := manifests[0]
+	for _, manifest := range manifests {
+		if manifest.Type == extensions.TypeTheme {
+			shown = manifest
+			break
+		}
+	}
+	return pickResult{Manifest: &shown}, nil
 }
 
 // confirmInstall installs the upgrade whose review the page showed. The

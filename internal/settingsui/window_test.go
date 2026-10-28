@@ -27,6 +27,8 @@ type fakeService struct {
 	review settings.InstallReview
 	// warmedUp, when not nil, gets the id of each WarmUpConverters call.
 	warmedUp chan string
+	// pack is what IsPack answers.
+	pack bool
 }
 
 func (f *fakeService) record(call string) error {
@@ -84,6 +86,11 @@ func (f *fakeService) ReviewInstall(path string) (settings.InstallReview, error)
 }
 func (f *fakeService) InstallReviewed(path, hash string) (extensions.Manifest, error) {
 	return extensions.Manifest{ID: "acme.rain"}, f.record("InstallReviewed " + path + " " + hash)
+}
+func (f *fakeService) IsPack(path string) (bool, error) { return f.pack, nil }
+func (f *fakeService) InstallPack(path string) ([]extensions.Manifest, error) {
+	parts := []extensions.Manifest{{ID: "acme.rain", Type: extensions.TypeBackground}, {ID: "acme.dark", Type: extensions.TypeTheme}}
+	return parts, f.record("InstallPack " + path)
 }
 
 // The warm-ups run in the background, so they report on warmedUp, not in
