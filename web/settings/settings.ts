@@ -1,7 +1,7 @@
 import { createBridge } from "./bridge.ts";
 import { formFor, type Field, type OptionSpec } from "./form.ts";
 import { withProject, withoutProject } from "./projects.ts";
-import { PREVIEW_DATA_URL, dataFolderUrl, previewState, serviceRunning } from "./preview-url.ts";
+import { PREVIEW_DATA_URL, dataFolderUrl, previewPaused, previewState, serviceRunning } from "./preview-url.ts";
 import { upgradeDialog, type DiffLine, type InstallReview } from "./upgrade.ts";
 import { connectionRows, focusAfterPlan, hookButtonId, isPlanChanged, planDialog, powerButtonId, type Connection, type ConnectionRow, type HookAction, type Plan } from "./connections.ts";
 
@@ -56,6 +56,8 @@ const VIEW_TITLES: Record<View, string> = {
 const TYPE_NAMES = { background: "Background", component: "Component", layout: "Layout", theme: "Theme" };
 const FPS_CHOICES = [0, 15, 24, 30, 60, 120, 240];
 const PREVIEW_POLL_MS = 1000;
+// The preview pauses this long after the window goes to the background.
+const PREVIEW_PAUSE_AFTER_MS = 10_000;
 // The Agents tab reads the agents' states again this often while it is open.
 const CONNECTIONS_POLL_MS = 5000;
 const STATUS_CLEAR_MS = 2000;
@@ -721,13 +723,22 @@ function ignoredProjectsGroup(): HTMLElement {
 
 /**
  * One live preview: the real runtime in a frame, fed with state.json. It
- * exists only while the Theme view is open and the window is visible, so a
- * settings window in the background costs no animation frames.
+ * exists only while the Theme view is open and the window is visible. It
+ * pauses, keeping its last picture, while it is scrolled out of sight and a
+ * short while after the window goes to the background: WebKit keeps an
+ * inactive or partly covered window "visible", so the frame would go on
+ * drawing.
  */
 const preview = {
   frame: undefined as HTMLIFrameElement | undefined,
   timer: undefined as ReturnType<typeof setInterval> | undefined,
   lastState: undefined as string | undefined,
+  /** What the frame was last told; undefined until the frame has loaded. */
+  sentPaused: undefined as boolean | undefined,
+  onScreen: true,
+  /** When the window went to the background, or undefined while it is in front. */
+  blurredAt: undefined as number | undefined,
+  observer: undefined as IntersectionObserver | undefined,
 
   sync(): void {
     const wanted = currentView === "appearance" && document.visibilityState === "visible";
@@ -748,22 +759,54 @@ const preview = {
     });
     frame.addEventListener("load", () => {
       this.lastState = undefined;
+      this.sentPaused = undefined;
       void this.poll();
     });
-    byId("preview").querySelector(".preview-screen")?.prepend(frame);
+    const screen = byId("preview").querySelector(".preview-screen") as HTMLElement;
+    screen.prepend(frame);
     this.frame = frame;
     this.timer = setInterval(() => void this.poll(), PREVIEW_POLL_MS);
+    this.observer = new IntersectionObserver((entries) => {
+      this.onScreen = entries.some((entry) => entry.isIntersecting);
+      this.syncPaused();
+    });
+    this.observer.observe(screen);
   },
 
   stop(): void {
     clearInterval(this.timer);
+    this.observer?.disconnect();
+    this.observer = undefined;
+    this.onScreen = true;
     this.frame?.remove();
     this.frame = undefined;
     this.lastState = undefined;
+    this.sentPaused = undefined;
+    byId("preview-paused").hidden = true;
+  },
+
+  /** The window went to the background (true) or came to the front (false). */
+  setBlurred(blurred: boolean): void {
+    if (!blurred) this.blurredAt = undefined;
+    else this.blurredAt ??= Date.now();
+    this.syncPaused();
+  },
+
+  /** Tells the frame to pause or go on, when that changed. */
+  syncPaused(): void {
+    const frame = this.frame;
+    if (frame === undefined) return;
+    const paused = previewPaused(this.onScreen, this.blurredAt, Date.now(), PREVIEW_PAUSE_AFTER_MS);
+    byId("preview-paused").hidden = !paused || !this.onScreen;
+    if (paused === this.sentPaused || this.lastState === undefined) return;
+    this.sentPaused = paused;
+    frame.contentWindow?.postMessage({ type: "agent-screensaver-paused", paused }, "*");
   },
 
   async poll(): Promise<void> {
     const frame = this.frame;
+    // Focus events can be missed while the window changes state, so each poll checks again.
+    this.setBlurred(!document.hasFocus());
     let state: string | null;
     try {
       state = await bridge.call<string | null>("state");
@@ -777,6 +820,7 @@ const preview = {
     // state goes in; this page listens to no message from the frame.
     const dataUrl = dataFolderUrl(location.href);
     frame.contentWindow?.postMessage({ type: "agent-screensaver-state", state: previewState(state, dataUrl), dataUrl }, "*");
+    this.syncPaused();
   },
 };
 
@@ -864,6 +908,8 @@ for (const link of Array.from(document.querySelectorAll<HTMLButtonElement>(".sid
 }
 // The menu bar app and the CLI change settings too: read them again when the
 // window is shown again.
+window.addEventListener("blur", () => preview.setBlurred(true));
+window.addEventListener("focus", () => preview.setBlurred(false));
 document.addEventListener("visibilitychange", () => {
   preview.sync();
   connectionsPoll.sync();

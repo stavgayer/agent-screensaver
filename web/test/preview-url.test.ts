@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { PREVIEW_DATA_URL, PREVIEW_ONLY_CSS, dataFolderUrl, previewState, serviceRunning, toPreviewUrl } from "../settings/preview-url.ts";
+import { PREVIEW_DATA_URL, PREVIEW_ONLY_CSS, dataFolderUrl, previewPaused, previewState, serviceRunning, toPreviewUrl } from "../settings/preview-url.ts";
 
 const DATA = "file:///Users/me/Library/Application%20Support/agent-screensaver/";
 
@@ -58,6 +58,19 @@ describe("previewState", () => {
     // The aerials background keeps only file:// URLs; the frame maps media src instead.
     assert.deepEqual(rewritten.view.background.options.files, [`${DATA}media/aerials/a.mov`]);
   });
+});
+
+describe("previewPaused", () => {
+  const AFTER = 10_000;
+  const cases: [string, boolean, number | undefined, number, boolean][] = [
+    ["runs while on screen and the window is in front", true, undefined, 50_000, false],
+    ["pauses while scrolled out of sight", false, undefined, 50_000, true],
+    ["goes on for a while after the window goes to the background", true, 45_000, 50_000, false],
+    ["pauses once the window has been in the background long enough", true, 40_000, 50_000, true],
+  ];
+  for (const [name, onScreen, blurredAt, now, want] of cases) {
+    it(name, () => assert.equal(previewPaused(onScreen, blurredAt, now, AFTER), want));
+  }
 });
 
 describe("serviceRunning", () => {
