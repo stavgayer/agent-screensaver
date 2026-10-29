@@ -107,3 +107,20 @@ func TestConfirmInstallRefusesWithoutAWaitingReview(t *testing.T) {
 		})
 	}
 }
+
+func TestInstallAPackInstallsEveryPartAndShowsTheTheme(t *testing.T) {
+	service := &fakeService{pack: true}
+
+	window := runCalls(t, service, call{"installExtension", `{}`})
+
+	if window.errs[0] != nil {
+		t.Fatal(window.errs[0])
+	}
+	if want := []string{"InstallPack /tmp/acme.zip"}; !reflect.DeepEqual(service.changes(), want) {
+		t.Errorf("calls = %q, want %q", service.changes(), want)
+	}
+	want := pickResult{Manifest: &extensions.Manifest{ID: "acme.dark", Type: extensions.TypeTheme}}
+	if !reflect.DeepEqual(window.results[0], want) {
+		t.Errorf("result = %#v", window.results[0])
+	}
+}

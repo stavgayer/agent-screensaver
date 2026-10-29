@@ -77,4 +77,6 @@ The service never shows a black screen for a broken theme:
 
 Install checks only that the theme has a background id and a layout id. It does not check that they exist. Test your theme after you install it, with every part in place.
 
+To share a theme with its own layout, background and widgets, put them in one pack. People then install all of it with one `ext install`, and `ext remove <theme id>` removes all of it again. See "Share a theme as a pack" in [test-and-share.md](test-and-share.md).
+
 To test and share: [test-and-share.md](test-and-share.md).

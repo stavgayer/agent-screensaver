@@ -154,3 +154,89 @@ func TestDemoCommand(t *testing.T) {
 		})
 	}
 }
+
+const (
+	cliPackTheme = `{"id":"acme.dark","name":"Dark","version":"1.0.0","type":"theme","api":1,
+"theme":{"background":{"id":"acme.rain"},"layout":"acme.layout","style":{}}}`
+	cliPackLayout = `{"id":"acme.layout","name":"Layout","version":"1.0.0","type":"layout","api":1,
+"layout":{"modes":{"idle":{"center":[{"id":"acme.clock"}]},"attention":{"bottom":[]}}}}`
+	cliPackClock  = `{"id":"acme.clock","name":"Clock","version":"2.0.0","type":"component","api":1,"entry":"main.js"}`
+	cliLightTheme = `{"id":"acme.light","name":"Light","version":"1.0.0","type":"theme","api":1,
+"theme":{"background":{"id":"acme.rain"},"layout":"builtin.layout","style":{}}}`
+)
+
+// packFolder puts each manifest in its own folder of one pack folder.
+func packFolder(t *testing.T, manifests ...string) string {
+	t.Helper()
+	pack := t.TempDir()
+	for index, manifest := range manifests {
+		if err := os.Rename(extensionFolder(t, manifest), filepath.Join(pack, "part"+string(rune('a'+index)))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return pack
+}
+
+func TestExtInstallAPackAndRemoveItsTheme(t *testing.T) {
+	p := paths.ForHome(t.TempDir())
+	pack := packFolder(t, cliPackTheme, cliPackLayout, cliBackground, cliPackClock)
+
+	code, stdout, stderr := runSettings(t, p, "ext", "install", pack)
+
+	want := "installed: acme.dark 1.0.0\ninstalled: acme.layout 1.0.0\ninstalled: acme.rain 1.0.0\ninstalled: acme.clock 2.0.0\n"
+	if code != 0 || stdout != want {
+		t.Fatalf("install: exit %d, stdout %q (stderr %q), want %q", code, stdout, stderr, want)
+	}
+	if code, _, stderr := runSettings(t, p, "ext", "install", extensionFolder(t, cliLightTheme)); code != 0 {
+		t.Fatal(stderr)
+	}
+	if code, _, stderr := runSettings(t, p, "theme", "set", "acme.dark"); code != 0 {
+		t.Fatal(stderr)
+	}
+
+	code, stdout, stderr = runSettings(t, p, "ext", "remove", "acme.dark")
+
+	want = "removed: acme.dark\nremoved: acme.layout\nremoved: acme.clock\nkept: acme.rain (used by acme.light)\n" +
+		"The removed theme was in use, so the screen saver now uses the default theme.\n"
+	if code != 0 || stdout != want {
+		t.Fatalf("remove: exit %d, stdout %q (stderr %q), want %q", code, stdout, stderr, want)
+	}
+	if theme := config.Load(p.ConfigFile).Theme; theme != "builtin.default" {
+		t.Errorf("theme = %q, want builtin.default", theme)
+	}
+}
+
+func TestExtInstallAPackWithABadPartInstallsNothing(t *testing.T) {
+	p := paths.ForHome(t.TempDir())
+	pack := packFolder(t, cliPackTheme, `{"id":"acme.broken","type":"background","api":1}`)
+
+	code, stdout, stderr := runSettings(t, p, "ext", "install", pack)
+
+	if code != 1 || stdout != "" || !strings.Contains(stderr, `part "partb"`) {
+		t.Errorf("exit %d, stdout %q, stderr %q; want a failure that names partb", code, stdout, stderr)
+	}
+	if entries, _ := os.ReadDir(p.ExtensionsDir); len(entries) != 0 {
+		t.Errorf("extensions folder holds %d entries, want none", len(entries))
+	}
+}
+
+func TestExtRemoveOnlyRemovesOneID(t *testing.T) {
+	p := paths.ForHome(t.TempDir())
+	if code, _, stderr := runSettings(t, p, "ext", "install", packFolder(t, cliPackTheme, cliPackLayout, cliBackground, cliPackClock)); code != 0 {
+		t.Fatal(stderr)
+	}
+
+	if code, _, stderr := runSettings(t, p, "theme", "set", "acme.dark"); code != 0 {
+		t.Fatal(stderr)
+	}
+
+	code, stdout, stderr := runSettings(t, p, "ext", "remove", "--only", "acme.dark")
+
+	want := "removed: acme.dark\nThe removed theme was in use, so the screen saver now uses the default theme.\n"
+	if code != 0 || stdout != want {
+		t.Fatalf("exit %d, stdout %q (stderr %q)", code, stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(p.ExtensionsDir, "acme.layout")); err != nil {
+		t.Errorf("acme.layout was removed too: %v", err)
+	}
+}

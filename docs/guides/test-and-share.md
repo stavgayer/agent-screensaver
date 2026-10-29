@@ -99,7 +99,9 @@ agent-screensaver ext remove acme.drift
 
 `ext list` shows `<id> <type>` for every extension. `ext remove` prints `removed: <id>`. A built-in id cannot be removed. An agent extension has its hooks removed first.
 
-If you remove the theme that is in use, the service falls back to `builtin.default`.
+When you remove a theme, `ext remove` also removes its layout, its background and the widgets of that layout. A built-in part stays, and so does a part that another installed theme or layout uses, or the background you chose with `background set`. The command prints `kept: <id> (used by ...)` for it. An agent or another theme is never removed as a part. To remove only the theme, use `ext remove --only <id>`.
+
+If you remove the theme that is in use, the settings go back to `builtin.default`.
 
 ## 5. What the install checks refuse
 
@@ -143,7 +145,35 @@ Or you can zip the folder itself, for example with "Compress" in Finder. The ins
 HOME=$(mktemp -d) agent-screensaver ext install ./acme.drift.zip
 ```
 
-## 7. Share it
+## 7. Share a theme as a pack
+
+A theme often needs its own layout, background and widgets. Put each one in its own folder inside one pack folder, with no `extension.json` at the top:
+
+```
+acme.dusk-pack/
+  theme/
+  layout/
+  background/
+  clock/
+```
+
+Zip the pack folder, for example with "Compress" in Finder, or zip its contents:
+
+```
+cd acme.dusk-pack
+zip -r ../acme.dusk-pack.zip .
+```
+
+People install all of it with one command, and remove all of it with one command:
+
+```
+agent-screensaver ext install ./acme.dusk-pack.zip
+agent-screensaver ext remove acme.dusk
+```
+
+The install prints one `installed:` line for each part. If one part is refused, nothing is installed, and the message names the part folder. A pack cannot hold an agent extension. Check the pack with a temporary home before you share it, as in step 6.
+
+## 8. Share it
 
 - Share the zip, or the folder in a repository. Use an `id` with your own name before the dot, for example `yourname.rain`.
 - Write in your README what it does, which options it has, and (for an agent) which tool versions you tested.
