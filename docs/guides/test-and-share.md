@@ -79,7 +79,7 @@ For a real install, the settings window shows the result:
 - Extensions: "Install..." installs a folder or a `.zip`. "Remove..." removes one (not a built-in one).
 - Agents: your agent extension, its state, "Add hooks", and "Add another agent" for an install.
 
-Open it with `agent-screensaver settings`, or from the menu bar app. The preview runs your script in a sandboxed frame, so a script that tries to reach the page around it does not work there. Use only the API in [extensions.md](../extensions.md).
+Open it with `agent-screensaver settings`, or from the menu bar app. The preview runs your script in a sandboxed frame, so a script that tries to reach the page around it does not work there. Use only the API in [extensions.md](../extensions.md). The preview also draws at most 15 frames a second, reports a `devicePixelRatio` of 1 and pauses while the window is in the background, so check smoothness on the real screen saver.
 
 ## 4. Install and remove
 
