@@ -37,6 +37,13 @@ Sources for the criteria: the `emil-design-eng` skill (motion and polish), the `
 - Secondary text is #636366 in light (6.0:1 on the panel, 5.4:1 on the ground) and #a6a6ab in dark (5.7:1 on the panel). Every tier with words passes 4.5:1.
 - The switch is a checkbox drawn as the macOS switch. It keeps checkbox behavior for the keyboard and for VoiceOver (`role="switch"`).
 
+## App icon
+
+- The window is the CLI binary, not an app bundle, so the Dock would show the generic "exec" icon. While the window is open, the Dock shows the app icon instead (`internal/platform/appicon.png`, set as `NSApp.applicationIconImage`).
+- The icon is the menu bar mark, made bold: a white monitor on a stand, with the orange attention dot at the top-right corner of the screen. The dot cuts a ring out of the monitor, as in the menu bar icon. The menu bar and the Dock read as one family.
+- It follows the macOS icon grid: a 1024px canvas, a rounded-square tile of 824px with continuous corners and a soft shadow. The tile is a dark indigo, and the screen has a faint teal glow, like a screen saver at night.
+- The source is `internal/platform/appicon.svg`. It stays legible at 16px: at that size it reads as a white monitor and an orange dot.
+
 ## Agents
 
 - One row per agent extension, built-ins first: the mark in a fixed 24px slot (so names share one edge), the name, "Built in" or "From <id> <version>" with the last event under it, then one status pill and two buttons in fixed columns, so the states and buttons line up down the list.

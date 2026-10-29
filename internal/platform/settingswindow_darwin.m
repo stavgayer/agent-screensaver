@@ -166,12 +166,15 @@ static void InstallMenu(AGSSettingsController *controller, NSString *name) {
   NSApp.mainMenu = bar;
 }
 
-void RunSettingsWindow(const char *title, const char *page, const char *readAccess) {
+void RunSettingsWindow(const char *title, const char *page, const char *readAccess, const void *icon, long long iconLength) {
   @autoreleasepool {
     [NSApplication sharedApplication];
     // Regular while the window is open: a Dock icon and a menu bar, like
     // any app with a window. The process ends with the window.
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    // dataWithBytes copies, so the Go bytes are not kept past this call.
+    NSImage *appIcon = [[NSImage alloc] initWithData:[NSData dataWithBytes:icon length:(NSUInteger)iconLength]];
+    if (appIcon) NSApp.applicationIconImage = appIcon;
     NSString *name = [NSString stringWithUTF8String:title];
     AGSSettingsController *controller = [AGSSettingsController new];
     InstallMenu(controller, name);
