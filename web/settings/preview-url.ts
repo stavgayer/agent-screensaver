@@ -20,6 +20,14 @@ interface Entry {
 }
 
 /**
+ * The preview's frame rate. The preview is a small picture next to the
+ * settings, so it does not need the screen saver's rate. WebKit gives a
+ * sandboxed frame about 22 uneven frames a second; the preview takes 15 even
+ * ones (frame-gate.ts).
+ */
+export const PREVIEW_MAX_FPS = 15;
+
+/**
  * state.json text with the extension entry scripts loaded from the preview
  * scheme. Option values stay as they are: extensions check them (the aerials
  * background keeps only file:// URLs), and preview.ts maps media `src` in the
@@ -58,3 +66,13 @@ export function serviceRunning(state: string | null): boolean {
  * note, not two. The real screen saver does not load this rule.
  */
 export const PREVIEW_ONLY_CSS = "#service-line { display: none !important; }";
+
+/**
+ * Whether the preview should be paused: while it is scrolled out of sight,
+ * and once the window has been in the background (since blurredAtMs) for
+ * pauseAfterMs.
+ */
+export function previewPaused(onScreen: boolean, blurredAtMs: number | undefined, nowMs: number, pauseAfterMs: number): boolean {
+  if (!onScreen) return true;
+  return blurredAtMs !== undefined && nowMs - blurredAtMs >= pauseAfterMs;
+}
