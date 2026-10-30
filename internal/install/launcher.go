@@ -240,3 +240,15 @@ func planRemoveLauncher(where locations) []PlannedStep {
 	}
 	return nil
 }
+
+// LauncherInstalled reports whether our launcher app is in place in home,
+// so install only points to Spotlight when there is something to find.
+func LauncherInstalled(home string) bool {
+	return launcherStateOf(locationsFor(home).launcher) == launcherOurs
+}
+
+// InstalledBinary is the path of the binary that install copies and launchd
+// runs, which stays after the downloaded folder is gone.
+func InstalledBinary(home string) string {
+	return locationsFor(home).bin
+}

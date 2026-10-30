@@ -67,7 +67,7 @@ func (s setup) install(args []string) int {
 		fmt.Fprintf(s.stderr, "agent-screensaver install: %v\n", err)
 		return 1
 	}
-	s.printInstalled(install.Notes(s.home, *artifacts))
+	s.printInstalled(install.Notes(s.home, *artifacts), install.LauncherInstalled(s.home))
 	return 0
 }
 
@@ -101,13 +101,17 @@ func (s setup) confirm(plan []install.PlannedStep, yes bool) bool {
 
 // printInstalled tells what is left to do: the agents' own notes (for
 // example approving new hooks in Codex) and the macOS settings.
-func (s setup) printInstalled(notes []string) {
+func (s setup) printInstalled(notes []string, launcher bool) {
 	fmt.Fprintln(s.stdout, "\nInstalled. What is left for you:")
 	for _, note := range notes {
 		fmt.Fprintf(s.stdout, "  - %s\n", note)
 	}
 	fmt.Fprintln(s.stdout, `  - In System Settings -> Lock Screen, set "Require password after screen saver begins" to Immediately.`)
-	fmt.Fprintln(s.stdout, "\nTo open the settings, search for Agent Screensaver in Spotlight or Launchpad.")
+	if launcher {
+		fmt.Fprintln(s.stdout, "\nTo open the settings, search for Agent Screensaver in Spotlight or Launchpad.")
+	} else {
+		fmt.Fprintf(s.stdout, "\nTo open the settings, run: %q settings\n", install.InstalledBinary(s.home))
+	}
 	fmt.Fprintln(s.stdout, "To select the screen saver: System Settings -> Screen Saver -> AgentScreensaver.")
 	fmt.Fprintln(s.stdout, `The first time, open System Settings -> Privacy & Security and click "Open Anyway".`)
 }
