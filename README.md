@@ -38,7 +38,7 @@ The Default theme, on a Matrix background:
   </tr>
 </table>
 
-A third theme, Calm, plays the Apple aerial videos that macOS has already downloaded. It has no picture here because the footage belongs to Apple. The Chrome theme needs WebGL2 and uses more CPU than the others, see [Known limits](docs/known-limits.md).
+A third theme, Calm, plays the Apple aerial videos that macOS has already downloaded. Until macOS has downloaded one, it shows the Matrix background: pick an aerial once in System Settings, Screen Saver, and macOS downloads it. It has no picture here because the footage belongs to Apple. The Chrome theme needs WebGL2 and uses more CPU than the others, see [Known limits](docs/known-limits.md).
 
 More themes are in [agent-screensaver-themes](https://github.com/stavgayer/agent-screensaver-themes). The first seven are inspired by album covers. Install only the ones you like:
 
