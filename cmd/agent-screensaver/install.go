@@ -18,9 +18,13 @@ type setup struct {
 	home       string
 	executable string
 	services   platform.ServiceManager
-	stdin      io.Reader
-	stdout     io.Writer
-	stderr     io.Writer
+	// options are what install adds on top: the version for the launcher app
+	// and the Launch Services call. Tests leave it empty, so nothing outside
+	// the temp home is touched.
+	options install.Options
+	stdin   io.Reader
+	stdout  io.Writer
+	stderr  io.Writer
 }
 
 // runSetup resolves the real environment and runs install or uninstall.
@@ -35,7 +39,8 @@ func runSetup(name string, args []string, stdin io.Reader, stdout, stderr io.Wri
 		fmt.Fprintf(stderr, "agent-screensaver %s: %v\n", name, err)
 		return 1
 	}
-	env := setup{home: home, executable: executable, services: platform.NewLaunchd(home), stdin: stdin, stdout: stdout, stderr: stderr}
+	env := setup{home: home, executable: executable, services: platform.NewLaunchd(home),
+		options: install.Options{Version: version, Register: install.RegisterLauncher}, stdin: stdin, stdout: stdout, stderr: stderr}
 	if name == "install" {
 		return env.install(args)
 	}
@@ -58,7 +63,7 @@ func (s setup) install(args []string) int {
 	if !s.confirm(plan, *yes) {
 		return 1
 	}
-	if _, err := install.Apply(s.home, s.executable, *artifacts, s.services); err != nil {
+	if _, err := install.Apply(s.home, s.executable, *artifacts, s.services, s.options); err != nil {
 		fmt.Fprintf(s.stderr, "agent-screensaver install: %v\n", err)
 		return 1
 	}
@@ -102,6 +107,7 @@ func (s setup) printInstalled(notes []string) {
 		fmt.Fprintf(s.stdout, "  - %s\n", note)
 	}
 	fmt.Fprintln(s.stdout, `  - In System Settings -> Lock Screen, set "Require password after screen saver begins" to Immediately.`)
-	fmt.Fprintln(s.stdout, "\nTo select the screen saver: System Settings -> Screen Saver -> AgentScreensaver.")
+	fmt.Fprintln(s.stdout, "\nTo open the settings, search for Agent Screensaver in Spotlight or Launchpad.")
+	fmt.Fprintln(s.stdout, "To select the screen saver: System Settings -> Screen Saver -> AgentScreensaver.")
 	fmt.Fprintln(s.stdout, `The first time, open System Settings -> Privacy & Security and click "Open Anyway".`)
 }

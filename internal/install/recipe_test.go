@@ -294,7 +294,7 @@ func TestInstallSkipsAgentWhoseDetectIsMissing(t *testing.T) {
 	}
 	artifacts, binary := artifactsFixture(t)
 
-	record, err := Apply(home, binary, artifacts, &fakeServices{})
+	record, err := Apply(home, binary, artifacts, &fakeServices{}, Options{})
 
 	if err != nil {
 		t.Fatal(err)
