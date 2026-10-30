@@ -40,6 +40,10 @@ The Default theme, on a Matrix background:
 
 A third theme, Calm, plays the Apple aerial videos that macOS has already downloaded. It has no picture here because the footage belongs to Apple. The Chrome theme needs WebGL2 and uses more CPU than the others, see [Known limits](docs/known-limits.md).
 
+More themes are in [agent-screensaver-themes](https://github.com/stavgayer/agent-screensaver-themes). The first seven are inspired by album covers. Install only the ones you like:
+
+https://github.com/user-attachments/assets/9a1826d2-a335-49b4-98be-1e8459d3d9ff
+
 ## Install
 
 You need macOS 14 or later, on Apple Silicon or Intel.
