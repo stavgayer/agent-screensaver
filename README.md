@@ -139,7 +139,7 @@ Everything on the screen is an extension: the clock, the cards, the rings, the b
 
 The menu bar app shows how many agents wait and run, your limits, and each open approval. Its icon changes when an agent waits for you. From its menu you can preview the screen saver, open the settings window, and turn the sound and privacy mode on or off.
 
-The settings window has five parts: Theme & background, Extension options, Extensions, Agents (add or remove an agent's hooks, turn an agent off) and General. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then open Spotlight or Launchpad and search for "Agent Screensaver". It is the launcher app that install puts in `~/Applications`. If you do not find it, run `./agent-screensaver settings` in Terminal to open the settings window directly.
+The settings window has five parts: Theme & background, Extension options, Extensions, Agents (add or remove an agent's hooks, turn an agent off) and General. To install a theme or any other extension, drop its `.zip` file or folder on the window, or click Install… under Extensions. You do not need Terminal for this. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then open Spotlight or Launchpad and search for "Agent Screensaver". It is the launcher app that install puts in `~/Applications`. If you do not find it, run `./agent-screensaver settings` in Terminal to open the settings window directly.
 
 To hide the sessions of a folder, add its name under General, Ignored projects, in the settings window. They then get no card, no approval and no sound. The list starts with `observer-sessions`, the folder where the claude-mem plugin runs its hidden Claude sessions.
 
@@ -175,7 +175,7 @@ Add its folder name under General, Ignored projects. Upper and lower case do not
 It can hide behind the notch. Search for "Agent Screensaver" in Spotlight or Launchpad, or run `./agent-screensaver settings`.
 
 **Can I install an extension from a zip?**
-Yes, if `extension.json` is at the top of the zip or inside its only top folder. A zip made with Finder's Compress on a folder works.
+Yes. Drop the zip on the settings window, click Install… under Extensions, or run `./agent-screensaver ext install`. `extension.json` must be at the top of the zip or inside its only top folder. A zip made with Finder's Compress on a folder works.
 
 More in [Known limits](docs/known-limits.md). The reasons behind the bigger choices are in [docs/decisions/](docs/decisions/).
 
