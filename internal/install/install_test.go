@@ -148,7 +148,7 @@ func apply(t *testing.T, home string, sm *fakeServices) Record {
 	t.Helper()
 	withTools(t, home)
 	artifacts, binary := artifactsFixture(t)
-	record, err := Apply(home, binary, artifacts, sm)
+	record, err := Apply(home, binary, artifacts, sm, Options{})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestInstallAbortsOnInvalidUserJSON(t *testing.T) {
 			sm := &fakeServices{}
 			artifacts, binary := artifactsFixture(t)
 
-			_, err := Apply(home, binary, artifacts, sm)
+			_, err := Apply(home, binary, artifacts, sm, Options{})
 
 			if err == nil || !strings.Contains(err.Error(), claudePath(home)) || !strings.Contains(err.Error(), "nothing was changed") {
 				t.Fatalf("error = %v", err)
@@ -455,7 +455,7 @@ func TestInstallAbortsOnCorruptOwnConfig(t *testing.T) {
 	sm := &fakeServices{}
 	artifacts, binary := artifactsFixture(t)
 
-	_, err := Apply(home, binary, artifacts, sm)
+	_, err := Apply(home, binary, artifacts, sm, Options{})
 
 	if err == nil || !strings.Contains(err.Error(), p.ConfigFile) || !strings.Contains(err.Error(), "nothing was changed") {
 		t.Fatalf("error = %v", err)
@@ -533,7 +533,7 @@ func TestUninstallAfterFailedServiceInstallStillRemovesService(t *testing.T) {
 	home := t.TempDir()
 	sm := &failingServices{}
 	artifacts, binary := artifactsFixture(t)
-	if _, err := Apply(home, binary, artifacts, sm); err == nil {
+	if _, err := Apply(home, binary, artifacts, sm, Options{}); err == nil {
 		t.Fatal("Apply should report the service failure")
 	}
 
@@ -558,14 +558,14 @@ func TestRetryAfterPartialFailureKeepsOriginalStatusline(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(codexDir, 0o755) })
 	sm := &fakeServices{}
 	artifacts, binary := artifactsFixture(t)
-	if _, err := Apply(home, binary, artifacts, sm); err == nil {
+	if _, err := Apply(home, binary, artifacts, sm, Options{}); err == nil {
 		t.Fatal("first Apply should fail on the read-only Codex folder")
 	}
 	if err := os.Chmod(codexDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := Apply(home, binary, artifacts, sm); err != nil {
+	if _, err := Apply(home, binary, artifacts, sm, Options{}); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 

@@ -15,7 +15,8 @@ Run this on a real Mac after installing the release zip. Tick each box only afte
 - [ ] Existing status line still prints the same as before install.
 - [ ] Menu bar icon changes when an agent waits; menu lines match the screen saver.
 - [ ] Settings window: a theme change shows in the preview and in the real screen saver.
-- [ ] `uninstall` leaves `~/.claude/settings.json` and `~/.codex/hooks.json` as they were, and removes both LaunchAgents.
+- [ ] Spotlight and Launchpad find "Agent Screensaver" with the icon, and it opens the settings window. Opening it again while the window is open brings the same window forward and opens no second window.
+- [ ] `uninstall` leaves `~/.claude/settings.json` and `~/.codex/hooks.json` as they were, and removes both LaunchAgents and `~/Applications/Agent Screensaver.app`.
 
 ## Real payload check
 

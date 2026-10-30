@@ -130,3 +130,25 @@ func TestUninstallWithoutRecordFails(t *testing.T) {
 		t.Errorf("exit %d\n%s", code, stdout)
 	}
 }
+
+func TestInstallPlanListsLauncherAppAndUninstallRemovesIt(t *testing.T) {
+	env, _, stdout, home, artifacts := newSetup(t, "")
+	app := filepath.Join(home, "Applications", "Agent Screensaver.app")
+
+	if code := env.install([]string{"--yes", "--artifacts", artifacts}); code != 0 {
+		t.Fatalf("install exit %d\n%s", code, stdout)
+	}
+
+	if !strings.Contains(stdout.String(), "Create the launcher app at "+app) || !strings.Contains(stdout.String(), "Spotlight or Launchpad") {
+		t.Errorf("output lacks the launcher app:\n%s", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(app, "Contents", "Info.plist")); err != nil {
+		t.Errorf("launcher app not created: %v", err)
+	}
+	if code := env.uninstall([]string{"--yes"}); code != 0 {
+		t.Fatalf("uninstall exit %d\n%s", code, stdout)
+	}
+	if _, err := os.Stat(app); !os.IsNotExist(err) {
+		t.Errorf("launcher app still there (err %v)", err)
+	}
+}

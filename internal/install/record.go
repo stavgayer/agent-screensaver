@@ -20,6 +20,10 @@ type Record struct {
 	Agents   []AgentRecord `json:"agents"`
 	Services []string      `json:"services"` // service labels
 	Saver    string        `json:"saver"`
+	// Launcher is the launcher app install made or replaced. Empty when an
+	// app that is not ours was in the way. Uninstall still checks the app's
+	// bundle id and takes the path from the home folder, not from here.
+	Launcher string `json:"launcher,omitempty"`
 }
 
 // AgentRecord is what install wrote for one agent. Uninstall uses only
