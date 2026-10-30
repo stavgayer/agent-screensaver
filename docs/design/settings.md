@@ -1,6 +1,6 @@
 # Settings window design notes
 
-The settings window (`agent-screensaver settings`, opened from the menu bar app) is a screen people work in, not a page they read. It must feel like the other settings windows on the Mac. This file records the design decisions.
+The settings window (`agent-screensaver settings`, opened from the menu bar app or from the launcher app `Agent Screensaver` that install puts in `~/Applications`) is a screen people work in, not a page they read. It must feel like the other settings windows on the Mac. This file records the design decisions.
 
 Sources for the criteria: the `emil-design-eng` skill (motion and polish), the `impeccable` skill (Operate mode, craft floor) and the `design-taste-frontend` skill (its app-screen rules, section "Forms and settings").
 

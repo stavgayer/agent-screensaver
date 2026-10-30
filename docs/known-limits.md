@@ -10,7 +10,7 @@ These are the limits of version 1 that you can see or that change how you use it
 
 ## Screen and menu bar
 
-- **The menu bar icon can hide behind the notch.** See the README, "Settings window and menu bar", for how to open the settings window directly.
+- **The menu bar icon can hide behind the notch.** Open Spotlight or Launchpad and search for "Agent Screensaver" instead. See the README, "Settings window and menu bar".
 
 ## Themes
 
