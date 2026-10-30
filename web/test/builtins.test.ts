@@ -5,7 +5,7 @@ import { displayName } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
 import { orderLimits, ringCaption, ringPercent, ringView } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha } from "../src/builtins/matrix/logic.ts";
-import { songView } from "../src/builtins/now-playing/logic.ts";
+import { songView } from "../src/builtins/shared/song.ts";
 import { numberOption } from "../src/builtins/shared/options.ts";
 import { CONTEXT_HIGH_PERCENT, taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
 

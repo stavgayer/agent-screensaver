@@ -1,5 +1,4 @@
-import type { Ctx, NowPlaying, ViewState } from "../../api.ts";
-import { songView } from "./logic.ts";
+import { createNowPlaying } from "../shared/now-playing.ts";
 
 // Set like the ring captions: two lines that never wrap, the artist in a quieter tone, the same dark halo over the
 // background. The bar fills with a transform only, a few times a second; a song that starts fades in, with no movement.
@@ -16,65 +15,4 @@ const STYLE = `
 @media (prefers-reduced-motion: reduce) { .now-playing { transition: none; } }
 `;
 
-// The bar moves 1/34 of the widget's width in a 3-minute song every ~5 s, so a few frames a second look smooth.
-const BAR_FPS = 4;
-
-window.agentScreensaver.register(() => {
-  let box: HTMLElement | undefined;
-  let song: HTMLElement | undefined;
-  let artist: HTMLElement | undefined;
-  let bar: HTMLElement | undefined;
-  let fill: HTMLElement | undefined;
-  let track: NowPlaying | undefined;
-  let cancelFrame: (() => void) | undefined;
-  let now = (): number => Date.now();
-
-  const setText = (element: HTMLElement | undefined, text: string): void => {
-    if (element !== undefined && element.textContent !== text) element.textContent = text;
-  };
-
-  const draw = (nowMs: number): void => {
-    const view = songView(track, nowMs);
-    box?.classList.toggle("hidden", view === null);
-    if (view === null) return;
-    setText(song, view.title);
-    setText(artist, view.artist);
-    if (artist !== undefined) artist.hidden = view.artist === "";
-    if (bar !== undefined) bar.hidden = view.progress === null;
-    if (fill !== undefined && view.progress !== null) fill.style.transform = `scaleX(${view.progress})`;
-  };
-
-  function mount(root: HTMLElement, ctx: Ctx): void {
-    const style = document.createElement("style");
-    style.textContent = STYLE;
-    const element = (className: string): HTMLElement => {
-      const created = document.createElement("div");
-      created.className = className;
-      return created;
-    };
-    box = element("now-playing hidden");
-    song = element("song");
-    artist = element("artist");
-    bar = element("bar");
-    fill = element("fill");
-    bar.append(fill);
-    box.append(song, artist, bar);
-    root.append(style, box);
-    now = () => ctx.now();
-    cancelFrame = ctx.requestFrame(() => draw(now()), BAR_FPS);
-  }
-
-  function update(state: ViewState): void {
-    track = state.nowPlaying;
-    draw(now());
-  }
-
-  function unmount(): void {
-    cancelFrame?.();
-    cancelFrame = undefined;
-    box?.parentElement?.replaceChildren();
-    box = song = artist = bar = fill = undefined;
-  }
-
-  return { mount, update, unmount };
-});
+window.agentScreensaver.register(() => createNowPlaying({ css: STYLE, className: "now-playing" }));

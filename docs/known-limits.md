@@ -17,7 +17,7 @@ These are the limits of version 1 that you can see or that change how you use it
 - **Only the Spotify and Music apps.** macOS no longer lets an ordinary program read what the whole system plays, so agent-screensaver asks these two apps through AppleScript. Music in a browser, and other music apps, are not shown.
 - **Songs that Music streams have no progress bar.** For them, Music gives the song and the artist but no position or length. Songs in your own library, and Spotify, have the bar.
 - **No album cover.** Spotify gives the cover only as a web link, and agent-screensaver uses no network.
-- **Only the Default and Calm themes show it.** A theme with its own layout must place `builtin.now-playing` itself. The Chrome theme does not yet.
+- **Only the built-in themes show it.** Default and Calm show `builtin.now-playing`, Chrome shows `builtin.chrome-now-playing`. A theme with its own layout must place one of them, or draw the song itself from `state.nowPlaying`.
 
 ## Themes
 

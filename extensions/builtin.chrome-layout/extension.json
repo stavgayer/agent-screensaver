@@ -7,7 +7,7 @@
   "layout": {
     "modes": {
       "idle": {
-        "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }],
+        "top-left": [{ "id": "builtin.chrome-clock", "options": { "size": "large" } }, { "id": "builtin.chrome-now-playing" }],
         "top-right": [{ "id": "builtin.chrome-rings" }],
         "bottom": [{ "id": "builtin.chrome-tasks" }]
       },
