@@ -54,7 +54,7 @@ static BOOL IsSettingsPage(NSURL *url) {
 }
 @end
 
-@interface AGSSettingsController : NSObject <WKScriptMessageHandler, WKNavigationDelegate, NSWindowDelegate>
+@interface AGSSettingsController : NSObject <WKScriptMessageHandler, WKNavigationDelegate, NSWindowDelegate, NSApplicationDelegate>
 @end
 
 @implementation AGSSettingsController
@@ -103,6 +103,16 @@ static BOOL IsSettingsPage(NSURL *url) {
   if (gWindow.isVisible) return;
   [gWindow makeKeyAndOrderFront:nil];
   [NSApp activate];
+}
+
+// Opening Agent Screensaver again (Spotlight, Launchpad, Finder) while the
+// window is open reaches this process as a reopen, because the launcher app
+// runs this very process. Bring the one window back instead of doing nothing.
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible {
+  if (gWindow.isMiniaturized) [gWindow deminiaturize:nil];
+  [gWindow makeKeyAndOrderFront:nil];
+  [NSApp activate];
+  return NO;
 }
 
 - (void)closeWindow:(id)sender {
@@ -178,6 +188,7 @@ void RunSettingsWindow(const char *title, const char *page, const char *readAcce
     NSString *name = [NSString stringWithUTF8String:title];
     AGSSettingsController *controller = [AGSSettingsController new];
     InstallMenu(controller, name);
+    NSApp.delegate = controller;
 
     WKWebViewConfiguration *config = [WKWebViewConfiguration new];
     [config.userContentController addScriptMessageHandler:controller name:@"ags"];
