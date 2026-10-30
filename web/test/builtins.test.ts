@@ -5,6 +5,7 @@ import { displayName } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
 import { orderLimits, ringCaption, ringPercent, ringView } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha } from "../src/builtins/matrix/logic.ts";
+import { songView } from "../src/builtins/now-playing/logic.ts";
 import { numberOption } from "../src/builtins/shared/options.ts";
 import { CONTEXT_HIGH_PERCENT, taskCards, taskContext, taskHeading, taskSource, taskStatus, taskWhere } from "../src/builtins/task-row/logic.ts";
 
@@ -347,3 +348,26 @@ describe("matrix logic", () => {
   });
 });
 
+
+describe("now playing logic", () => {
+  const song = { app: "Spotify", title: "Sloop John B", artist: "The Beach Boys", position_ms: 60_000, duration_ms: 180_000, at_ms: NOW_MS };
+
+  it("shows_nothing_without_a_song", () => {
+    assert.equal(songView(undefined, NOW_MS), null);
+    assert.equal(songView({ ...song, title: "" }, NOW_MS), null);
+  });
+
+  it("moves_the_position_on_from_the_read", () => {
+    assert.deepEqual(songView(song, NOW_MS), { title: "Sloop John B", artist: "The Beach Boys", progress: 1 / 3 });
+    assert.equal(songView(song, NOW_MS + 30_000)?.progress, 0.5);
+  });
+
+  it("stops_at_the_end_and_never_goes_back", () => {
+    assert.equal(songView(song, NOW_MS + 10 * MINUTE_MS)?.progress, 1);
+    assert.equal(songView(song, NOW_MS - MINUTE_MS)?.progress, 1 / 3);
+  });
+
+  it("has_no_bar_without_a_length", () => {
+    assert.deepEqual(songView({ ...song, artist: "", duration_ms: 0 }, NOW_MS), { title: "Sloop John B", artist: "", progress: null });
+  });
+});

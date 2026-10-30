@@ -1,4 +1,4 @@
-import type { AgentInfo, Card, Limit, Mode, Region, ViewState } from "./api.ts";
+import type { AgentInfo, Card, Limit, Mode, NowPlaying, Region, ViewState } from "./api.ts";
 import { regionsFor } from "./layout.ts";
 import { screenMode } from "./mode.ts";
 
@@ -20,6 +20,8 @@ export interface StateFile {
   service_ok: boolean;
   cards: Card[];
   limits: Limit[];
+  /** Left out when no song plays, now playing is off, or privacy is on. */
+  now_playing?: NowPlaying;
   view: {
     theme: string;
     background: ExtensionConfig;
@@ -138,6 +140,7 @@ export function toViewState(state: StateFile, display: "main" | "secondary", now
     nowMs,
     serviceOk: state.service_ok,
     display,
+    ...(state.now_playing === undefined ? {} : { nowPlaying: state.now_playing }),
   };
 }
 

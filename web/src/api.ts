@@ -45,6 +45,21 @@ export interface AgentInfo {
   mark_url: string;
 }
 
+/**
+ * The song a music app plays (Spotify or Music), as the service last read it.
+ * Times are in milliseconds. `duration_ms` is 0 when the app gives no length,
+ * as Music does for songs it streams; `artist` can be "". Move the position on
+ * from `at_ms`, when it was read.
+ */
+export interface NowPlaying {
+  app: string;
+  title: string;
+  artist: string;
+  position_ms: number;
+  duration_ms: number;
+  at_ms: number;
+}
+
 export interface ViewState {
   mode: Mode;
   cards: Card[];
@@ -56,6 +71,8 @@ export interface ViewState {
   nowMs: number;
   serviceOk: boolean;
   display: "main" | "secondary";
+  /** The song that plays, when the user has now playing on. Left out when none plays and in privacy mode. */
+  nowPlaying?: NowPlaying;
 }
 
 export interface Ctx {

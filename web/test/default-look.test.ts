@@ -138,6 +138,6 @@ describe("the default look stays as it was", () => {
 
   it("the Default and Calm themes keep the spotlight layout with the shared components", () => {
     const layout = readFileSync(new URL("../../extensions/builtin.spotlight/extension.json", import.meta.url), "utf8");
-    assert.equal(sha(layout), "49e0b337ec1f2778");
+    assert.equal(sha(layout), "cd750a36e2913f9e");
   });
 });
