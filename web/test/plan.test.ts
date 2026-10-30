@@ -168,6 +168,12 @@ describe("toViewState", () => {
     assert.equal(view.display, "main");
     assert.equal(toViewState(state({ cards: [approval] }), "secondary", 5).mode, "secondary");
   });
+
+  it("passes_the_song_on_only_when_one_plays", () => {
+    const song = { app: "Spotify", title: "Sloop John B", artist: "The Beach Boys", position_ms: 1, duration_ms: 2, at_ms: 3 };
+    assert.deepEqual(toViewState(state({ now_playing: song }), "main", 5).nowPlaying, song);
+    assert.equal("nowPlaying" in toViewState(state(), "main", 5), false);
+  });
 });
 
 describe("cssVariables", () => {

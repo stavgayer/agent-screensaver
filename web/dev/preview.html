@@ -41,6 +41,7 @@
         limit.updated_at_ms += nowMs;
         if ("resets_at" in limit) limit.resets_at += Math.round(nowMs / 1000);
       }
+      if (state.now_playing) state.now_playing.at_ms += nowMs;
       return JSON.stringify(state);
     }
 

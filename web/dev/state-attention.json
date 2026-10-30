@@ -85,6 +85,11 @@
     "layout": {
       "modes": {
         "idle": {
+          "top-left": [
+            {
+              "id": "builtin.now-playing"
+            }
+          ],
           "center": [
             {
               "id": "builtin.clock",
@@ -162,6 +167,11 @@
       {
         "id": "builtin.approval-card",
         "entry_url": "{{BUILD}}extensions/builtin.approval-card/index.js",
+        "options": {}
+      },
+      {
+        "id": "builtin.now-playing",
+        "entry_url": "{{BUILD}}extensions/builtin.now-playing/index.js",
         "options": {}
       }
     ],

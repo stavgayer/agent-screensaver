@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/state"
 )
 
@@ -60,6 +61,18 @@ func Scene(elapsedMs, totalMs, nowMs int64) ([]state.Card, []state.Limit) {
 		cards = append(cards, buildCard(item, loopMs, demoStartMs, nowMs))
 	}
 	return cards, buildLimits(elapsedMs, totalMs, demoStartMs, nowMs)
+}
+
+// demoSong is the made-up song of the demo: no real song or artist.
+var demoSong = nowplaying.Track{App: "Music", Title: "Slow Lights", Artist: "The Night Shift", PositionMs: 74_000, DurationMs: 222_000}
+
+// Track returns the demo song elapsedMs into the demo, read at nowMs. It
+// plays on from the same point each demo and starts over at its end.
+func Track(elapsedMs, nowMs int64) nowplaying.Track {
+	track := demoSong
+	track.PositionMs = (demoSong.PositionMs + elapsedMs) % demoSong.DurationMs
+	track.AtMs = nowMs
+	return track
 }
 
 func buildCard(item script, loopMs, demoStartMs, nowMs int64) state.Card {

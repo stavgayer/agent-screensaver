@@ -59,7 +59,7 @@ The entry is one classic script. It must not use `import` or `export`. If you us
 ```
 
 - `mount(root, ctx)` runs once. `root` is your own `div`. Put all your elements, and your `<style>`, inside it.
-- `update(state)` runs on every state change and once a minute. `state` has `mode`, `cards`, `agents`, `agentOrder`, `limits`, `nowMs`, `serviceOk` and `display`.
+- `update(state)` runs on every state change and once a minute. `state` has `mode`, `cards`, `agents`, `agentOrder`, `limits`, `nowMs`, `serviceOk` and `display`, and `nowPlaying` while a song plays and the user has now playing on.
 - `setOptions(options)` is optional. The runtime calls it when your component moves to a place with other options. Without it, the runtime mounts your component again.
 - `unmount()` runs when the component goes away. Remove timers and listeners here.
 

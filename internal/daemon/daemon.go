@@ -17,6 +17,7 @@ import (
 	"agent-screensaver/internal/event"
 	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/limits"
+	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 	"agent-screensaver/internal/spool"
@@ -87,6 +88,12 @@ type Daemon struct {
 	// limits change, so a new agent is polled without a restart and a
 	// removed one stops. Without it, Run keeps the providers it was given.
 	LimitsProviders func(installed []agents.Agent) []limits.Provider
+	// Music reads the song the music apps play, while the user has now
+	// playing on. Without one, the file never shows a song.
+	Music MusicReader
+	// MusicRunner runs one music read away from the step. It defaults to a
+	// new goroutine; tests pass one that runs it at once.
+	MusicRunner func(read func())
 
 	paths     paths.Paths
 	state     state.State
@@ -121,6 +128,13 @@ type Daemon struct {
 	detailsInFlight map[cardKey]bool
 	detailsResults  chan detailsResult
 
+	track         *nowplaying.Track // the song the file shows, nil for none
+	musicInFlight bool
+	musicReadMs   int64
+	musicReadOnce bool   // a read was started, so musicReadMs counts
+	musicErr      string // the last read error, to log only changes
+	musicResults  chan musicResult
+
 	restored       bool // the limits of the last run were read back
 	estimatedOnce  bool
 	estimateDue    bool // an exact reading arrived or the estimator catches up
@@ -143,6 +157,9 @@ func New(p paths.Paths) *Daemon {
 		DetailsRunner:   func(read func()) { go read() },
 		detailsInFlight: map[cardKey]bool{},
 		detailsResults:  make(chan detailsResult, maxDetailReads),
+
+		MusicRunner:  func(read func()) { go read() },
+		musicResults: make(chan musicResult, 1),
 	}
 }
 
@@ -183,6 +200,7 @@ func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	changed = d.drainSpool(nowMs) || changed
 	changed = d.estimateLimits(nowMs) || changed
 	changed = d.readDueDetails(nowMs) || changed
+	changed = d.readMusic(nowMs) || changed
 	changed = d.tick(nowMs) || changed
 
 	realAttention := d.state.NeedsAttention()
@@ -319,13 +337,18 @@ func (d *Daemon) duePolls(nowMs int64, saverActive bool) []string {
 	return due
 }
 
-// writeState writes the state file. A demo frame replaces the cards and
-// limits after Build, so privacy mode never masks the made-up text, and
-// marks the file so a restart never restores them.
+// writeState writes the state file. A demo frame replaces the cards, the
+// limits and the song after Build, so privacy mode never masks the made-up
+// text, and marks the file so a restart never restores them. The demo song
+// shows only while now playing is on, like a real one.
 func (d *Daemon) writeState(nowMs int64, frame *demoFrame, result *StepResult) {
-	file := statefile.Build(d.state, d.view, nowMs)
+	file := statefile.Build(d.state, d.view, d.track, nowMs)
 	if frame != nil {
 		file.Cards, file.Limits, file.Demo = frame.cards, frame.limits, true
+		file.NowPlaying = nil
+		if d.cfg.NowPlaying {
+			file.NowPlaying = &frame.track
+		}
 	}
 	if err := statefile.WriteAtomic(d.paths.StateFile, file); err != nil {
 		d.dirty = true

@@ -7,6 +7,7 @@
   "layout": {
     "modes": {
       "idle": {
+        "top-left": [{ "id": "builtin.now-playing" }],
         "center": [{ "id": "builtin.clock", "options": { "size": "large" } }],
         "top-right": [{ "id": "builtin.limit-rings" }],
         "bottom": [{ "id": "builtin.task-row" }]

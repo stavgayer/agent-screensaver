@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"agent-screensaver/internal/atomicfile"
+	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/state"
 	"agent-screensaver/internal/view"
 )
@@ -32,17 +33,21 @@ type StateFile struct {
 	// saver ignores it. Privacy mode leaves it out.
 	SessionNames []state.SessionName `json:"session_names,omitempty"`
 	View         view.View           `json:"view"`
+	// NowPlaying is the song a music app plays, when the user has now
+	// playing on. Privacy mode leaves it out.
+	NowPlaying *nowplaying.Track `json:"now_playing,omitempty"`
 	// Demo marks a file whose cards and limits are the made-up demo scene,
 	// so a restarted service never takes them back as real. Internal: the
 	// saver ignores it.
 	Demo bool `json:"demo,omitempty"`
 }
 
-// Build combines state and view into a file. With privacy on it clears each
-// card's title, request, conversation name and branch: each says what the
-// work is; it also leaves out the session names. It copies the cards, so the caller's state is
+// Build combines state, view and the playing song (nil for none) into a
+// file. With privacy on it clears each card's title, request, conversation
+// name and branch: each says what the work is; it also leaves out the
+// session names and the song. It copies the cards, so the caller's state is
 // untouched, and it never leaves a nil list (which would encode as null).
-func Build(st state.State, v view.View, nowMs int64) StateFile {
+func Build(st state.State, v view.View, track *nowplaying.Track, nowMs int64) StateFile {
 	cards := make([]state.Card, len(st.Cards))
 	copy(cards, st.Cards)
 	if v.Privacy {
@@ -59,6 +64,11 @@ func Build(st state.State, v view.View, nowMs int64) StateFile {
 	if !v.Privacy {
 		names = st.SessionNames(nowMs)
 	}
+	var song *nowplaying.Track
+	if track != nil && !v.Privacy {
+		copied := *track
+		song = &copied
+	}
 	sources := maps.Clone(st.Sources)
 	if sources == nil {
 		sources = map[string]state.Source{}
@@ -72,6 +82,7 @@ func Build(st state.State, v view.View, nowMs int64) StateFile {
 		Sources:       sources,
 		SessionNames:  names,
 		View:          v,
+		NowPlaying:    song,
 	}
 }
 
