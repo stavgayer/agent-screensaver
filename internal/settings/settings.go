@@ -218,6 +218,14 @@ func (s Service) SetPrivacy(on bool) error {
 	})
 }
 
+// SetNowPlaying turns on or off showing the song Spotify or Music plays.
+func (s Service) SetNowPlaying(on bool) error {
+	return s.update(func(cfg *config.Config) error {
+		cfg.NowPlaying = on
+		return nil
+	})
+}
+
 // SetSound turns the attention sound on or off. A non-empty file replaces the
 // sound; an empty one keeps the current sound.
 func (s Service) SetSound(on bool, file string) error {

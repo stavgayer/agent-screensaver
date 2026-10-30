@@ -32,6 +32,7 @@ type Service interface {
 	SetOption(extID, key, raw string) error
 	ResetOption(extID, key string) error
 	SetPrivacy(on bool) error
+	SetNowPlaying(on bool) error
 	SetSound(on bool, file string) error
 	SetMaxFPS(fps int) error
 	SetIgnoredProjects(projects []string) error
@@ -127,8 +128,11 @@ func (b *bridge) methods() map[string]method {
 			return nil, b.svc.ResetOption(p.Extension, p.Key)
 		}),
 		"setPrivacy": withParams(func(p struct{ On bool }) (any, error) { return nil, b.svc.SetPrivacy(p.On) }),
-		"setSound":   withParams(b.setSound),
-		"setMaxFps":  withParams(func(p struct{ FPS int }) (any, error) { return nil, b.svc.SetMaxFPS(p.FPS) }),
+		"setNowPlaying": withParams(func(p struct{ On bool }) (any, error) {
+			return nil, b.svc.SetNowPlaying(p.On)
+		}),
+		"setSound":  withParams(b.setSound),
+		"setMaxFps": withParams(func(p struct{ FPS int }) (any, error) { return nil, b.svc.SetMaxFPS(p.FPS) }),
 		"setIgnoredProjects": withParams(func(p struct{ Projects []string }) (any, error) {
 			return nil, b.svc.SetIgnoredProjects(p.Projects)
 		}),
@@ -380,7 +384,7 @@ func (b *bridge) state() (any, error) {
 func (b *bridge) idleState() (any, error) {
 	cfg := config.Load(b.paths.ConfigFile)
 	resolved := view.Resolve(cfg, extensions.Scan(b.paths.ExtensionsDir), nil)
-	file := statefile.Build(state.State{}, resolved, b.now())
+	file := statefile.Build(state.State{}, resolved, nil, b.now())
 	file.ServiceOK = false
 	data, err := json.Marshal(file)
 	if err != nil {

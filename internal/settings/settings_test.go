@@ -374,6 +374,21 @@ func TestPrivacyTogglePersists(t *testing.T) {
 	}
 }
 
+func TestNowPlayingTogglePersists(t *testing.T) {
+	service := newService(t)
+	if loadConfig(service).NowPlaying {
+		t.Fatal("now playing is on by default, want off")
+	}
+	for _, on := range []bool{true, false} {
+		if err := service.SetNowPlaying(on); err != nil {
+			t.Fatal(err)
+		}
+		if got := loadConfig(service).NowPlaying; got != on {
+			t.Fatalf("now playing = %v, want %v", got, on)
+		}
+	}
+}
+
 func TestSetSound(t *testing.T) {
 	service := newService(t)
 	chime := writeFile(t, filepath.Join(t.TempDir(), "chime.aiff"), "sound")

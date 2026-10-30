@@ -17,6 +17,7 @@ import (
 	"agent-screensaver/internal/cli"
 	"agent-screensaver/internal/daemon"
 	"agent-screensaver/internal/limits"
+	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
 	"agent-screensaver/internal/sessioninfo"
@@ -153,6 +154,7 @@ func runDaemon(args []string, stderr io.Writer) int {
 	service.Details = sessioninfo.Reader{Home: home, ContextSizes: contextSizes}
 	service.Estimator = claudeEstimator(home, p, stderr)
 	service.LimitsProviders = limitsProviders(home)
+	service.Music = nowplaying.Reader{}
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.
 	finished := make(chan struct{})

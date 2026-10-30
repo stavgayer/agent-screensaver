@@ -21,6 +21,7 @@ type Config struct {
 	Sound              bool                      `json:"sound"`
 	SoundFile          string                    `json:"sound_file"`
 	Privacy            bool                      `json:"privacy"`
+	NowPlaying         bool                      `json:"now_playing"`      // show the song Spotify or Music plays
 	MaxFPS             int                       `json:"max_fps"`          // 0 = display refresh rate; else 1..240
 	IgnoredProjects    []string                  `json:"ignored_projects"` // folder names whose sessions never get a card
 	PreviousStatusline string                    `json:"previous_statusline,omitempty"`

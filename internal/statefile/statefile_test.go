@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/state"
 	"agent-screensaver/internal/view"
 )
@@ -31,7 +32,7 @@ func TestBuildPrivacyStripsTitles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := sampleState()
-			got := Build(input, view.View{Privacy: tt.privacy}, 42)
+			got := Build(input, view.View{Privacy: tt.privacy}, nil, 42)
 
 			if got.Version != 1 || !got.ServiceOK || got.GeneratedAtMs != 42 {
 				t.Fatalf("header = %+v", got)
@@ -55,7 +56,7 @@ func TestBuildPrivacyStripsTitles(t *testing.T) {
 }
 
 func TestBuildNeverEmitsNullLists(t *testing.T) {
-	data, err := json.Marshal(Build(state.State{}, view.View{}, 1))
+	data, err := json.Marshal(Build(state.State{}, view.View{}, nil, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,7 @@ func TestBuildNeverEmitsNullLists(t *testing.T) {
 func TestWriteAtomicLeavesNoTmp(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	path := filepath.Join(dir, "state.json")
-	want := Build(sampleState(), view.View{}, 7)
+	want := Build(sampleState(), view.View{}, nil, 7)
 
 	for range 2 { // second write replaces the first
 		if err := WriteAtomic(path, want); err != nil {
@@ -119,7 +120,7 @@ func TestReadLimits(t *testing.T) {
 			switch tt.content {
 			case "":
 			case "write", "demo":
-				file := Build(state.State{Limits: written}, view.View{}, 5000)
+				file := Build(state.State{Limits: written}, view.View{}, nil, 5000)
 				file.Demo = tt.content == "demo"
 				if err := WriteAtomic(path, file); err != nil {
 					t.Fatal(err)
@@ -140,10 +141,24 @@ func TestReadLimits(t *testing.T) {
 	}
 }
 
+func TestBuildShowsTheSongUnlessPrivacyIsOn(t *testing.T) {
+	track := &nowplaying.Track{App: "Spotify", Title: "Sloop John B", Artist: "The Beach Boys", PositionMs: 1, DurationMs: 2, AtMs: 3}
+	for _, privacy := range []bool{false, true} {
+		got := Build(state.State{}, view.View{Privacy: privacy}, track, 42).NowPlaying
+		if privacy && got != nil || !privacy && (got == nil || *got != *track || got == track) {
+			t.Errorf("privacy %v: now_playing = %+v, want %v", privacy, got, map[bool]string{false: "a copy of the song", true: "none"}[privacy])
+		}
+	}
+	data, err := json.Marshal(Build(state.State{}, view.View{}, nil, 1))
+	if err != nil || strings.Contains(string(data), "now_playing") {
+		t.Errorf("no song, the file holds now_playing: %s (%v)", data, err)
+	}
+}
+
 func TestSessionNamesAreWrittenAndReadBackUnlessPrivacyIsOn(t *testing.T) {
 	for _, privacy := range []bool{false, true} {
 		path := filepath.Join(t.TempDir(), "state.json")
-		if err := WriteAtomic(path, Build(sampleState(), view.View{Privacy: privacy}, 42)); err != nil {
+		if err := WriteAtomic(path, Build(sampleState(), view.View{Privacy: privacy}, nil, 42)); err != nil {
 			t.Fatal(err)
 		}
 		data, err := os.ReadFile(path)

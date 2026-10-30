@@ -3,6 +3,7 @@ package daemon
 import (
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/demo"
+	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/state"
 )
 
@@ -30,6 +31,7 @@ type demoRun struct {
 type demoFrame struct {
 	cards  []state.Card
 	limits []state.Limit
+	track  nowplaying.Track
 }
 
 func (f demoFrame) needsAttention() bool {
@@ -68,7 +70,7 @@ func (r *demoRun) next(cfg config.Config, realApproval, saverActive bool, nowMs 
 		return nil
 	}
 	cards, limits := demo.Scene(elapsedMs, totalMs, nowMs)
-	return &demoFrame{cards: cards, limits: limits}
+	return &demoFrame{cards: cards, limits: limits, track: demo.Track(elapsedMs, nowMs)}
 }
 
 func (r *demoRun) spend() {

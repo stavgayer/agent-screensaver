@@ -136,7 +136,7 @@ func TestEstimateErrorsAreLoggedOncePerChange(t *testing.T) {
 func TestLimitsOfTheLastRunAreShownAtStart(t *testing.T) {
 	d, p := newTestDaemon(t)
 	before := []state.Limit{{Source: "codex", Window: event.Week, UsedPercent: 12, UpdatedAtMs: 100}}
-	if err := statefile.WriteAtomic(p.StateFile, statefile.Build(state.State{Limits: before}, view.View{}, 100)); err != nil {
+	if err := statefile.WriteAtomic(p.StateFile, statefile.Build(state.State{Limits: before}, view.View{}, nil, 100)); err != nil {
 		t.Fatal(err)
 	}
 	d.Step(1_000, false)

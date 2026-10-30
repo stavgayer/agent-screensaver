@@ -13,6 +13,7 @@ interface Snapshot {
     sound: boolean;
     sound_file: string;
     privacy: boolean;
+    now_playing: boolean;
     max_fps: number;
     /** Folder names whose sessions get no card. */
     ignored_projects: string[] | null;
@@ -665,6 +666,12 @@ function generalView(): Node[] {
       row("Privacy mode", toggle("privacy", config.privacy, (on) => void change("setPrivacy", { on }, "privacy")), {
         id: "privacy",
         description: "Hides task titles and approval requests on the screen saver, and project names in the menu.",
+      }),
+    ]),
+    group("Music", [
+      row("Show what's playing", toggle("now-playing", config.now_playing, (on) => void change("setNowPlaying", { on }, "now-playing")), {
+        id: "now-playing",
+        description: "Shows the song that Spotify or Music plays on the screen saver. macOS asks once to allow it for each app. Privacy mode hides it.",
       }),
     ]),
     ignoredProjectsGroup(),

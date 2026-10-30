@@ -70,6 +70,9 @@ func (f *fakeService) ResetOption(extID, key string) error {
 	return f.record("ResetOption " + extID + " " + key)
 }
 func (f *fakeService) SetPrivacy(on bool) error { return f.record("SetPrivacy " + yesNo(on)) }
+func (f *fakeService) SetNowPlaying(on bool) error {
+	return f.record("SetNowPlaying " + yesNo(on))
+}
 func (f *fakeService) SetSound(on bool, file string) error {
 	return f.record("SetSound " + yesNo(on) + " " + file)
 }
@@ -235,6 +238,7 @@ func TestOpenCallsTheService(t *testing.T) {
 		{"set file option with the picker", "setOption", `{"extension":"builtin.image","key":"file","pick":true}`, "/tmp/a.png", "SetOption builtin.image file /tmp/a.png", nil},
 		{"reset option", "resetOption", `{"extension":"builtin.matrix","key":"fps"}`, "", "ResetOption builtin.matrix fps", nil},
 		{"privacy", "setPrivacy", `{"on":true}`, "", "SetPrivacy on", nil},
+		{"now playing", "setNowPlaying", `{"on":true}`, "", "SetNowPlaying on", nil},
 		{"sound keeps the file", "setSound", `{"on":false}`, "", "SetSound off ", nil},
 		{"sound file with the picker", "setSound", `{"on":true,"pick":true}`, "/tmp/ding.aiff", "SetSound on /tmp/ding.aiff", nil},
 		{"max fps", "setMaxFps", `{"fps":3}`, "", "SetMaxFPS |||", nil},
