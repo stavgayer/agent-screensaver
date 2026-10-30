@@ -37,10 +37,11 @@ const settingsWindowTitle = "Agent Screen Saver"
 //go:embed appicon.png
 var appIcon []byte
 
-// pageHandler and previewRoot serve the one settings window a process can
-// have. They are only touched on the main thread.
+// pageHandler, dropHandler and previewRoot serve the one settings window a
+// process can have. They are only touched on the main thread.
 var (
 	pageHandler PageHandler
+	dropHandler DropHandler
 	previewRoot string
 )
 
@@ -51,11 +52,11 @@ type webKitWindow struct{}
 func NewSettingsWindow() SettingsWindow { return webKitWindow{} }
 
 // Run shows the page and serves the app loop until the window closes.
-func (webKitWindow) Run(page, readAccess string, handle PageHandler) error {
+func (webKitWindow) Run(page, readAccess string, handle PageHandler, drop DropHandler) error {
 	if _, err := os.Stat(page); err != nil {
 		return fmt.Errorf("settings page: %w", err)
 	}
-	pageHandler, previewRoot = handle, readAccess
+	pageHandler, dropHandler, previewRoot = handle, drop, readAccess
 	title, cPage, cAccess := C.CString(settingsWindowTitle), C.CString(page), C.CString(readAccess)
 	defer C.free(unsafe.Pointer(title))
 	defer C.free(unsafe.Pointer(cPage))
@@ -77,6 +78,18 @@ func settingsPageMessage(message *C.char) {
 	cScript := C.CString(script)
 	defer C.free(unsafe.Pointer(cScript))
 	C.EvaluateInSettingsWindow(cScript)
+}
+
+// settingsFileDropped is called by the web view on the main thread with the
+// path of the one .zip file or folder dropped on it. A nonzero answer means
+// the drop was taken and the page may be told.
+//
+//export settingsFileDropped
+func settingsFileDropped(path *C.char) C.int {
+	if dropHandler == nil || !dropHandler(C.GoString(path)) {
+		return 0
+	}
+	return 1
 }
 
 // previewRequest answers one ags-preview:// request from the preview frame,
