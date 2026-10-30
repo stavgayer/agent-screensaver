@@ -37,12 +37,20 @@ type FileCloner interface {
 // error out. It is called on the main thread, one call at a time.
 type PageHandler func(method string, params json.RawMessage) (any, error)
 
+// DropHandler is given the path of one .zip file or folder dropped on a
+// SettingsWindow. It reports whether it takes the drop; only then is the page
+// told about it. The path comes from the system's drag, never from the
+// page. It is called on the main thread, between page calls.
+type DropHandler func(path string) bool
+
 // SettingsWindow shows a local web page in a native window and lets the page
 // call Go. Run opens the page (a file inside readAccess, which is the only
 // folder the page may load from), blocks until the user closes the window,
-// and must be called from the main goroutine.
+// and must be called from the main goroutine. A .zip file or folder dropped
+// on the window goes to drop, and once drop takes it the page's
+// window.__agsDropped is called.
 type SettingsWindow interface {
-	Run(page, readAccess string, handle PageHandler) error
+	Run(page, readAccess string, handle PageHandler, drop DropHandler) error
 }
 
 // FileRequest says what an open-file dialog offers.

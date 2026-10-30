@@ -54,6 +54,61 @@ static BOOL IsSettingsPage(NSURL *url) {
 }
 @end
 
+// The one .zip file or folder a drag carries, or nil for any other drag
+// (text inside the page, several files, other kinds of files).
+static NSURL *DroppedExtension(id<NSDraggingInfo> info) {
+  NSArray<NSURL *> *urls = [info.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
+                                                                  options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (urls.count != 1) return nil;
+  NSURL *url = urls.firstObject;
+  BOOL folder = NO;
+  if (![NSFileManager.defaultManager fileExistsAtPath:url.path isDirectory:&folder]) return nil;
+  return folder || [url.pathExtension.lowercaseString isEqualToString:@"zip"] ? url : nil;
+}
+
+// Takes a dropped extension itself, so WebKit never opens the file. The path
+// goes to Go, and the page only learns that a drop happened: it never sees
+// or sends the path. Every other drag goes to WebKit as usual.
+@interface AGSWebView : WKWebView
+@end
+
+@implementation AGSWebView
+- (void)showDropping:(BOOL)on {
+  [self evaluateJavaScript:on ? @"window.__agsDragging && window.__agsDragging(true)"
+                              : @"window.__agsDragging && window.__agsDragging(false)"
+         completionHandler:nil];
+}
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {
+  if (DroppedExtension(info) == nil) return [super draggingEntered:info];
+  [self showDropping:YES];
+  return NSDragOperationCopy;
+}
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info {
+  return DroppedExtension(info) == nil ? [super draggingUpdated:info] : NSDragOperationCopy;
+}
+- (void)draggingExited:(id<NSDraggingInfo>)info {
+  if (DroppedExtension(info) == nil) {
+    [super draggingExited:info];
+    return;
+  }
+  [self showDropping:NO];
+}
+- (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)info {
+  return DroppedExtension(info) == nil ? [super prepareForDragOperation:info] : YES;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+  NSURL *url = DroppedExtension(info);
+  if (url == nil) return [super performDragOperation:info];
+  [self showDropping:NO];
+  if (!settingsFileDropped((char *)url.path.UTF8String)) return NO;
+  [self evaluateJavaScript:@"window.__agsDropped && window.__agsDropped()" completionHandler:nil];
+  return YES;
+}
+- (void)concludeDragOperation:(id<NSDraggingInfo>)info {
+  if (DroppedExtension(info) == nil) [super concludeDragOperation:info];
+}
+@end
+
 @interface AGSSettingsController : NSObject <WKScriptMessageHandler, WKNavigationDelegate, NSWindowDelegate, NSApplicationDelegate>
 @end
 
@@ -194,7 +249,7 @@ void RunSettingsWindow(const char *title, const char *page, const char *readAcce
     [config.userContentController addScriptMessageHandler:controller name:@"ags"];
     [config setURLSchemeHandler:[AGSPreviewScheme new] forURLScheme:@"ags-preview"];
     NSRect frame = NSMakeRect(0, 0, kWidth, kHeight);
-    gWebView = [[WKWebView alloc] initWithFrame:frame configuration:config];
+    gWebView = [[AGSWebView alloc] initWithFrame:frame configuration:config];
     gWebView.navigationDelegate = controller;
 
     gWindow = [[NSWindow alloc] initWithContentRect:frame

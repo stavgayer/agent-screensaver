@@ -76,7 +76,7 @@ func Open(p paths.Paths, svc Service, picker platform.FilePicker, window platfor
 		return fmt.Errorf("settings page is missing, run agent-screensaver install: %w", err)
 	}
 	b := &bridge{svc: svc, picker: picker, paths: p, now: func() int64 { return time.Now().UnixMilli() }}
-	return window.Run(page, p.DataDir, b.handle)
+	return window.Run(page, p.DataDir, b.handle, b.drop)
 }
 
 type bridge struct {
@@ -91,6 +91,9 @@ type bridge struct {
 	// waiting is the picked file of an upgrade whose review the page
 	// shows. The page confirms it by hash and never sends the path.
 	waiting *waitingInstall
+	// dropped is the file dropped on the window, kept for the one install
+	// the page starts with {dropped: true}. The page never sends the path.
+	dropped string
 }
 
 type waitingInstall struct {
@@ -129,7 +132,7 @@ func (b *bridge) methods() map[string]method {
 		"setIgnoredProjects": withParams(func(p struct{ Projects []string }) (any, error) {
 			return nil, b.svc.SetIgnoredProjects(p.Projects)
 		}),
-		"installExtension": withParams(func(struct{}) (any, error) { return b.installExtension() }),
+		"installExtension": withParams(func(p struct{ Dropped bool }) (any, error) { return b.installExtension(p.Dropped) }),
 		"confirmInstall":   withParams(func(p struct{ Hash string }) (any, error) { return b.confirmInstall(p.Hash) }),
 		"cancelInstall": withParams(func(struct{}) (any, error) {
 			b.waiting = nil
@@ -235,11 +238,32 @@ func (b *bridge) setSound(p soundParams) (any, error) {
 // installExtension reviews the picked file first. An upgrade that changes
 // any file is not installed here: the page shows the review and
 // calls confirmInstall with its hash.
-func (b *bridge) installExtension() (any, error) {
+// drop keeps a dropped file for the page's next install. It refuses the
+// drop while the open panel or an upgrade review is up, so a drop never
+// replaces the file a review is about.
+func (b *bridge) drop(path string) bool {
+	if b.picking || b.waiting != nil {
+		return false
+	}
+	b.dropped = path
+	return true
+}
+
+// installExtension installs the file the user picks, or with dropped the
+// file dropped on the window, which it uses once.
+func (b *bridge) installExtension(dropped bool) (any, error) {
 	b.waiting = nil
-	path, ok, err := b.pick(extensionFiles)
-	if err != nil || !ok {
-		return pickResult{Cancelled: err == nil}, err
+	path := b.dropped
+	b.dropped = ""
+	if dropped && path == "" {
+		return nil, errors.New("no dropped file waits to be installed; drop it again")
+	}
+	if !dropped {
+		picked, ok, err := b.pick(extensionFiles)
+		if err != nil || !ok {
+			return pickResult{Cancelled: err == nil}, err
+		}
+		path = picked
 	}
 	if pack, err := b.svc.IsPack(path); err == nil && pack {
 		return b.installPack(path)

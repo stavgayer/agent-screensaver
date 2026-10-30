@@ -67,6 +67,10 @@ const DEFAULT_ACCENT = "#00e07a";
 declare global {
   interface Window {
     __agsReply(id: number, result: unknown, error: string | null): void;
+    /** The window took a dropped .zip file or folder; Go holds its path. */
+    __agsDropped(): void;
+    /** A .zip file or folder is dragged over the window, or no longer is. */
+    __agsDragging(on: boolean): void;
     webkit?: { messageHandlers: { ags: { postMessage(message: unknown): void } } };
   }
 }
@@ -380,8 +384,9 @@ function extensionsView(): Node[] {
   ];
 }
 
-async function installExtension(): Promise<void> {
-  const result = (await change("installExtension", {}, "install", 0)) as PickResult | undefined;
+/** With dropped, installs the file dropped on the window instead of asking for one. */
+async function installExtension(dropped = false): Promise<void> {
+  const result = (await change("installExtension", dropped ? { dropped: true } : {}, "install", 0)) as PickResult | undefined;
   if (result?.review !== undefined) {
     showUpgradeDialog(result.review);
     return;
@@ -902,6 +907,15 @@ function show(view: View): void {
   render();
   if (view === "connections") void refresh();
 }
+
+window.__agsDragging = (on) => document.body.classList.toggle("dropping", on);
+// A drop installs from any view; the Extensions view shows the result and
+// any error under its Install row. An open dialog is left alone.
+window.__agsDropped = () => {
+  if (document.querySelector("dialog[open]") !== null) return;
+  show("extensions");
+  void installExtension(true);
+};
 
 for (const link of Array.from(document.querySelectorAll<HTMLButtonElement>(".sidebar button"))) {
   link.addEventListener("click", () => show(link.dataset.view as View));

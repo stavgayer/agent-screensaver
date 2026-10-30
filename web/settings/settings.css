@@ -438,11 +438,31 @@ input[type="color"] { width: 44px; height: 24px; padding: 0; border: 0; backgrou
 .plan-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .button:disabled { opacity: 0.6; }
 
+/* A .zip file or folder dragged over the window: the whole window is the drop target. */
+body::after {
+  content: "Drop to install";
+  position: fixed;
+  inset: 12px;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out);
+}
+body.dropping::after { opacity: 1; }
+
 @keyframes plan-in {
   from { opacity: 0; transform: scale(0.97); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .switch, .switch::after, .button, .status { transition: none; }
+  .switch, .switch::after, .button, .status, body::after { transition: none; }
   .plan-dialog[open] { animation: none; }
 }

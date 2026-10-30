@@ -172,7 +172,8 @@ func (f *fakePicker) PickFile(request platform.FileRequest) (string, bool, error
 	return f.path, f.path != "", nil
 }
 
-// fakeWindow calls the page handler with each call, like a page would.
+// fakeWindow calls the page handler with each call, like a page would. A
+// call with method dropMethod is a drop of the file in params instead.
 type fakeWindow struct {
 	calls      []call
 	page       string
@@ -180,16 +181,23 @@ type fakeWindow struct {
 	results    []any
 	errs       []error
 	handle     platform.PageHandler
+	drops      []bool
 }
+
+const dropMethod = "<drop>"
 
 type call struct {
 	method string
 	params string
 }
 
-func (f *fakeWindow) Run(page, readAccess string, handle platform.PageHandler) error {
+func (f *fakeWindow) Run(page, readAccess string, handle platform.PageHandler, drop platform.DropHandler) error {
 	f.page, f.readAccess, f.handle = page, readAccess, handle
 	for _, c := range f.calls {
+		if c.method == dropMethod {
+			f.drops = append(f.drops, drop(c.params))
+			continue
+		}
 		result, err := handle(c.method, json.RawMessage(c.params))
 		f.results = append(f.results, result)
 		f.errs = append(f.errs, err)
@@ -511,6 +519,58 @@ func TestBridgeRefusesWhilePicking(t *testing.T) {
 			}
 			if want := []string{"ReviewInstall /tmp/acme.zip", "InstallReviewed /tmp/acme.zip "}; !reflect.DeepEqual(service.changes(), want) {
 				t.Fatalf("changes = %q, want %q", service.changes(), want)
+			}
+		})
+	}
+}
+
+func TestDroppedFileInstallsOnce(t *testing.T) {
+	drop := call{dropMethod, "/tmp/drop.zip"}
+	installDropped := call{"installExtension", `{"dropped":true}`}
+	tests := []struct {
+		name      string
+		service   *fakeService
+		calls     []call
+		want      []string
+		wantDrops []bool
+		wantPicks int
+		wantErrs  []bool // one per page call; drops are not page calls
+	}{
+		{"a drop installs without the picker", &fakeService{}, []call{drop, installDropped},
+			[]string{"ReviewInstall /tmp/drop.zip", "InstallReviewed /tmp/drop.zip "}, []bool{true}, 0, []bool{false}},
+		{"a dropped pack installs as a pack", &fakeService{pack: true}, []call{drop, installDropped},
+			[]string{"InstallPack /tmp/drop.zip"}, []bool{true}, 0, []bool{false}},
+		{"a drop is used once", &fakeService{}, []call{drop, installDropped, installDropped},
+			[]string{"ReviewInstall /tmp/drop.zip", "InstallReviewed /tmp/drop.zip "}, []bool{true}, 0, []bool{false, true}},
+		{"no drop, nothing to install", &fakeService{}, []call{installDropped},
+			nil, nil, 0, []bool{true}},
+		{"the picker clears a drop", &fakeService{}, []call{drop, {"installExtension", `{}`}, installDropped},
+			[]string{"ReviewInstall /tmp/rain.zip", "InstallReviewed /tmp/rain.zip "}, []bool{true}, 1, []bool{false, true}},
+		{"a drop waits while a review is open", &fakeService{review: changedConverter}, []call{{"installExtension", `{}`}, drop, installDropped},
+			[]string{"ReviewInstall /tmp/rain.zip"}, []bool{false}, 1, []bool{false, true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			picker := &fakePicker{path: "/tmp/rain.zip"}
+			window := &fakeWindow{calls: tt.calls}
+			if err := Open(testPaths(t), tt.service, picker, window); err != nil {
+				t.Fatal(err)
+			}
+			if got := tt.service.changes(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("calls = %q, want %q", got, tt.want)
+			}
+			if !reflect.DeepEqual(window.drops, tt.wantDrops) {
+				t.Errorf("drops taken = %v, want %v", window.drops, tt.wantDrops)
+			}
+			if len(picker.requests) != tt.wantPicks {
+				t.Errorf("picker shown %d times, want %d", len(picker.requests), tt.wantPicks)
+			}
+			var gotErrs []bool
+			for _, err := range window.errs {
+				gotErrs = append(gotErrs, err != nil)
+			}
+			if !reflect.DeepEqual(gotErrs, tt.wantErrs) {
+				t.Errorf("errors = %v, want %v (%v)", gotErrs, tt.wantErrs, window.errs)
 			}
 		})
 	}
