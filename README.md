@@ -14,7 +14,7 @@ You start a long task in Claude Code, Codex or Cursor and walk away. When you co
 
 ## What it does
 
-Each agent task gets a card: what it works on, for how long, its project, model and branch, and how full the context is. The rings show how much of your 5-hour and weekly limits is used and when they reset. When an agent waits for your approval, a large card says which agent, which project and what it wants to run. A sound plays when the screen saver is showing. With no tasks, you see the clock and your limits. A second display shows only the background and the clock.
+Each agent task gets a card: what it works on, for how long, its project, model and branch, and how full the context is. The rings show how much of your 5-hour and weekly limits is used and when they reset. When an agent waits for your approval, a large card says which agent, which project and what it wants to run. A sound plays when the screen saver is showing. With no tasks, you see the clock and your limits. A second display shows only the background and the clock. If you like, the idle screen also shows the song that Spotify or Music plays, with a progress bar (General, "Show what's playing", off by default).
 
 The pictures are of the real screen saver with made-up data. First the Chrome theme:
 
@@ -101,10 +101,10 @@ Everything lives in `~/Library/Application Support/agent-screensaver`.
 
 Privacy:
 
-- No network. agent-screensaver sends nothing anywhere. The only program it talks to is `codex app-server` on your Mac, which it starts to read the Codex limits and then stops.
+- No network. agent-screensaver sends nothing anywhere. The programs it talks to are on your Mac: `codex app-server`, which it starts to read the Codex limits and then stops, and, only when you turn on "Show what's playing", the Spotify and Music apps, which it asks what plays every 3 seconds. It never starts them. macOS asks you once per app to allow this.
 - No login tokens. Limits come from what the agents themselves give: the Claude Code status line, files that Claude Code and the Claude desktop app write on your disk, and the Codex app-server.
 - Transcripts are read, never sent. The service reads your agents' local transcripts only for the session name, the model and token counts (for how full the context is and the Claude "est." limit). It takes no prompt text from them.
-- Prompts are masked. A card title made from a prompt has its secrets masked and is cut to 40 characters. Privacy mode (`./agent-screensaver privacy on`) also hides card titles, requests, names and branches.
+- Prompts are masked. A card title made from a prompt has its secrets masked and is cut to 40 characters. Privacy mode (`./agent-screensaver privacy on`) also hides card titles, requests, names, branches and the playing song.
 
 ## Supported agents
 

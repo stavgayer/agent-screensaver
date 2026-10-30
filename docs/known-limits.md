@@ -12,6 +12,13 @@ These are the limits of version 1 that you can see or that change how you use it
 
 - **The menu bar icon can hide behind the notch.** Open Spotlight or Launchpad and search for "Agent Screensaver" instead. See the README, "Settings window and menu bar".
 
+## Now playing
+
+- **Only the Spotify and Music apps.** macOS no longer lets an ordinary program read what the whole system plays, so agent-screensaver asks these two apps through AppleScript. Music in a browser, and other music apps, are not shown.
+- **Songs that Music streams have no progress bar.** For them, Music gives the song and the artist but no position or length. Songs in your own library, and Spotify, have the bar.
+- **No album cover.** Spotify gives the cover only as a web link, and agent-screensaver uses no network.
+- **Only the Default and Calm themes show it.** A theme with its own layout must place `builtin.now-playing` itself. The Chrome theme does not yet.
+
 ## Themes
 
 - **The Chrome theme needs WebGL2.** Without it, the background is only black with grain and scan lines: no chrome shape and no agent signs. The clock, the rings and the cards still show.
