@@ -137,7 +137,7 @@ Everything on the screen is an extension: the clock, the cards, the rings, the b
 
 ## Settings window and menu bar
 
-The menu bar app shows how many agents wait and run, your limits, and each open approval. Its icon changes when an agent waits for you. From its menu you can preview the screen saver, open the settings window, and turn the sound and privacy mode on or off.
+The menu bar app shows how many agents wait and run, your limits, and each open approval. Its icon changes when an agent waits for you. From its menu you can preview the screen saver, open the settings window, and turn the sound and privacy mode on or off. After "Quit menu bar app" it stays away until you open Agent Screensaver again or log in.
 
 The settings window has five parts: Theme & background, Extension options, Extensions, Agents (add or remove an agent's hooks, turn an agent off) and General. To install a theme or any other extension, drop its `.zip` file or folder on the window, or click Install… under Extensions. You do not need Terminal for this. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then open Spotlight or Launchpad and search for "Agent Screensaver". It is the launcher app that install puts in `~/Applications`. If you do not find it, run `./agent-screensaver settings` in Terminal to open the settings window directly.
 
@@ -172,7 +172,7 @@ Cursor sends the same hook event before every command, also when it will not ask
 Add its folder name under General, Ignored projects. Upper and lower case do not count: `My-App` also hides `my-app`.
 
 **The menu bar icon is gone.**
-It can hide behind the notch. Search for "Agent Screensaver" in Spotlight or Launchpad, or run `./agent-screensaver settings`.
+It can hide behind the notch, or you quit it from its menu. Search for "Agent Screensaver" in Spotlight or Launchpad, or run `./agent-screensaver settings`: that opens the settings window and starts the menu bar app again if it is not running.
 
 **Can I install an extension from a zip?**
 Yes. Drop the zip on the settings window, click Install… under Extensions, or run `./agent-screensaver ext install`. `extension.json` must be at the top of the zip or inside its only top folder. A zip made with Finder's Compress on a folder works.

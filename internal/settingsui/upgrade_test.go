@@ -18,7 +18,7 @@ var changedConverter = settings.InstallReview{
 func runCalls(t *testing.T, service *fakeService, calls ...call) *fakeWindow {
 	t.Helper()
 	window := &fakeWindow{calls: calls}
-	if err := Open(testPaths(t), service, &fakePicker{path: "/tmp/acme.zip"}, window); err != nil {
+	if err := Open(testPaths(t), "v9.9.9", service, &fakePicker{path: "/tmp/acme.zip"}, window); err != nil {
 		t.Fatal(err)
 	}
 	return window

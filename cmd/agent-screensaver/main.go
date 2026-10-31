@@ -16,6 +16,7 @@ import (
 	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/cli"
 	"agent-screensaver/internal/daemon"
+	"agent-screensaver/internal/install"
 	"agent-screensaver/internal/limits"
 	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/paths"
@@ -249,7 +250,11 @@ func runSettingsWindow(args []string, stderr io.Writer) int {
 		return 1
 	}
 	p := paths.ForHome(home)
-	err = settingsui.Open(p, settings.Service{Paths: p}, platform.NewFilePicker(), platform.NewSettingsWindow())
+	// Opening Agent Screensaver brings the menu bar icon back, as opening a
+	// Mac app does: "Quit menu bar app" keeps it quit only until then. When
+	// agent-screensaver is not installed there is no menu bar app to start.
+	_ = platform.NewLaunchd(home).Start(install.TrayLabel)
+	err = settingsui.Open(p, version, settings.Service{Paths: p}, platform.NewFilePicker(), platform.NewSettingsWindow())
 	if err != nil {
 		fmt.Fprintf(stderr, "agent-screensaver settings: %v\n", err)
 		return 1
