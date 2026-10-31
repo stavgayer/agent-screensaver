@@ -70,21 +70,23 @@ var (
 
 // Open shows the settings page (runtime/settings/index.html) and blocks
 // until the window closes. The page may read the whole data directory: the
-// preview loads the runtime and the extensions from there.
-func Open(p paths.Paths, svc Service, picker platform.FilePicker, window platform.SettingsWindow) error {
+// preview loads the runtime and the extensions from there. version is the
+// release this binary was built as, which the General view shows.
+func Open(p paths.Paths, version string, svc Service, picker platform.FilePicker, window platform.SettingsWindow) error {
 	page := filepath.Join(p.RuntimeDir, "settings", "index.html")
 	if _, err := os.Stat(page); err != nil {
 		return fmt.Errorf("settings page is missing, run agent-screensaver install: %w", err)
 	}
-	b := &bridge{svc: svc, picker: picker, paths: p, now: func() int64 { return time.Now().UnixMilli() }}
+	b := &bridge{svc: svc, picker: picker, paths: p, version: version, now: func() int64 { return time.Now().UnixMilli() }}
 	return window.Run(page, p.DataDir, b.handle, b.drop)
 }
 
 type bridge struct {
-	svc    Service
-	picker platform.FilePicker
-	paths  paths.Paths
-	now    func() int64 // milliseconds, for the idle state
+	svc     Service
+	picker  platform.FilePicker
+	paths   paths.Paths
+	version string
+	now     func() int64 // milliseconds, for the idle state
 	// picking is true while the open panel is up. Its modal loop still
 	// delivers the page's messages, so a call could arrive in the middle of
 	// another; those calls are refused instead of nesting.
@@ -119,6 +121,7 @@ type method func(params json.RawMessage) (any, error)
 func (b *bridge) methods() map[string]method {
 	return map[string]method{
 		"snapshot": func(json.RawMessage) (any, error) { return b.svc.Snapshot() },
+		"version":  func(json.RawMessage) (any, error) { return b.version, nil },
 		"setTheme": withParams(func(p struct{ ID string }) (any, error) { return nil, b.svc.SetTheme(p.ID) }),
 		"setBackground": withParams(func(p struct{ ID string }) (any, error) {
 			return nil, b.svc.SetBackground(p.ID)

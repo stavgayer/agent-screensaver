@@ -262,7 +262,7 @@ func TestOpenCallsTheService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			service, picker := &fakeService{}, &fakePicker{path: tt.pickerPath}
 			window := &fakeWindow{calls: []call{{tt.method, tt.params}}}
-			if err := Open(testPaths(t), service, picker, window); err != nil {
+			if err := Open(testPaths(t), "v9.9.9", service, picker, window); err != nil {
 				t.Fatal(err)
 			}
 			if window.errs[0] != nil {
@@ -285,7 +285,7 @@ func TestOpenCallsTheService(t *testing.T) {
 func TestOpenLoadsThePageWithDataDirAccess(t *testing.T) {
 	p := testPaths(t)
 	window := &fakeWindow{}
-	if err := Open(p, &fakeService{}, &fakePicker{}, window); err != nil {
+	if err := Open(p, "v9.9.9", &fakeService{}, &fakePicker{}, window); err != nil {
 		t.Fatal(err)
 	}
 	if want := filepath.Join(p.RuntimeDir, "settings", "index.html"); window.page != want {
@@ -297,7 +297,7 @@ func TestOpenLoadsThePageWithDataDirAccess(t *testing.T) {
 }
 
 func TestOpenFailsWithoutThePage(t *testing.T) {
-	err := Open(paths.ForHome(t.TempDir()), &fakeService{}, &fakePicker{}, &fakeWindow{})
+	err := Open(paths.ForHome(t.TempDir()), "v9.9.9", &fakeService{}, &fakePicker{}, &fakeWindow{})
 	if err == nil || !strings.Contains(err.Error(), "agent-screensaver install") {
 		t.Fatalf("Open error = %v, want a hint to run install", err)
 	}
@@ -313,7 +313,7 @@ func TestCancelledPickerChangesNothing(t *testing.T) {
 		t.Run(tt.method, func(t *testing.T) {
 			service := &fakeService{}
 			window := &fakeWindow{calls: []call{{tt.method, tt.params}}}
-			if err := Open(testPaths(t), service, &fakePicker{}, window); err != nil {
+			if err := Open(testPaths(t), "v9.9.9", service, &fakePicker{}, window); err != nil {
 				t.Fatal(err)
 			}
 			if window.errs[0] != nil || len(service.changes()) != 0 {
@@ -332,7 +332,7 @@ func warmUps(t *testing.T, service *fakeService, calls ...call) []string {
 	t.Helper()
 	service.warmedUp = make(chan string, 4)
 	window := &fakeWindow{calls: calls}
-	if err := Open(testPaths(t), service, &fakePicker{path: "/tmp/rain.zip"}, window); err != nil {
+	if err := Open(testPaths(t), "v9.9.9", service, &fakePicker{path: "/tmp/rain.zip"}, window); err != nil {
 		t.Fatal(err)
 	}
 	var started []string
@@ -373,7 +373,7 @@ func TestWarmUpsFromTheWindowNeedTrust(t *testing.T) {
 func TestInstallPickerOffersZipAndFolders(t *testing.T) {
 	picker := &fakePicker{}
 	window := &fakeWindow{calls: []call{{"installExtension", `{}`}}}
-	if err := Open(testPaths(t), &fakeService{}, picker, window); err != nil {
+	if err := Open(testPaths(t), "v9.9.9", &fakeService{}, picker, window); err != nil {
 		t.Fatal(err)
 	}
 	got := picker.requests[0]
@@ -395,7 +395,7 @@ func TestErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			window := &fakeWindow{calls: []call{{tt.method, tt.params}}}
-			if err := Open(testPaths(t), &fakeService{err: tt.serviceErr}, &fakePicker{}, window); err != nil {
+			if err := Open(testPaths(t), "v9.9.9", &fakeService{err: tt.serviceErr}, &fakePicker{}, window); err != nil {
 				t.Fatal(err)
 			}
 			if window.errs[0] == nil || !strings.Contains(window.errs[0].Error(), tt.want) {
@@ -411,7 +411,7 @@ func TestState(t *testing.T) {
 		t.Fatal(err)
 	}
 	window := &fakeWindow{calls: []call{{"state", ``}}}
-	if err := Open(p, &fakeService{}, &fakePicker{}, window); err != nil {
+	if err := Open(p, "v9.9.9", &fakeService{}, &fakePicker{}, window); err != nil {
 		t.Fatal(err)
 	}
 	// With no daemon there is no state.json: the preview still gets an idle
@@ -430,7 +430,7 @@ func TestState(t *testing.T) {
 		t.Fatal(err)
 	}
 	window = &fakeWindow{calls: []call{{"state", `{}`}}}
-	if err := Open(p, &fakeService{}, &fakePicker{}, window); err != nil {
+	if err := Open(p, "v9.9.9", &fakeService{}, &fakePicker{}, window); err != nil {
 		t.Fatal(err)
 	}
 	if window.errs[0] != nil || window.results[0] != content {
@@ -451,7 +451,7 @@ func TestFileOptionOnlyThroughTheDialog(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &fakeService{}
 			window := &fakeWindow{calls: []call{{"setOption", tt.params}}}
-			if err := Open(testPaths(t), service, &fakePicker{path: tt.pickerPath}, window); err != nil {
+			if err := Open(testPaths(t), "v9.9.9", service, &fakePicker{path: tt.pickerPath}, window); err != nil {
 				t.Fatal(err)
 			}
 			err := window.errs[0]
@@ -469,7 +469,7 @@ func TestNoCallsWhileTheDialogIsOpen(t *testing.T) {
 	service := &fakeService{}
 	window := &fakeWindow{calls: []call{{"installExtension", `{}`}, {"setPrivacy", `{"on":true}`}}}
 	picker := &fakePicker{path: "/tmp/rain.zip", window: window, nested: &call{"setPrivacy", `{"on":true}`}}
-	if err := Open(testPaths(t), service, picker, window); err != nil {
+	if err := Open(testPaths(t), "v9.9.9", service, picker, window); err != nil {
 		t.Fatal(err)
 	}
 	if picker.nestedErr == nil || !strings.Contains(picker.nestedErr.Error(), "file dialog is open") {
@@ -492,7 +492,7 @@ func TestBridgeAgentMethodsTakeIdsOnly(t *testing.T) {
 		t.Run(tt.method+" "+tt.params, func(t *testing.T) {
 			service := &fakeService{}
 			window := &fakeWindow{calls: []call{{tt.method, tt.params}}}
-			if err := Open(testPaths(t), service, &fakePicker{}, window); err != nil {
+			if err := Open(testPaths(t), "v9.9.9", service, &fakePicker{}, window); err != nil {
 				t.Fatal(err)
 			}
 			if window.errs[0] == nil || !strings.Contains(window.errs[0].Error(), "unknown field") {
@@ -515,7 +515,7 @@ func TestBridgeRefusesWhilePicking(t *testing.T) {
 			service := &fakeService{}
 			window := &fakeWindow{calls: []call{{"installExtension", `{}`}}}
 			picker := &fakePicker{path: "/tmp/acme.zip", window: window, nested: &nested}
-			if err := Open(testPaths(t), service, picker, window); err != nil {
+			if err := Open(testPaths(t), "v9.9.9", service, picker, window); err != nil {
 				t.Fatal(err)
 			}
 			if picker.nestedErr == nil || !strings.Contains(picker.nestedErr.Error(), "file dialog is open") {
@@ -557,7 +557,7 @@ func TestDroppedFileInstallsOnce(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			picker := &fakePicker{path: "/tmp/rain.zip"}
 			window := &fakeWindow{calls: tt.calls}
-			if err := Open(testPaths(t), tt.service, picker, window); err != nil {
+			if err := Open(testPaths(t), "v9.9.9", tt.service, picker, window); err != nil {
 				t.Fatal(err)
 			}
 			if got := tt.service.changes(); !reflect.DeepEqual(got, tt.want) {
@@ -577,5 +577,16 @@ func TestDroppedFileInstallsOnce(t *testing.T) {
 				t.Errorf("errors = %v, want %v (%v)", gotErrs, tt.wantErrs, window.errs)
 			}
 		})
+	}
+}
+
+func TestVersionIsTheOneOpenWasGiven(t *testing.T) {
+	service := &fakeService{}
+	window := &fakeWindow{calls: []call{{"version", ``}}}
+	if err := Open(testPaths(t), "v9.9.9", service, &fakePicker{}, window); err != nil {
+		t.Fatal(err)
+	}
+	if window.errs[0] != nil || window.results[0] != "v9.9.9" || len(service.calls) != 0 {
+		t.Fatalf("version = %#v, %v, service calls %q; want v9.9.9 and no service call", window.results[0], window.errs[0], service.calls)
 	}
 }

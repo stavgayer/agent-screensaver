@@ -249,7 +249,7 @@ func runSettingsWindow(args []string, stderr io.Writer) int {
 		return 1
 	}
 	p := paths.ForHome(home)
-	err = settingsui.Open(p, settings.Service{Paths: p}, platform.NewFilePicker(), platform.NewSettingsWindow())
+	err = settingsui.Open(p, version, settings.Service{Paths: p}, platform.NewFilePicker(), platform.NewSettingsWindow())
 	if err != nil {
 		fmt.Fprintf(stderr, "agent-screensaver settings: %v\n", err)
 		return 1

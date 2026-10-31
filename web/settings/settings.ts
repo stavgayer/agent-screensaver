@@ -90,6 +90,8 @@ let snapshot: Snapshot | undefined;
 let connections: Connection[] = [];
 let notices: Record<string, string> = {};
 let currentView: View = "appearance";
+/** The release this agent-screensaver was built as ("dev" for a local build), read once. */
+let appVersion = "";
 /** The extension whose Remove button waits for a second click. */
 let confirmingRemove: string | undefined;
 
@@ -678,6 +680,11 @@ function generalView(): Node[] {
     group("Performance", [
       row("Maximum frame rate", fps, { id: "max-fps", description: "A ceiling for every background. Display follows the screen's refresh rate." }),
     ]),
+    group("About", [
+      row("Version", h("span", { class: "version", id: "version" }, appVersion || "Unknown"), {
+        description: "The agent-screensaver release you run. Each extension's version is under Extensions.",
+      }),
+    ]),
   ];
 }
 
@@ -939,3 +946,10 @@ document.addEventListener("visibilitychange", () => {
 // WebKit focuses the first control when the window opens, with a keyboard
 // ring; nothing should look selected by the keyboard before a key is pressed.
 void refresh().then(() => (document.activeElement as HTMLElement | null)?.blur());
+void bridge
+  .call<string>("version")
+  .then((version) => {
+    appVersion = version;
+    if (currentView === "general") render();
+  })
+  .catch(() => undefined);

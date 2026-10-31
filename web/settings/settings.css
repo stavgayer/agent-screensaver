@@ -178,6 +178,7 @@ h2 { font-size: 13px; font-weight: 600; }
 .panel > .panel-note { margin: 0; padding: 10px 14px; color: var(--secondary); font-size: 12px; }
 .panel-note + .row { border-top: 1px solid var(--line); }
 .row-control { flex: none; display: flex; align-items: center; gap: 8px; }
+.version { color: var(--secondary); font-variant-numeric: tabular-nums; -webkit-user-select: text; user-select: text; }
 
 .muted { color: var(--secondary); }
 
