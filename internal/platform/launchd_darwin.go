@@ -50,6 +50,13 @@ func (l Launchd) plistPath(label string) string {
 
 func domain() string { return fmt.Sprintf("gui/%d", os.Getuid()) }
 
+// Start starts the loaded service with this label if it is not running. It
+// never restarts a running one (kickstart without -k). A service that is not
+// loaded, because agent-screensaver is not installed, is an error.
+func (l Launchd) Start(label string) error {
+	return l.Run("launchctl", "kickstart", domain()+"/"+label)
+}
+
 // Install writes the plist and loads it. args is the full command line;
 // the service's stderr goes to logFile.
 func (l Launchd) Install(label string, args []string, logFile string) (string, error) {

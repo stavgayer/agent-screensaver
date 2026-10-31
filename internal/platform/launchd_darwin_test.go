@@ -268,3 +268,15 @@ func TestKeepAliveByService(t *testing.T) {
 		})
 	}
 }
+
+func TestLaunchdStartKickstartsWithoutRestart(t *testing.T) {
+	fake := &recorder{}
+	launchd := Launchd{Home: t.TempDir(), Run: fake.run, Sleep: noSleep}
+	if err := launchd.Start("dev.agentscreensaver.tray"); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{{"launchctl", "kickstart", domain() + "/dev.agentscreensaver.tray"}}
+	if !reflect.DeepEqual(fake.commands, want) {
+		t.Errorf("commands = %q, want %q (no -k, so a running menu bar app is left alone)", fake.commands, want)
+	}
+}
