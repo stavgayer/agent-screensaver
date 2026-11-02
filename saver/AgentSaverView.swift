@@ -66,7 +66,8 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
 
     private func loadRuntime() {
         guard let dataDir = Self.dataDir else { return }
-        webView.loadFileURL(dataDir.appendingPathComponent("runtime/index.html"), allowingReadAccessTo: dataDir)
+        guard let page = Self.runtimePage else { return }
+        webView.loadFileURL(page, allowingReadAccessTo: dataDir)
     }
 
     // MARK: - Lifecycle
@@ -205,6 +206,24 @@ final class AgentSaverView: ScreenSaverView, WKNavigationDelegate {
         webView.removeFromSuperview()
         if !isPreview { exit(0) }
     }
+
+    // MARK: - Navigation
+
+    // The page is the local runtime and nothing else: an extension's script must
+    // not take the page to a web address, which could carry the state in its URL.
+    // The runtime itself never navigates, so only its own page and about: load.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        decisionHandler(Self.allowsNavigation(to: navigationAction.request.url) ? .allow : .cancel)
+    }
+
+    static func allowsNavigation(to url: URL?) -> Bool {
+        guard let url, let page = runtimePage else { return false }
+        if url.scheme == "about" { return true }
+        return url.isFileURL && url.standardizedFileURL.path == page.standardizedFileURL.path
+    }
+
+    private static var runtimePage: URL? { dataDir?.appendingPathComponent("runtime/index.html") }
 
     // MARK: - State
 
