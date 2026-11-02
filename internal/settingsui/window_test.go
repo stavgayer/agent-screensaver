@@ -111,7 +111,9 @@ func (f *fakeService) warmUp(call string) {
 		f.warmedUp <- call
 	}
 }
-func (f *fakeService) RemoveExtension(id string) error { return f.record("RemoveExtension " + id) }
+func (f *fakeService) RemoveTheme(id string) (settings.Removal, error) {
+	return settings.Removal{Removed: []string{id, id + "-layout"}}, f.record("RemoveTheme " + id)
+}
 func (f *fakeService) Notice(extID string) string {
 	_ = f.record("Notice " + extID)
 	return "notice for " + extID
@@ -244,7 +246,7 @@ func TestOpenCallsTheService(t *testing.T) {
 		{"max fps", "setMaxFps", `{"fps":3}`, "", "SetMaxFPS |||", nil},
 		{"ignored projects", "setIgnoredProjects", `{"projects":["observer-sessions","scratch"]}`, "", "SetIgnoredProjects observer-sessions,scratch", nil},
 		{"no ignored projects", "setIgnoredProjects", `{"projects":[]}`, "", "SetIgnoredProjects ", nil},
-		{"remove", "removeExtension", `{"id":"acme.rain"}`, "", "RemoveExtension acme.rain", nil},
+		{"remove takes the theme's parts too", "removeExtension", `{"id":"acme.rain"}`, "", "RemoveTheme acme.rain", settings.Removal{Removed: []string{"acme.rain", "acme.rain-layout"}}},
 		{"notice", "notice", `{"extension":"builtin.aerials"}`, "", "Notice builtin.aerials", "notice for builtin.aerials"},
 		{"connections", "connections", `{}`, "", "Connections now", []settings.Connection{{ID: "builtin.claude", State: settings.StateIdle}}},
 		{"turn an agent off", "setAgentOn", `{"id":"builtin.codex","on":false}`, "", "SetAgentOn builtin.codex off", nil},
@@ -588,5 +590,55 @@ func TestVersionIsTheOneOpenWasGiven(t *testing.T) {
 	}
 	if window.errs[0] != nil || window.results[0] != "v9.9.9" || len(service.calls) != 0 {
 		t.Fatalf("version = %#v, %v, service calls %q; want v9.9.9 and no service call", window.results[0], window.errs[0], service.calls)
+	}
+}
+
+// The window's Remove goes through the real service, so a theme leaves with
+// the parts it brought, and a theme in use hands over to the default one.
+func TestRemoveTakesTheThemesPartsAlong(t *testing.T) {
+	p := testPaths(t)
+	write := func(id, manifest string, extra ...string) {
+		dir := filepath.Join(p.ExtensionsDir, id)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "extension.json"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range extra {
+			if err := os.WriteFile(filepath.Join(dir, file), []byte("// entry"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	write("acme.clock", `{"id":"acme.clock","name":"Clock","version":"1.0.0","type":"component","api":1,"entry":"main.js"}`, "main.js")
+	write("acme.layout", `{"id":"acme.layout","name":"Layout","version":"1.0.0","type":"layout","api":1,
+		"layout":{"modes":{"idle":{"center":[{"id":"acme.clock"}]},"attention":{"center":[{"id":"acme.clock"}]}}}}`)
+	write("acme.dark", `{"id":"acme.dark","name":"Dark","version":"1.0.0","type":"theme","api":1,
+		"theme":{"background":{"id":"builtin.matrix"},"layout":"acme.layout","style":{}}}`)
+	service := settings.Service{Paths: p}
+	if err := service.SetTheme("acme.dark"); err != nil {
+		t.Fatal(err)
+	}
+
+	window := &fakeWindow{calls: []call{{"removeExtension", `{"id":"acme.dark"}`}}}
+	if err := Open(p, "v9.9.9", service, &fakePicker{}, window); err != nil {
+		t.Fatal(err)
+	}
+
+	if window.errs[0] != nil {
+		t.Fatal(window.errs[0])
+	}
+	removal, _ := window.results[0].(settings.Removal)
+	if want := []string{"acme.dark", "acme.layout", "acme.clock"}; !reflect.DeepEqual(removal.Removed, want) || !removal.ThemeReset {
+		t.Errorf("removal = %+v, want %q removed and the theme reset", removal, want)
+	}
+	for _, id := range []string{"acme.dark", "acme.layout", "acme.clock"} {
+		if _, err := os.Stat(filepath.Join(p.ExtensionsDir, id)); !os.IsNotExist(err) {
+			t.Errorf("%s is still installed", id)
+		}
+	}
+	if theme := config.Load(p.ConfigFile).Theme; theme != config.Default().Theme {
+		t.Errorf("theme = %q, want the default", theme)
 	}
 }

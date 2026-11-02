@@ -3,6 +3,7 @@ import { formFor, type Field, type OptionSpec } from "./form.ts";
 import { withProject, withoutProject } from "./projects.ts";
 import { PREVIEW_DATA_URL, dataFolderUrl, previewPaused, previewState, serviceRunning } from "./preview-url.ts";
 import { upgradeDialog, type DiffLine, type InstallReview } from "./upgrade.ts";
+import { removalStatus, type Removal } from "./removal.ts";
 import { connectionRows, focusAfterPlan, hookButtonId, isPlanChanged, planDialog, powerButtonId, type Connection, type ConnectionRow, type HookAction, type Plan } from "./connections.ts";
 
 /** The `snapshot` answer (Go's settings.Snapshot). */
@@ -335,6 +336,11 @@ function rangeText(field: Field): string | undefined {
 
 // ---------- Extensions ----------
 
+async function removeExtension(id: string, name: string): Promise<void> {
+  const removal = (await change("removeExtension", { id }, `remove-${id}`)) as Removal | undefined;
+  if (removal !== undefined) showStatus(removalStatus(name, removal), "saved");
+}
+
 function extensionRow(ext: ExtensionInfo): HTMLElement {
   const id = ext.manifest.id;
   const meta = [id, ext.manifest.version, TYPE_NAMES[ext.manifest.type]].filter(Boolean).join(" · ");
@@ -351,7 +357,7 @@ function extensionRow(ext: ExtensionInfo): HTMLElement {
       }, "plain", `cancel-${id}`),
       button(`Remove ${displayName(ext)}`, () => {
         confirmingRemove = undefined;
-        void change("removeExtension", { id }, `remove-${id}`);
+        void removeExtension(id, displayName(ext));
       }, "danger", `confirm-${id}`),
     );
   } else {
