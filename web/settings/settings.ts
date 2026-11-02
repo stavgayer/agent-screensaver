@@ -260,7 +260,7 @@ function appearanceView(): Node[] {
     ),
   );
   return [
-    group("Theme", [gallery, ...themes.map((theme) => errorLine(`theme-${theme.manifest.id}`)).filter((line) => line !== null)]),
+    group("Theme", [gallery, ...themes.map((theme) => errorLine(`theme-${theme.manifest.id}`)).filter((line): line is HTMLElement => line !== null)]),
     group("Background", [
       row("Background", select, { id: "background", description: "Replaces the theme's background. Its settings are under Extension options." }),
     ]),

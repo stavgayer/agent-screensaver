@@ -189,7 +189,9 @@ scripts/build-release.sh
 
 It builds a universal binary and the screen saver, and writes `dist/agent-screensaver-<version>-macos.zip`.
 
-Run the tests with `go test ./...` and `cd web && npm test`. [Test and share](docs/guides/test-and-share.md) shows the dev preview and the screenshot harness. Issues and pull requests are welcome.
+Run the tests with `go test ./...` and `cd web && npm test`. CI runs them, the type check and the release build on every push.
+
+To release, push an annotated tag whose message is the version, a blank line, then the notes: `git tag -a v0.4.4 --cleanup=verbatim -F notes.txt` and `git push origin v0.4.4`. CI builds the zip, checks it and publishes the release with those notes. [Test and share](docs/guides/test-and-share.md) shows the dev preview and the screenshot harness. Issues and pull requests are welcome.
 
 ## License
 

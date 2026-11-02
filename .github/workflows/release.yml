@@ -1,0 +1,83 @@
+# Publishes a release when a version tag is pushed. The tag must be annotated:
+# its first line is the version, and the text under it is the release notes.
+#
+#   git tag -a v0.4.4 --cleanup=verbatim -F notes.txt   # notes.txt: "v0.4.4", a blank line, the notes
+#   git push origin v0.4.4
+#
+# --cleanup=verbatim keeps the notes' markdown headings: without it git drops
+# every line that starts with #.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # to create the release
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Read the notes from the tag
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != tag ]; then
+            echo "::error::$GITHUB_REF_NAME is not an annotated tag, so it has no notes"
+            exit 1
+          fi
+          git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ] || ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::the message of $GITHUB_REF_NAME has no notes under its first line"
+            exit 1
+          fi
+      - name: The tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at a commit that is not on main"
+            exit 1
+          fi
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the web tools
+        run: npm ci
+        working-directory: web
+      - name: Tests
+        run: |
+          (cd web && npm run typecheck && npm test)
+          go vet ./...
+          go test ./...
+      - name: Build
+        run: scripts/build-release.sh
+      - name: Check the zip
+        run: |
+          name="agent-screensaver-$GITHUB_REF_NAME-macos"
+          zip="dist/$name.zip"
+          test -f "$zip"
+          check="$RUNNER_TEMP/check"
+          mkdir -p "$check"
+          unzip -q "$zip" -d "$check"
+          got=$("$check/$name/agent-screensaver" version)
+          if [ "$got" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::the binary says $got, not $GITHUB_REF_NAME"
+            exit 1
+          fi
+          if grep -rIla '/Users/' "$check"; then
+            echo "::error::the zip holds a home folder path (listed above)"
+            exit 1
+          fi
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "dist/agent-screensaver-$GITHUB_REF_NAME-macos.zip" \
+            --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
