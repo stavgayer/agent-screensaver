@@ -11,7 +11,7 @@ Two samples are in [examples/](examples/). Both tools are made up, so the hook p
 
 Before you start:
 
-- You can run `agent-screensaver` from the unzipped folder (`./agent-screensaver`, see the README).
+- You can run the `agent-screensaver` command: install puts it on your PATH, so open a new Terminal window after you install (see [In Terminal](../../README.md#in-terminal)).
 - You ran `agent-screensaver install` once. Adding hooks needs its install record.
 - You know how your tool runs a command on an event (a hook or a plugin).
 

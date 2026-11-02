@@ -55,6 +55,14 @@ You need macOS 14 or later, on Apple Silicon or Intel.
 
 Install also creates a small app, `Agent Screensaver`, in `~/Applications`. Spotlight, Launchpad and Finder find it, and it opens the settings window. It needs no admin password. If `~/Applications` does not exist, install creates it. If a file or folder named `Agent Screensaver.app` is already there and it is not ours, install leaves it alone and says so in the plan.
 
+From this version, install also puts the `agent-screensaver` command on your PATH. It needs no admin password, and the plan lists it:
+
+- It makes a link at `~/.local/bin/agent-screensaver` that points to the installed binary. If `~/.local/bin` does not exist, install creates it. If something that is not our link is already at that path, install leaves it alone and says so in the plan.
+- If `~/.local/bin` is not on your PATH yet and your shell is zsh or bash, install adds three lines to your shell profile (`~/.zprofile` for zsh, `~/.bash_profile` for bash). They sit between the markers `# >>> agent-screensaver >>>` and `# <<< agent-screensaver <<<`. If the profile exists, install first saves a copy of it next to it, with the ending `.agent-screensaver.bak`. If the lines are already there, install does not add them again.
+- For any other shell, such as fish, install does not edit anything. Add `~/.local/bin` to your PATH yourself.
+
+Open a new Terminal window to use the command. See [In Terminal](#in-terminal).
+
 ### Open Anyway (one time)
 
 The screen saver is not signed with an Apple Developer account. macOS blocks it the first time. To allow it:
@@ -78,7 +86,7 @@ Open System Settings, then Lock Screen. Set "Require password after screen saver
 
 ### Uninstall
 
-Run `./agent-screensaver uninstall` and confirm the plan. Your settings and extensions in the data folder are kept. Uninstall also deletes `~/Applications/Agent Screensaver.app`, but only when it is our app. It keeps the `~/Applications` folder.
+Run `agent-screensaver uninstall` (or `./agent-screensaver uninstall` from the unzipped folder) and confirm the plan. Your settings and extensions in the data folder are kept. Uninstall also deletes `~/Applications/Agent Screensaver.app`, but only when it is our app. It keeps the `~/Applications` folder. It also deletes the link `~/.local/bin/agent-screensaver`, but only when it is still our link, and takes only the marked lines out of your shell profile. Every other line of the profile stays. It keeps the `~/.local/bin` folder.
 
 Your agents' settings files are safe. Install only adds its own hooks to files such as `~/.claude/settings.json`, and saves a copy of each file first, next to it, with the ending `.agent-screensaver.bak`. Uninstall removes only the entries that install added, so each file gets back the same keys and values. It keeps the indent per level (tabs, or the number of spaces of its first indented line) and whether the file ends with a newline, but not every other part of the layout: see [known limits](docs/known-limits.md). A file that install creates gets two spaces. A status line command of your own is saved at install and put back at uninstall.
 
@@ -104,7 +112,7 @@ Privacy:
 - No network. agent-screensaver sends nothing anywhere. The programs it talks to are on your Mac: `codex app-server`, which it starts to read the Codex limits and then stops, and, only when you turn on "Show what's playing", the Spotify and Music apps, which it asks what plays every 3 seconds. It never starts them. macOS asks you once per app to allow this.
 - No login tokens. Limits come from what the agents themselves give: the Claude Code status line, files that Claude Code and the Claude desktop app write on your disk, and the Codex app-server.
 - Transcripts are read, never sent. The service reads your agents' local transcripts only for the session name, the model and token counts (for how full the context is and the Claude "est." limit). It takes no prompt text from them.
-- Prompts are masked. A card title made from a prompt has its secrets masked and is cut to 40 characters. Privacy mode (`./agent-screensaver privacy on`) also hides card titles, requests, names, branches and the playing song.
+- Prompts are masked. A card title made from a prompt has its secrets masked and is cut to 40 characters. Privacy mode (`agent-screensaver privacy on`) also hides card titles, requests, names, branches and the playing song.
 
 ## Supported agents
 
@@ -140,26 +148,30 @@ Everything on the screen is an extension: the clock, the cards, the rings, the b
 
 The menu bar app shows how many agents wait and run, your limits, and each open approval. Its icon changes when an agent waits for you. From its menu you can preview the screen saver, open the settings window, and turn the sound and privacy mode on or off. After "Quit menu bar app" it stays away until you open Agent Screensaver again or log in.
 
-The settings window has five parts: Theme & background, Extension options, Extensions, Agents (add or remove an agent's hooks, turn an agent off) and General. To install a theme or any other extension, drop its `.zip` file or folder on the window, or click Install… under Extensions. You do not need Terminal for this. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then open Spotlight or Launchpad and search for "Agent Screensaver". It is the launcher app that install puts in `~/Applications`. If you do not find it, run `./agent-screensaver settings` in Terminal to open the settings window directly.
+The settings window has five parts: Theme & background, Extension options, Extensions, Agents (add or remove an agent's hooks, turn an agent off) and General. To install a theme or any other extension, drop its `.zip` file or folder on the window, or click Install… under Extensions. You do not need Terminal for this. On a Mac with a notch, a full menu bar can hide the app's icon behind the notch. Then open Spotlight or Launchpad and search for "Agent Screensaver". It is the launcher app that install puts in `~/Applications`. If you do not find it, run `agent-screensaver settings` in Terminal to open the settings window directly.
 
 To hide the sessions of a folder, add its name under General, Ignored projects, in the settings window. They then get no card, no approval and no sound. The list starts with `observer-sessions`, the folder where the claude-mem plugin runs its hidden Claude sessions.
 
-You can also change settings with `agent-screensaver` commands, run from the unzipped folder. One example each:
+### In Terminal
+
+From this version, install puts the `agent-screensaver` command on your PATH, so you can run it from any folder. Open a new Terminal window first. If your shell is not zsh or bash, add `~/.local/bin` to your PATH yourself. If you installed with an older version, run `./agent-screensaver install` from the new unzipped folder once more to get the command.
+
+You can change settings with `agent-screensaver` commands. One example each:
 
 | Command | Example |
 | --- | --- |
-| `theme` | `./agent-screensaver theme set builtin.chrome` |
-| `background` | `./agent-screensaver background set builtin.aerials` |
-| `option` | `./agent-screensaver option set builtin.matrix color "#00ff66"` |
-| `privacy` | `./agent-screensaver privacy on` |
-| `sound` | `./agent-screensaver sound on` |
-| `fps` | `./agent-screensaver fps max 30` |
-| `ext` | `./agent-screensaver ext install ./my-theme-pack.zip` |
-| `demo` | `./agent-screensaver demo --seconds 60` |
+| `theme` | `agent-screensaver theme set builtin.chrome` |
+| `background` | `agent-screensaver background set builtin.aerials` |
+| `option` | `agent-screensaver option set builtin.matrix color "#00ff66"` |
+| `privacy` | `agent-screensaver privacy on` |
+| `sound` | `agent-screensaver sound on` |
+| `fps` | `agent-screensaver fps max 30` |
+| `ext` | `agent-screensaver ext install ./my-theme-pack.zip` |
+| `demo` | `agent-screensaver demo --seconds 60` |
 
-Run `./agent-screensaver theme list` to see the themes you can use.
+Run `agent-screensaver theme list` to see the themes you can use.
 
-`demo` plays a made-up scene with three agents, for a screen recording. It starts when the screen saver next shows and plays for the seconds you give (10 to 600, 60 if you give none). Start the screen saver within 5 minutes, or the demo is dropped. It ends when the screen saver stops, and a real approval request ends it at once. `./agent-screensaver demo stop` ends it early. Privacy mode does not hide the demo text, because none of it is real. [docs/media/README.md](docs/media/README.md) tells how the pictures above were made and how to record a video.
+`demo` plays a made-up scene with three agents, for a screen recording. It starts when the screen saver next shows and plays for the seconds you give (10 to 600, 60 if you give none). Start the screen saver within 5 minutes, or the demo is dropped. It ends when the screen saver stops, and a real approval request ends it at once. `agent-screensaver demo stop` ends it early. Privacy mode does not hide the demo text, because none of it is real. [docs/media/README.md](docs/media/README.md) tells how the pictures above were made and how to record a video.
 
 ## FAQ
 
@@ -173,10 +185,10 @@ Cursor sends the same hook event before every command, also when it will not ask
 Add its folder name under General, Ignored projects. Upper and lower case do not count: `My-App` also hides `my-app`.
 
 **The menu bar icon is gone.**
-It can hide behind the notch, or you quit it from its menu. Search for "Agent Screensaver" in Spotlight or Launchpad, or run `./agent-screensaver settings`: that opens the settings window and starts the menu bar app again if it is not running.
+It can hide behind the notch, or you quit it from its menu. Search for "Agent Screensaver" in Spotlight or Launchpad, or run `agent-screensaver settings`: that opens the settings window and starts the menu bar app again if it is not running.
 
 **Can I install an extension from a zip?**
-Yes. Drop the zip on the settings window, click Install… under Extensions, or run `./agent-screensaver ext install`. `extension.json` must be at the top of the zip or inside its only top folder. A zip made with Finder's Compress on a folder works.
+Yes. Drop the zip on the settings window, click Install… under Extensions, or run `agent-screensaver ext install`. `extension.json` must be at the top of the zip or inside its only top folder. A zip made with Finder's Compress on a folder works.
 
 More in [Known limits](docs/known-limits.md). The reasons behind the bigger choices are in [docs/decisions/](docs/decisions/).
 

@@ -2,7 +2,7 @@
 
 Goal: see your extension work before you share it, then hand it to other people as a folder or a zip.
 
-All commands run as `agent-screensaver` (from the unzipped folder: `./agent-screensaver`). The first three ways to test need no change to your real settings if you use a temporary home folder. Section 2 shows how.
+All commands run as `agent-screensaver`, the command that install puts on your PATH (open a new Terminal window after you install, see [In Terminal](../../README.md#in-terminal)). The first three ways to test need no change to your real settings if you use a temporary home folder. Section 2 shows how.
 
 ## 1. Dev preview in a browser (fast, for widgets and backgrounds)
 
@@ -83,7 +83,7 @@ Open it with `agent-screensaver settings`, or from the menu bar app. The preview
 
 ## 4. Install and remove
 
-Install from a folder or a zip. The same command works for both. The commands are written as `agent-screensaver`: install does not put it on your PATH, so see [Before you start](README.md#before-you-start) for the alias, or run `./agent-screensaver` from the unzipped release folder. You can also drop the folder's zip on the settings window.
+Install from a folder or a zip. The same command works for both. The commands are written as `agent-screensaver`: install puts it on your PATH, see [Before you start](README.md#before-you-start). You can also drop the folder's zip on the settings window.
 
 ```
 agent-screensaver ext install ./acme.drift
