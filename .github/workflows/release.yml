@@ -1,7 +1,7 @@
 # Publishes a release when a version tag is pushed. The tag must be annotated:
 # its first line is the version, and the text under it is the release notes.
 #
-#   git tag -a v0.4.4 --cleanup=verbatim -F notes.txt   # notes.txt: "v0.4.4", a blank line, the notes
+#   git tag -a v0.4.4 --cleanup=verbatim -F <(scripts/release-notes.sh v0.4.4)   # notes from CHANGELOG.md
 #   git push origin v0.4.4
 #
 # --cleanup=verbatim keeps the notes' markdown headings: without it git drops
