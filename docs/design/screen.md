@@ -1,6 +1,6 @@
 # Screen design notes
 
-The screen is an ambient display. People read it from about 3 m away, often for one second. It has two states (spec §3, mockup `docs/superpowers/specs/mockups/layout-b-clock.html`):
+The screen is an ambient display. People read it from about 3 m away, often for one second. It has two states (spec §3, mockup `docs/history/specs/mockups/layout-b-clock.html`):
 
 - **Idle:** a big clock and date in the center, limit rings top right, task cards at the bottom.
 - **Attention:** the clock moves to the top left, an orange approval card pulses in the center.

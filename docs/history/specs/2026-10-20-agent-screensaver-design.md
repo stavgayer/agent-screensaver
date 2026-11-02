@@ -47,7 +47,7 @@ The owner is the first user. The project will be open source.
 
 ## 3. What the screen looks like
 
-The owner chose layout "B, Spotlight, with a clock". Mockup: `docs/superpowers/specs/mockups/layout-b-clock.html` (copy of the brainstorm mockup).
+The owner chose layout "B, Spotlight, with a clock". Mockup: `docs/history/specs/mockups/layout-b-clock.html` (copy of the brainstorm mockup).
 
 ### State 1: nothing needs you
 

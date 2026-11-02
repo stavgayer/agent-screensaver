@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go (stdlib), TypeScript web runtime built with esbuild, raw WebGL2 (no new dependency), `node --test`.
 
-**Spec:** `docs/superpowers/specs/2026-10-26-chrome-theme-demo-readme-design.md`
+**Spec:** `docs/history/specs/2026-10-26-chrome-theme-demo-readme-design.md`
 
 ## Global Constraints
 
