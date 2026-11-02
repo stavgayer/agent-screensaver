@@ -1,7 +1,7 @@
 # Publishes a release when a version tag is pushed. The tag must be annotated:
 # its first line is the version, and the text under it is the release notes.
 #
-#   git tag -a v0.4.4 --cleanup=verbatim -F notes.txt   # notes.txt: "v0.4.4", a blank line, the notes
+#   git tag -a v0.4.4 --cleanup=verbatim -F <(scripts/release-notes.sh v0.4.4)   # notes from CHANGELOG.md
 #   git push origin v0.4.4
 #
 # --cleanup=verbatim keeps the notes' markdown headings: without it git drops
@@ -22,6 +22,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: The changelog has notes for this version
+        run: |
+          if ! scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null; then
+            echo "::error::CHANGELOG.md has no '## $GITHUB_REF_NAME (date)' section with notes: add it, commit it to main and tag again"
+            exit 1
+          fi
       - name: Read the notes from the tag
         run: |
           git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
