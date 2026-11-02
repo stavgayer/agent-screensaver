@@ -37,7 +37,8 @@ acme.rain/
 | `name` | string | no | Name shown to people. |
 | `version` | string | no | Your version, for example `1.0.0`. |
 | `type` | string | yes | `background`, `component`, `layout`, `theme` or `agent`. |
-| `api` | number | yes | The API version you need. It must be `1`. |
+| `api` | number | yes | The API version you need: `1` or `2`. See the rules below. |
+| `requires` | string | no | The oldest agent-screensaver version that can run the extension, as `x.y.z`, for example `0.5.0`. |
 | `entry` | string | background, component | The JavaScript file to load. |
 | `options` | object | no | Settings people can change. See below. |
 | `layout` | object | layout | The layout. See below. |
@@ -47,7 +48,9 @@ Rules:
 
 - The `id` uses lowercase letters, digits and dashes. It has at least one dot. Examples: `acme.rain`, `my-name.big-clock`.
 - Ids that start with `builtin.` are reserved. You cannot install or remove them.
-- `api` must be exactly `1`. A manifest with another number is refused.
+- `api` must be `1` or `2`. A manifest with another number is refused. `api` `2` means the extension uses the [shared helpers](#shared-helpers). An older agent-screensaver accepts only `1`, so it refuses an `api` `2` extension.
+- `requires` is three numbers with dots, for example `0.5.0`. Any other form is refused. When it is newer than the running agent-screensaver, the install is refused with `<id> needs agent-screensaver <requires> or later; this is <version>. Update agent-screensaver first.`, and a scan of the extensions folder skips the extension for the same reason. Numbers compare as numbers, so `0.10.0` is newer than `0.9.0`. A build that is not a release (version `dev`) does not check it. For a release build such as `v0.4.4-3-gabc1234`, only the leading `0.4.4` counts.
+- An extension that uses the shared helpers declares `"api": 2` and `"requires": "0.5.0"`. Then an older app refuses it instead of failing when the helpers are missing.
 - `entry` is a path inside your folder. It cannot start with `/`. It cannot use `..`. The file must exist.
 
 Example background:
@@ -154,11 +157,11 @@ A user can replace the theme's background with any installed background: `agent-
 
 ## The web API
 
-These are the types an extension is written against. The API version is `1`, the same number as `api` in the manifest.
+These are the types an extension is written against. The newest API version is `2`. A manifest declares `1` or `2` in `api`.
 
 ```ts
-/** Version of the extension API. A manifest must declare this exact number. */
-export const API_VERSION = 1;
+/** The newest version of the extension API. A manifest declares 1 or 2: 2 means it uses `window.agentScreensaver.helpers`. */
+export const API_VERSION = 2;
 
 export type Region = "top-left" | "top-right" | "center" | "bottom";
 export type Mode = "idle" | "attention" | "secondary";
@@ -262,6 +265,20 @@ export interface ComponentExt {
   unmount(): void;
 }
 
+/** The shared helpers on `window.agentScreensaver.helpers`. An extension that uses them declares `"api": 2` and `"requires": "0.5.0"`. */
+export interface Helpers {
+  /**
+   * How far the song is, 0 to 1, at `nowMs` (wall time: `ctx.now()`), or null when the app gives no length.
+   * The position moves on from `at_ms` and stops at the song's end.
+   */
+  songProgress(track: NowPlaying, nowMs: number): number | null;
+  /**
+   * Wraps a background so it starts again with the last state on a fresh canvas after WebGL loses its context.
+   * `surfaceOf` returns the background's current canvas. `stop` takes the listener off before it calls `api.stop`.
+   */
+  recoverWebGL(api: BackgroundExt, surfaceOf: () => HTMLCanvasElement | undefined): BackgroundExt;
+}
+
 /** What an entry file passes to `window.agentScreensaver.register(create)`. */
 export type CreateExtension = () => BackgroundExt | ComponentExt;
 ```
@@ -278,6 +295,34 @@ The built-in rings never show an old number as the current one. The caption unde
 Components that show limits should follow the same rule.
 
 The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. It can also have an `update` method. The runtime calls it with the view state after `start`, and on every new state, as it does for components. A background without `update` never gets the state. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
+
+### Shared helpers
+
+`window.agentScreensaver.helpers` holds two functions that are the same for every extension. They are present in every build that has them, but only an extension that declares `"api": 2` and `"requires": "0.5.0"` may rely on them: an older app refuses such an extension at install, so it never runs without them.
+
+`songProgress(track, nowMs)` gives the progress of the song, from 0 to 1. It gives `null` when `duration_ms` is not above 0, as Music does for songs it streams. Pass the wall time, `ctx.now()`. The position moves on from `at_ms`, and the result stops at 1 after the end of the song. The built-in now playing widget uses the same function.
+
+```js
+const { songProgress } = window.agentScreensaver.helpers;
+// in a frame callback from ctx.requestFrame:
+const progress = state.nowPlaying ? songProgress(state.nowPlaying, ctx.now()) : null;
+if (progress !== null) bar.style.transform = `scaleX(${progress})`;
+```
+
+`recoverWebGL(api, surfaceOf)` wraps a background. When the canvas that `surfaceOf` returns fires `webglcontextlost`, the wrapper calls `preventDefault()`, waits 400 ms (more losses in that time cause one restart), then calls `api.stop()` and `api.start(root, ctx)`, listens on the new canvas and calls `api.update` with the last state, if there was one. `stop()` of the wrapper cancels a waiting restart and takes the listener off before it calls `api.stop()`. So your `stop()` can lose the context on purpose to free the GPU without the background starting again.
+
+```js
+const { recoverWebGL } = window.agentScreensaver.helpers;
+window.agentScreensaver.register(() => {
+  let canvas;
+  const api = {
+    start(root, ctx) { canvas = document.createElement("canvas"); root.append(canvas); /* draw */ },
+    update(state) { /* use the state */ },
+    stop() { canvas?.remove(); canvas = undefined; },
+  };
+  return recoverWebGL(api, () => canvas);
+});
+```
 
 ### When macOS shows its lock screen
 
@@ -304,6 +349,7 @@ Install from a folder or a `.zip` file. The service copies the extension into th
 An install is refused when:
 
 - The manifest is not valid.
+- The manifest has a `requires` that is newer than the running agent-screensaver.
 - The `id` starts with `builtin.`.
 - A `.zip` has more than 1000 entries, or is more than 50 MiB when unpacked.
 - A `.zip` has an entry with an absolute path or a `..` in its path.

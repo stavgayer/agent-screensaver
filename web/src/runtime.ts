@@ -1,5 +1,6 @@
-import type { BackgroundExt, ComponentExt, CreateExtension, Ctx, Region } from "./api.ts";
+import type { BackgroundExt, ComponentExt, CreateExtension, Ctx, Helpers, Region } from "./api.ts";
 import { loadExtension, pendingLoads, safeCall } from "./loader.ts";
+import { recoverWebGL, songProgress } from "./helpers.ts";
 import { createFrameScheduler, requestedFps, type FrameScheduler } from "./frame.ts";
 import { bindBackground, createKeeper, type Instance } from "./instance.ts";
 import { screenMode } from "./mode.ts";
@@ -29,6 +30,7 @@ interface AgentScreensaver {
   /** The host calls this when macOS shows or hides its lock screen over the saver. */
   setLockUI(shown: boolean): void;
   register(create: CreateExtension): void;
+  readonly helpers: Helpers;
 }
 
 declare global {
@@ -264,6 +266,7 @@ window.agentScreensaver = Object.freeze({
     if (typeof create !== "function") return;
     pendingLoads.register((document.currentScript as HTMLScriptElement | null)?.src, create);
   },
+  helpers: Object.freeze({ songProgress, recoverWebGL }),
 });
 
 // The daemon rewrites state every 30 s; a stopped one must show the line without a new setState.

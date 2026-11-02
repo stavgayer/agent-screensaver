@@ -14,8 +14,14 @@ import (
 	"strings"
 )
 
-// APIVersion is the only manifest API version this build understands.
-const APIVersion = 1
+// APIVersion is the newest manifest API version this build understands, and
+// MinAPIVersion the oldest. API 2 means the extension uses the shared
+// helpers (docs/extensions.md); an older build only accepts API 1, so it
+// refuses such an extension instead of running it.
+const (
+	MinAPIVersion = 1
+	APIVersion    = 2
+)
 
 // ManifestFile is the file name every extension folder must contain.
 const ManifestFile = "extension.json"
@@ -80,16 +86,19 @@ type ThemeSpec struct {
 
 // Manifest is the parsed extension.json.
 type Manifest struct {
-	ID      string                `json:"id"`
-	Name    string                `json:"name"`
-	Version string                `json:"version"`
-	Type    Type                  `json:"type"`
-	API     int                   `json:"api"`
-	Entry   string                `json:"entry,omitempty"`
-	Options map[string]OptionSpec `json:"options,omitempty"`
-	Layout  json.RawMessage       `json:"layout,omitempty"`
-	Theme   *ThemeSpec            `json:"theme,omitempty"`
-	Agent   json.RawMessage       `json:"agent,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Type    Type   `json:"type"`
+	API     int    `json:"api"`
+	// Requires is the oldest app version that can run the extension, as
+	// x.y.z. Empty means any version.
+	Requires string                `json:"requires,omitempty"`
+	Entry    string                `json:"entry,omitempty"`
+	Options  map[string]OptionSpec `json:"options,omitempty"`
+	Layout   json.RawMessage       `json:"layout,omitempty"`
+	Theme    *ThemeSpec            `json:"theme,omitempty"`
+	Agent    json.RawMessage       `json:"agent,omitempty"`
 }
 
 // Installed is a valid extension found on disk.
@@ -121,8 +130,11 @@ func Validate(m Manifest, dir string) error {
 	if !idPattern.MatchString(m.ID) {
 		return fmt.Errorf("id %q must look like \"author.name\" (lowercase letters, digits, dashes, at least one dot)", m.ID)
 	}
-	if m.API != APIVersion {
-		return fmt.Errorf("unsupported api %d, this build supports %d", m.API, APIVersion)
+	if err := validateRequires(m); err != nil {
+		return err
+	}
+	if m.API < MinAPIVersion || m.API > APIVersion {
+		return fmt.Errorf("unsupported api %d: this build supports api %d to %d. A newer agent-screensaver may support it.", m.API, MinAPIVersion, APIVersion)
 	}
 	if err := validateBody(m, dir); err != nil {
 		return err

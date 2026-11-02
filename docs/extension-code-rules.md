@@ -16,6 +16,7 @@ The page loads from the agent-screensaver data folder, `~/Library/Application Su
 - Files of your own extension folder, by a URL relative to your script: pictures, videos, fonts and more scripts. A script finds its own URL with `document.currentScript.src` while it first runs.
 - Other files inside the data folder, by `file:` URL.
 - Images as `data:` URLs.
+- Two shared helpers, `songProgress` and `recoverWebGL`, on `window.agentScreensaver.helpers` ([extensions.md](extensions.md#shared-helpers)). An extension that uses them declares `"api": 2` and `"requires": "0.5.0"`, so an older app refuses it.
 - The DOM inside your `root`, CSS, canvas 2D and WebGL. Ask WebGL for `powerPreference: "low-power"`.
 
 ## What your code cannot do
@@ -54,7 +55,7 @@ Every built-in theme and every theme in [agent-screensaver-themes](https://githu
 3. **Draw with `ctx.requestFrame`, at the lowest rate that looks right.** A clock needs 1 frame a second, a moving bar about 4. Do not start your own `requestAnimationFrame` loop or timers that never stop. A screen saver runs for hours.
 4. **Show times from the state.** For a time you show, a countdown or a progress bar, use `state.nowMs` and `ctx.now()` between states, not your own reading of the clock, so the screen agrees with the service and the demo. Reading the clock for motion only, such as a slow drift against burn-in, is fine.
 5. **Respect "Reduce motion".** With `prefers-reduced-motion: reduce`, stand still or fade, and do not move or scale things.
-6. **Handle a lost WebGL context.** After sleep and wake, or a graphics reset, WebGL can lose its context. Listen for `webglcontextlost` and start again on a fresh canvas (the album themes with WebGL do this), or switch to a simple background without WebGL (the built-in Chrome scene does this). Otherwise the background stays black or frozen.
+6. **Handle a lost WebGL context.** After sleep and wake, or a graphics reset, WebGL can lose its context. Listen for `webglcontextlost` and start again on a fresh canvas (the album themes with WebGL do this; `recoverWebGL` from the shared helpers does it for you), or switch to a simple background without WebGL (the built-in Chrome scene does this). Otherwise the background stays black or frozen.
 7. **Keep text readable everywhere.** Put small text on a plate, a card or a dark halo, so it reads over every part of your background. Test with long names: cut them with "…" instead of letting them run over other things.
 8. **Show only what the state says.** Do not make up numbers or names. A field that is missing is left out.
 9. **Use no company logos or artwork you do not own.** The project ships letter marks of its own for the agents. A theme inspired by an album cover draws its look in code, from the cover's shapes and colours, without the artwork.

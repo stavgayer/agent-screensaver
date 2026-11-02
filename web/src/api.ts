@@ -1,5 +1,5 @@
-/** Version of the extension API. A manifest must declare this exact number. */
-export const API_VERSION = 1;
+/** The newest version of the extension API. A manifest declares 1 or 2: 2 means it uses `window.agentScreensaver.helpers`. */
+export const API_VERSION = 2;
 
 export type Region = "top-left" | "top-right" | "center" | "bottom";
 export type Mode = "idle" | "attention" | "secondary";
@@ -101,6 +101,20 @@ export interface ComponentExt {
   /** Optional. Called when the same component moves to a placement with other options. */
   setOptions?(options: Readonly<Record<string, unknown>>): void;
   unmount(): void;
+}
+
+/** The shared helpers on `window.agentScreensaver.helpers`. An extension that uses them declares `"api": 2` and `"requires": "0.5.0"`. */
+export interface Helpers {
+  /**
+   * How far the song is, 0 to 1, at `nowMs` (wall time: `ctx.now()`), or null when the app gives no length.
+   * The position moves on from `at_ms` and stops at the song's end.
+   */
+  songProgress(track: NowPlaying, nowMs: number): number | null;
+  /**
+   * Wraps a background so it starts again with the last state on a fresh canvas after WebGL loses its context.
+   * `surfaceOf` returns the background's current canvas. `stop` takes the listener off before it calls `api.stop`.
+   */
+  recoverWebGL(api: BackgroundExt, surfaceOf: () => HTMLCanvasElement | undefined): BackgroundExt;
 }
 
 /** What an entry file passes to `window.agentScreensaver.register(create)`. */

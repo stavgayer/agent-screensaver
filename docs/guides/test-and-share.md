@@ -110,7 +110,9 @@ Nothing is left behind when an install is refused. The message says why:
 | Problem | Message |
 |---|---|
 | The `id` starts with `builtin.` | `ids starting with "builtin." are reserved` |
-| `api` is not `1` | `unsupported api 2, this build supports 1` |
+| `api` is not `1` or `2` | `unsupported api 3: this build supports api 1 to 2. A newer agent-screensaver may support it.` |
+| `requires` is newer than the running app | `acme.rain needs agent-screensaver 0.5.0 or later; this is 0.4.4. Update agent-screensaver first.` |
+| `requires` is not three numbers like `0.5.0` | `requires "0.5" must look like "0.5.0" (three numbers separated by dots)` |
 | The entry file is missing | `entry file: ... main.js: no such file or directory` |
 | A symlink in the folder | `"link" is a symlink or special file, which is not allowed` |
 | An option default is not valid | `option "count": default: 999 is above the maximum 300` |

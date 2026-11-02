@@ -16,6 +16,7 @@ import (
 	"agent-screensaver/internal/agents"
 	"agent-screensaver/internal/cli"
 	"agent-screensaver/internal/daemon"
+	"agent-screensaver/internal/extensions"
 	"agent-screensaver/internal/install"
 	"agent-screensaver/internal/limits"
 	"agent-screensaver/internal/nowplaying"
@@ -43,6 +44,7 @@ func main() {
 
 // run dispatches to a subcommand and returns the process exit code.
 func run(args []string, stdout, stderr io.Writer) int {
+	extensions.RunningVersion = version
 	if len(args) == 1 && (args[0] == "version" || args[0] == "--version") {
 		fmt.Fprintln(stdout, version)
 		return 0
