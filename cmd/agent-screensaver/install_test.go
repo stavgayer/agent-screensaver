@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"agent-screensaver/internal/install"
 )
 
 type noServices struct{ installed, removed int }
@@ -150,5 +152,35 @@ func TestInstallPlanListsLauncherAppAndUninstallRemovesIt(t *testing.T) {
 	}
 	if _, err := os.Stat(app); !os.IsNotExist(err) {
 		t.Errorf("launcher app still there (err %v)", err)
+	}
+}
+
+func TestInstallSaysWhatIsLeftForTheCommandOnThePath(t *testing.T) {
+	tests := []struct {
+		name, shell, want string
+		wantProfile       bool
+	}{
+		{"zsh", "/bin/zsh", "Open a new Terminal window to use the agent-screensaver command.", true},
+		{"fish", "/usr/bin/fish", "Add ~/.local/bin to your PATH to use the agent-screensaver command.", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, _, stdout, home, artifacts := newSetup(t, "")
+			env.options = install.Options{Shell: tt.shell, Path: "/usr/bin"}
+
+			if code := env.install([]string{"--yes", "--artifacts", artifacts}); code != 0 {
+				t.Fatalf("exit %d\n%s", code, stdout)
+			}
+
+			text := stdout.String()
+			after := text[strings.Index(text, "What is left for you"):]
+			if !strings.Contains(after, tt.want) {
+				t.Errorf("what is left lacks %q:\n%s", tt.want, after)
+			}
+			_, err := os.Stat(filepath.Join(home, ".zprofile"))
+			if (err == nil) != tt.wantProfile {
+				t.Errorf("profile exists = %v", err == nil)
+			}
+		})
 	}
 }

@@ -18,9 +18,9 @@ type setup struct {
 	home       string
 	executable string
 	services   platform.ServiceManager
-	// options are what install adds on top: the version for the launcher app
-	// and the Launch Services call. Tests leave it empty, so nothing outside
-	// the temp home is touched.
+	// options are what install adds on top: the version for the launcher app,
+	// the Launch Services call, and the PATH and SHELL of the user. Tests set
+	// only what they need, so nothing outside the temp home is touched.
 	options install.Options
 	stdin   io.Reader
 	stdout  io.Writer
@@ -40,7 +40,8 @@ func runSetup(name string, args []string, stdin io.Reader, stdout, stderr io.Wri
 		return 1
 	}
 	env := setup{home: home, executable: executable, services: platform.NewLaunchd(home),
-		options: install.Options{Version: version, Register: install.RegisterLauncher}, stdin: stdin, stdout: stdout, stderr: stderr}
+		options: install.Options{Version: version, Register: install.RegisterLauncher,
+			Path: os.Getenv("PATH"), Shell: os.Getenv("SHELL")}, stdin: stdin, stdout: stdout, stderr: stderr}
 	if name == "install" {
 		return env.install(args)
 	}
@@ -55,7 +56,7 @@ func (s setup) install(args []string) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	plan, err := install.Plan(s.home, *artifacts)
+	plan, err := install.Plan(s.home, *artifacts, s.options)
 	if err != nil {
 		fmt.Fprintf(s.stderr, "agent-screensaver install: %v\n", err)
 		return 1
@@ -63,11 +64,14 @@ func (s setup) install(args []string) int {
 	if !s.confirm(plan, *yes) {
 		return 1
 	}
+	// Read before Apply: what is left for the user depends on the PATH
+	// lines Apply is about to add.
+	commandNotes := install.CommandNotes(s.home, s.options)
 	if _, err := install.Apply(s.home, s.executable, *artifacts, s.services, s.options); err != nil {
 		fmt.Fprintf(s.stderr, "agent-screensaver install: %v\n", err)
 		return 1
 	}
-	s.printInstalled(install.Notes(s.home, *artifacts), install.LauncherInstalled(s.home))
+	s.printInstalled(append(install.Notes(s.home, *artifacts), commandNotes...), install.LauncherInstalled(s.home))
 	return 0
 }
 

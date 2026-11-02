@@ -208,7 +208,7 @@ func TestForeignLauncherIsLeftAloneAndPlanSaysSo(t *testing.T) {
 			withTools(t, home)
 			artifacts, _ := artifactsFixture(t)
 
-			plan, err := Plan(home, artifacts)
+			plan, err := Plan(home, artifacts, Options{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -250,7 +250,7 @@ func TestPlanListsLauncherApp(t *testing.T) {
 	artifacts, _ := artifactsFixture(t)
 	app := launcherApp(home)
 
-	plan, err := Plan(home, artifacts)
+	plan, err := Plan(home, artifacts, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,13 +262,13 @@ func TestPlanListsLauncherApp(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(app), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plan, _ = Plan(home, artifacts)
+	plan, _ = Plan(home, artifacts, Options{})
 	if text := planText(plan); !strings.Contains(text, "Create the launcher app at "+app) || strings.Contains(text, "created too") {
 		t.Errorf("plan for an existing ~/Applications:\n%s", text)
 	}
 
 	applyLauncher(t, home, "1.0.0", &registerSpy{})
-	plan, _ = Plan(home, artifacts)
+	plan, _ = Plan(home, artifacts, Options{})
 	if text := planText(plan); !strings.Contains(text, "Replace the launcher app at "+app) {
 		t.Errorf("plan for a re-install:\n%s", text)
 	}

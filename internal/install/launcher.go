@@ -35,6 +35,10 @@ type Options struct {
 	// Register tells Launch Services about the launcher app once it exists,
 	// so Spotlight finds it at once. A failure is ignored. Nil skips it.
 	Register func(app string)
+	// Path and Shell are the PATH and SHELL install runs with. Install does
+	// not read the environment itself, so tests pass them in. Empty means no
+	// PATH and an unknown shell: the profile is left alone.
+	Path, Shell string
 }
 
 // RegisterLauncher asks Launch Services to index the app. Best effort: when

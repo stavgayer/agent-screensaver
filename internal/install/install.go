@@ -42,21 +42,27 @@ type PlannedStep struct {
 
 // locations are the files install owns, derived from the home directory.
 type locations struct {
+	home  string
 	paths paths.Paths
 	bin   string
 	saver string
 	// launcher is the app that opens the settings window from Spotlight.
 	launcher string
+	// link puts the command on the PATH: a symlink to bin, in a folder that
+	// the user's own profile adds (no admin rights needed).
+	link string
 }
 
 func locationsFor(home string) locations {
 	p := paths.ForHome(home)
 	return locations{
+		home:  home,
 		paths: p,
 		bin:   filepath.Join(p.DataDir, "bin", binaryName),
 		saver: filepath.Join(home, "Library", "Screen Savers", saverName),
 		// The user's own Applications folder: no admin rights needed.
 		launcher: filepath.Join(home, "Applications", launcherName),
+		link:     filepath.Join(home, ".local", "bin", binaryName),
 	}
 }
 
@@ -99,8 +105,12 @@ func detected(home, detect string) bool {
 
 // Plan lists what Apply will do for home, one step per change. artifacts
 // is the build folder, whose built-in agents say which hooks are added.
-func Plan(home, artifacts string) ([]PlannedStep, error) {
+func Plan(home, artifacts string, opts Options) ([]PlannedStep, error) {
 	where := locationsFor(home)
+	command, err := planCommand(where, opts)
+	if err != nil {
+		return nil, err
+	}
 	steps := []PlannedStep{
 		{Name: "binary", Description: "Copy the agent-screensaver binary to " + where.bin},
 		{Name: "runtime", Description: "Copy the screen saver web page to " + where.paths.RuntimeDir},
@@ -108,6 +118,7 @@ func Plan(home, artifacts string) ([]PlannedStep, error) {
 		{Name: "saver", Description: "Install the screen saver at " + where.saver},
 		planLauncher(where),
 	}
+	steps = append(steps, planCommandSteps(where, command)...)
 	found, err := installAgents(home, artifacts)
 	if err != nil {
 		return nil, err
@@ -151,6 +162,7 @@ func PlanUninstall(home string) ([]PlannedStep, error) {
 		steps = append(steps, PlannedStep{Name: "service", Description: "Stop and remove the launch agent " + label})
 	}
 	steps = append(steps, planRemoveLauncher(where)...)
+	steps = append(steps, planRemoveCommand(where, record)...)
 	return append(steps,
 		PlannedStep{Name: "files", Description: fmt.Sprintf("Delete %s, %s, %s, the aerial clones in %s and the built-in extensions in %s",
 			where.bin, where.paths.RuntimeDir, where.saver, where.paths.AerialClonesDir, where.paths.ExtensionsDir)},
@@ -181,7 +193,7 @@ type configEdit struct {
 // The launcher app is added at the end; one that is not ours is skipped.
 func Apply(home, bin, artifacts string, sm platform.ServiceManager, opts Options) (Record, error) {
 	where := locationsFor(home)
-	w, record, err := prepareInstall(home, artifacts, where)
+	w, record, command, err := prepareInstall(home, artifacts, where, opts)
 	if err != nil {
 		return Record{}, fmt.Errorf("cannot install: %w; nothing was changed", err)
 	}
@@ -207,6 +219,9 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager, opts Options
 	if _, err := sm.Install(TrayLabel, []string{where.bin, "tray"}, where.paths.TrayLog); err != nil {
 		return Record{}, fmt.Errorf("install service %s: %w", TrayLabel, err)
 	}
+	if err := installCommand(where, command); err != nil {
+		return Record{}, err
+	}
 	// Last, so a failure here never stops the daemon from starting. Running
 	// install again retries it.
 	if err := installLauncher(where, opts); err != nil {
@@ -218,22 +233,27 @@ func Apply(home, bin, artifacts string, sm platform.ServiceManager, opts Options
 // prepareInstall reads and edits every file in memory. Our own settings
 // file is checked up front too: saving the status line later must never
 // replace a damaged file with defaults.
-func prepareInstall(home, artifacts string, where locations) (*workspace, Record, error) {
+func prepareInstall(home, artifacts string, where locations, opts Options) (*workspace, Record, commandPlan, error) {
 	if _, err := config.LoadStrict(where.paths.ConfigFile); err != nil {
-		return nil, Record{}, err
+		return nil, Record{}, commandPlan{}, err
 	}
 	if err := checkArtifacts(artifacts); err != nil {
-		return nil, Record{}, err
+		return nil, Record{}, commandPlan{}, err
+	}
+	command, err := planCommand(where, opts)
+	if err != nil {
+		return nil, Record{}, commandPlan{}, err
 	}
 	found, err := installAgents(home, artifacts)
 	if err != nil {
-		return nil, Record{}, err
+		return nil, Record{}, commandPlan{}, err
 	}
 	prior, _ := LoadRecord(where.paths.InstallRecord, found) // missing record: first install
 	record := Record{Version: RecordVersion, Bin: where.bin, Saver: where.saver, Services: []string{DaemonLabel, TrayLabel}}
 	if launcherStateOf(where.launcher) != launcherForeign {
 		record.Launcher = where.launcher
 	}
+	record.CommandLink, record.Profiles = commandRecord(where, command, prior)
 	priorBin := prior.Bin
 	if priorBin == "" {
 		priorBin = where.bin
@@ -243,7 +263,7 @@ func prepareInstall(home, artifacts string, where locations) (*workspace, Record
 		previous, _ := prior.agentRecord(agent.ID)
 		entry, err := w.addAgent(where.bin, agent, previous)
 		if err != nil {
-			return nil, Record{}, err
+			return nil, Record{}, commandPlan{}, err
 		}
 		record.Agents = append(record.Agents, entry)
 	}
@@ -255,9 +275,9 @@ func prepareInstall(home, artifacts string, where locations) (*workspace, Record
 		}
 	}
 	if _, err := w.edits(); err != nil {
-		return nil, Record{}, err
+		return nil, Record{}, commandPlan{}, err
 	}
-	return w, record, nil
+	return w, record, command, nil
 }
 
 // previousStatusline is the user's own status line command, which the
@@ -289,8 +309,17 @@ func Uninstall(home string, sm platform.ServiceManager) error {
 	if _, err := w.edits(); err != nil {
 		return fmt.Errorf("cannot uninstall: %w; nothing was changed", err)
 	}
+	profileEdits, err := planProfileRemovals(where, record)
+	if err != nil {
+		return fmt.Errorf("cannot uninstall: %w; nothing was changed", err)
+	}
 	if err := w.write(); err != nil {
 		return err
+	}
+	for _, edit := range profileEdits {
+		if err := writeEdit(edit); err != nil {
+			return err
+		}
 	}
 	for _, label := range record.Services {
 		if err := sm.Uninstall(label); err != nil {
@@ -301,6 +330,9 @@ func Uninstall(home string, sm platform.ServiceManager) error {
 		return err
 	}
 	if err := removeLauncher(where); err != nil {
+		return err
+	}
+	if err := removeCommandLink(where); err != nil {
 		return err
 	}
 	if err := clearSavedStatusline(where.paths.ConfigFile); err != nil {

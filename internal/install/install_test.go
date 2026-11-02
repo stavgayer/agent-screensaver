@@ -506,7 +506,7 @@ func TestPlanNamesRealPaths(t *testing.T) {
 	home := t.TempDir()
 	withTools(t, home)
 	artifacts, _ := artifactsFixture(t)
-	plan, err := Plan(home, artifacts)
+	plan, err := Plan(home, artifacts, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,7 +643,7 @@ func TestInstallAddsTrayService(t *testing.T) {
 		t.Errorf("record services = %v, want %s in it", record.Services, TrayLabel)
 	}
 	artifacts, _ := artifactsFixture(t)
-	steps, err := Plan(home, artifacts)
+	steps, err := Plan(home, artifacts, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,6 +24,14 @@ type Record struct {
 	// app that is not ours was in the way. Uninstall still checks the app's
 	// bundle id and takes the path from the home folder, not from here.
 	Launcher string `json:"launcher,omitempty"`
+	// CommandLink is the link that puts the command on the PATH. Empty when
+	// something that is not ours was in the way. Uninstall takes the path from
+	// the home folder and deletes the link only while it is still ours.
+	CommandLink string `json:"command_link,omitempty"`
+	// Profiles are the shell profiles that hold our PATH lines. Uninstall
+	// takes out the marked block of each, and only of ~/.zprofile and
+	// ~/.bash_profile.
+	Profiles []string `json:"profiles,omitempty"`
 }
 
 // AgentRecord is what install wrote for one agent. Uninstall uses only
