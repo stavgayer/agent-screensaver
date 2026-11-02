@@ -83,7 +83,7 @@ Open it with `agent-screensaver settings`, or from the menu bar app. The preview
 
 ## 4. Install and remove
 
-Install from a folder or a zip. The same command works for both:
+Install from a folder or a zip. The same command works for both. The commands are written as `agent-screensaver`: install does not put it on your PATH, so see [Before you start](README.md#before-you-start) for the alias, or run `./agent-screensaver` from the unzipped release folder. You can also drop the folder's zip on the settings window.
 
 ```
 agent-screensaver ext install ./acme.drift
