@@ -6,7 +6,12 @@ Read [extensions.md](../extensions.md) for the reference of the manifest and the
 
 ## Before you start
 
-- A Mac with agent-screensaver installed, so that `agent-screensaver` works. See the main README.
+- A Mac with agent-screensaver installed. See the main README.
+- The `agent-screensaver` command. Install does not put it on your PATH, so the guides' commands need one of these: run them as `./agent-screensaver` from the unzipped release folder, or add this line to `~/.zshrc` and open a new Terminal window:
+
+  ```
+  alias agent-screensaver='"$HOME/Library/Application Support/agent-screensaver/bin/agent-screensaver"'
+  ```
 - An editor. For widgets and backgrounds, basic JavaScript. You do not need a bundler or Node.
 - For the dev preview and the screenshot harness: a checkout of this repository, Node and the Xcode command line tools ([test-and-share.md](test-and-share.md)).
 
