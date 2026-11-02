@@ -269,8 +269,8 @@ func commitParts(content string, parts []string, manifests []Manifest, extDir, s
 // KeptPart is a part of a theme that stays because another extension
 // still uses it.
 type KeptPart struct {
-	ID     string
-	UsedBy string
+	ID     string `json:"id"`
+	UsedBy string `json:"used_by"`
 }
 
 // ThemeRemoval is what removing a theme removes and keeps.

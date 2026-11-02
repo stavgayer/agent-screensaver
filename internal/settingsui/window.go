@@ -42,7 +42,7 @@ type Service interface {
 	InstallPack(path string) ([]extensions.Manifest, error)
 	WarmUpConverters(id string) []string
 	WarmUpIfHooked(id string) []string
-	RemoveExtension(id string) error
+	RemoveTheme(id string) (settings.Removal, error)
 	Notice(extID string) string
 	Connections(nowMs int64) ([]settings.Connection, error)
 	SetAgentOn(id string, on bool) error
@@ -146,7 +146,10 @@ func (b *bridge) methods() map[string]method {
 			return nil, nil
 		}),
 		"removeExtension": withParams(func(p struct{ ID string }) (any, error) {
-			return nil, b.svc.RemoveExtension(p.ID)
+			// As `ext remove` does: a theme goes with the parts it brought
+			// that nothing else uses, and a theme in use falls back to the
+			// default one.
+			return b.svc.RemoveTheme(p.ID)
 		}),
 		"notice": withParams(func(p struct{ Extension string }) (any, error) { return b.svc.Notice(p.Extension), nil }),
 		"state":  func(json.RawMessage) (any, error) { return b.state() },

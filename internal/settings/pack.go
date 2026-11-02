@@ -26,11 +26,11 @@ func (s Service) InstallPack(path string) ([]extensions.Manifest, error) {
 
 // Removal is what RemoveTheme did.
 type Removal struct {
-	Removed []string
-	Kept    []extensions.KeptPart
+	Removed []string              `json:"removed"`
+	Kept    []extensions.KeptPart `json:"kept"`
 	// ThemeReset is true when the removed theme was in use and the
 	// settings went back to the default theme.
-	ThemeReset bool
+	ThemeReset bool `json:"theme_reset"`
 }
 
 // backgroundSetting names the user's background choice as a user of a
