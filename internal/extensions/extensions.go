@@ -14,8 +14,14 @@ import (
 	"strings"
 )
 
-// APIVersion is the only manifest API version this build understands.
-const APIVersion = 1
+// APIVersion is the newest manifest API version this build understands, and
+// MinAPIVersion the oldest. API 2 means the extension uses the shared
+// helpers (docs/extensions.md); an older build only accepts API 1, so it
+// refuses such an extension instead of running it.
+const (
+	MinAPIVersion = 1
+	APIVersion    = 2
+)
 
 // ManifestFile is the file name every extension folder must contain.
 const ManifestFile = "extension.json"
@@ -127,8 +133,8 @@ func Validate(m Manifest, dir string) error {
 	if err := validateRequires(m); err != nil {
 		return err
 	}
-	if m.API != APIVersion {
-		return fmt.Errorf("unsupported api %d, this build supports %d", m.API, APIVersion)
+	if m.API < MinAPIVersion || m.API > APIVersion {
+		return fmt.Errorf("unsupported api %d: this build supports api %d to %d. A newer agent-screensaver may support it.", m.API, MinAPIVersion, APIVersion)
 	}
 	if err := validateBody(m, dir); err != nil {
 		return err

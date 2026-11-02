@@ -33,7 +33,12 @@ func TestValidate(t *testing.T) {
 	}{
 		{"valid background", func(m *Manifest) {}, ""},
 		{"bad id", func(m *Manifest) { m.ID = "NoDots" }, "id"},
-		{"unsupported api", func(m *Manifest) { m.API = 2 }, "api"},
+		{"api 1 accepted", func(m *Manifest) { m.API = 1 }, ""},
+		{"api 2 accepted", func(m *Manifest) { m.API = 2 }, ""},
+		{"api 0 refused", func(m *Manifest) { m.API = 0 },
+			"unsupported api 0: this build supports api 1 to 2. A newer agent-screensaver may support it."},
+		{"api 3 refused", func(m *Manifest) { m.API = 3 },
+			"unsupported api 3: this build supports api 1 to 2. A newer agent-screensaver may support it."},
 		{"entry outside dir", func(m *Manifest) { m.Entry = "../x.js" }, "entry"},
 		{"absolute entry", func(m *Manifest) { m.Entry = "/etc/passwd" }, "entry"},
 		{"entry missing", func(m *Manifest) { m.Entry = "nope.js" }, "entry"},
