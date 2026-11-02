@@ -53,6 +53,8 @@ The `style` keys that start with `--` are set as CSS variables on the page. Othe
 
 Your own widgets can read any variable you set. Give each a fallback value in your CSS.
 
+A theme has no code, so its `api` stays `1`. If a part of your pack, such as a background, uses the [shared helpers](../extensions.md#shared-helpers), that part declares `"api": 2` and `"requires": "0.5.0"`. An older app then refuses the whole pack at install.
+
 ## 3. Thumbnail and tile
 
 A theme has no thumbnail field. The settings window draws a small tile for each theme: a black screen with a clock in your `--accent` (and a dusk sky when the theme uses `builtin.aerials`). Set `--accent` so the tile shows your color. The live preview above the tiles shows the real result.
