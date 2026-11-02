@@ -22,6 +22,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: The changelog has notes for this version
+        run: |
+          if ! scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null; then
+            echo "::error::CHANGELOG.md has no '## $GITHUB_REF_NAME (date)' section with notes: add it, commit it to main and tag again"
+            exit 1
+          fi
       - name: Read the notes from the tag
         run: |
           git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
