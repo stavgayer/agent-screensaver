@@ -204,7 +204,7 @@ It builds a universal binary and the screen saver, and writes `dist/agent-screen
 
 Run the tests with `go test ./...` and `cd web && npm test`. CI runs them, the type check and the release build on every push.
 
-To release, push an annotated tag whose message is the version, a blank line, then the notes: `git tag -a v0.4.4 --cleanup=verbatim -F notes.txt` and `git push origin v0.4.4`. CI builds the zip, checks it and publishes the release with those notes. [Test and share](docs/guides/test-and-share.md) shows the dev preview and the screenshot harness. Issues and pull requests are welcome.
+To release, add the version's notes at the top of [CHANGELOG.md](CHANGELOG.md), under a `## v0.5.2 (2026-11-03)` heading, and commit it to main. Then tag that commit with an annotated tag whose message is the version, a blank line, then those notes, and push it: `git tag -a v0.5.2 --cleanup=verbatim -F <(scripts/release-notes.sh v0.5.2)` and `git push origin v0.5.2`. `scripts/release-notes.sh` prints that message from CHANGELOG.md, and fails when the version has no section there. CI stops the release when CHANGELOG.md has no section for the tag. Otherwise it builds the zip, checks it and publishes the release with the notes from the tag message. [Test and share](docs/guides/test-and-share.md) shows the dev preview and the screenshot harness. Issues and pull requests are welcome.
 
 ## License
 
