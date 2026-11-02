@@ -1,0 +1,42 @@
+# Runs the checks on every push and pull request. The app and the screen saver
+# build only on macOS, so this runs on a Mac runner.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the build names itself with git describe
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the web tools
+        run: npm ci
+        working-directory: web
+      - name: Type check
+        run: npm run typecheck
+        working-directory: web
+      - name: Web tests
+        run: npm test
+        working-directory: web
+      - name: Go vet
+        run: go vet ./...
+      - name: Go tests
+        run: go test ./...
+      - name: Release build
+        run: scripts/build-release.sh
