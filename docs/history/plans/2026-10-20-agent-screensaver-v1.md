@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go >= 1.23, standard library first (`encoding/json`, `archive/zip`, `regexp`, `os/exec`, `flag`, `testing`); cgo + one Objective-C file only for macOS screen saver notifications. No third-party Go modules except `fyne.io/systray`, used only by the menu bar app (Phase 5, spec §7c). The settings window is our own cgo + WKWebView window (owner decision after Task 5.1). Swift 6 + ScreenSaver + WebKit, built with `swiftc` (no Xcode project). TypeScript 5 compiled with esbuild, tested with `node --test` (Node >= 22.18, type stripping). JSON for every data format.
 
-**Spec:** `docs/superpowers/specs/2026-10-20-agent-screensaver-design.md` (read it before any task; sections are cited as "spec §N").
+**Spec:** `docs/history/specs/2026-10-20-agent-screensaver-design.md` (read it before any task; sections are cited as "spec §N").
 
 **Go test style (owner's go-testing rules):** table-driven tests with `t.Run(tt.name, ...)`; fixtures in each package's `testdata/`; `t.TempDir()` for every file test; anything that runs real commands or the built binary is an integration test that skips under `go test -short`; system calls that tests must avoid (for example `launchctl`) sit behind a small interface with a fake in tests.
 
@@ -439,7 +439,7 @@ Go's `map[string]any` sorts keys when it writes JSON, which would rewrite the us
 
 **Interfaces:**
 - Consumes: `api.ts`, `format.ts`, `mode.ts` only. Built-ins MUST NOT import `runtime.ts` or anything outside these (Global Constraints, no private shortcuts).
-- Produces (manifests; values from spec §3, §7, mockup `docs/superpowers/specs/mockups/layout-b-clock.html`):
+- Produces (manifests; values from spec §3, §7, mockup `docs/history/specs/mockups/layout-b-clock.html`):
   - `builtin.matrix` (background): options `color` (color, `#00ff66`), `speed` (number 0.25..4, 1), `charset` (enum `katakana|latin|digits|hebrew`, `katakana`), `fps` (number 1..240, 24), `density` (number 0.25..2, 1). Uses `ctx.requestFrame`.
   - `builtin.clock` (component): option `size` (enum `large|small`, `large`); shows `formatClock` and, when large, `formatDate`; updates every second via `ctx.requestFrame` at 1 fps.
   - `builtin.limit-rings` (component): one ring per `Limit` in order Claude 5h, Claude week, Codex 5h, Codex week; color class from `ringLevel`; 5h rings show `formatResetIn`; a ring whose `updated_at_ms` is over 15 min old shows `"updated Xm ago"`.
