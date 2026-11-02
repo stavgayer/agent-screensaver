@@ -132,6 +132,7 @@ Everything on the screen is an extension: the clock, the cards, the rings, the b
   - [Change the layout](docs/guides/change-the-layout.md)
   - [Test and share](docs/guides/test-and-share.md)
 - [Writing extensions](docs/extensions.md): the manifest and the web API.
+- [What extension code can do](docs/extension-code-rules.md): what a theme's code can use, what it cannot do, and what it sees. Read it before you install a theme from someone else.
 - [Agent extensions](docs/agents.md): teach agent-screensaver a new coding agent. The project ships no company logos; you may add your own icon for any agent.
 - [Event format](docs/event-format.md): the event your own program can send.
 

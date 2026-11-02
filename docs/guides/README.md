@@ -2,7 +2,7 @@
 
 Short, step by step guides. Each one ends with a working result. Everything in them was run: each sample in [examples/](examples/) installs with the real `agent-screensaver ext install`, and its picture or output was checked.
 
-Read [extensions.md](../extensions.md) for the reference of the manifest and the web API. Read [agents.md](../agents.md) for the reference of agent extensions.
+Read [extensions.md](../extensions.md) for the reference of the manifest and the web API, and [extension-code-rules.md](../extension-code-rules.md) for what your code can and cannot do. Read [agents.md](../agents.md) for the reference of agent extensions.
 
 ## Before you start
 

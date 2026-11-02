@@ -2,6 +2,8 @@
 
 This page tells you how to write an extension for agent-screensaver and how to install it. For short step-by-step guides with tested samples, see [guides/](guides/README.md).
 
+What your code can use, what it cannot do and the rules every published theme follows are in [extension-code-rules.md](extension-code-rules.md).
+
 ## The six types
 
 | Type | What it does | Has a manifest |
