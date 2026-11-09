@@ -545,6 +545,16 @@ func TestEstimateResetTime(t *testing.T) {
 			want:    derived(exact(event.Week, 40, at10+dayMs, at10-dayMs)),
 		},
 		{
+			// The desktop app's samples carry no week end. One read the day
+			// before the weekly reset belongs to the week that ended, not to
+			// a week that ends seven days after the sample.
+			name:    "a reading without an end, taken before the rolled-forward end, says that end",
+			anchors: []Anchor{withReset(anchor(event.Week, 66, at10-10*dayMs), at10-7*dayMs-12*hourMs), anchor(event.Week, 55, at10-dayMs)},
+			nowMs:   at10,
+			window:  event.Week,
+			want:    exact(event.Week, 55, at10-12*hourMs, at10-dayMs),
+		},
+		{
 			name:    "a week end never seen stays unknown",
 			anchors: []Anchor{anchor(event.Week, 60, at10)},
 			nowMs:   at11,

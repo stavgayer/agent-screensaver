@@ -296,6 +296,12 @@ func (e *Estimator) reading(window limitWindow, nowMs int64) (Reading, bool) {
 	anchorClosedMs := latest.AtMs + window.lengthMs
 	if latest.ResetsAt != nil {
 		anchorClosedMs = *latest.ResetsAt * 1000
+	} else if window.name == event.Week {
+		// A week reading with no end of its own (the desktop app's samples)
+		// ends at the first known week end after it, not a week after it.
+		if own, ok := e.openPeriod(window, calibration.ResetsAt, latest.AtMs); ok {
+			anchorClosedMs = min(anchorClosedMs, own.endS*1000)
+		}
 	}
 	if anchorClosedMs <= current.startMs {
 		from, basePercent = current.startMs-1, 0
