@@ -2,6 +2,14 @@
 
 The release notes of agent-screensaver, newest first. This file is where they are written: the message of each release tag is made from the section of its version, and CI refuses to release a version that has no section here. See the README for how to release.
 
+## v0.5.2 (2026-11-09)
+
+## The Claude weekly limit resets on time
+
+After the weekly reset, the Claude week ring could keep showing the old week's usage. For example, it showed 65% when the new week had just started. The last exact reading from the Claude desktop app has no reset time, so it was counted as part of the new week, and the tokens used since were added on top. Now such a reading belongs to the week it was taken in, and the new week counts up from zero.
+
+Install this version over the old one to get the fix. Nothing else changes.
+
 ## v0.5.1 (2026-11-02)
 
 ## The command is on your PATH
