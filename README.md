@@ -12,6 +12,14 @@ https://github.com/user-attachments/assets/588e6f6f-617a-4842-9c8f-d854756a434b
 
 You start a long task in Claude Code, Codex or Cursor and walk away. When you come back, you see from across the room if an agent needs you, which tasks finished, which are still running and for how long, and how much of your usage limits is left. The screen saver shows the time anyway while you are away, so it is the right place to show this too.
 
+**[Download the latest version](https://github.com/stavgayer/agent-screensaver/releases/latest)** (free, open source, macOS 14 or later). Then:
+
+1. Unzip it, open Terminal in the folder and run `./agent-screensaver install`.
+2. Allow it once in System Settings, Privacy & Security ("Open Anyway").
+3. Pick AgentScreensaver in System Settings, Screen Saver.
+
+The full steps are in [Install](#install).
+
 ## What it does
 
 Each agent task gets a card: what it works on, for how long, its project, model and branch, and how full the context is. The rings show how much of your 5-hour and weekly limits is used and when they reset. When an agent waits for your approval, a large card says which agent, which project and what it wants to run. A sound plays when the screen saver is showing. With no tasks, you see the clock and your limits. A second display shows only the background and the clock. If you like, the idle screen also shows the song that Spotify or Music plays, with a progress bar (General, "Show what's playing", off by default).
@@ -48,14 +56,19 @@ https://github.com/user-attachments/assets/9a1826d2-a335-49b4-98be-1e8459d3d9ff
 
 You need macOS 14 or later, on Apple Silicon or Intel.
 
-1. Download `agent-screensaver-<version>-macos.zip` from the [Releases page](https://github.com/stavgayer/agent-screensaver/releases) and unzip it.
+1. Download `agent-screensaver-<version>-macos.zip` from the [latest release](https://github.com/stavgayer/agent-screensaver/releases/latest) and unzip it.
 2. Open Terminal in the unzipped folder and run `./agent-screensaver install`.
 3. Read the plan it prints. It lists every change it will make.
 4. Type `y` to confirm.
 
+It needs no admin password, and it changes nothing before you confirm.
+
+<details>
+<summary>What install changes on your Mac</summary>
+
 Install also creates a small app, `Agent Screensaver`, in `~/Applications`. Spotlight, Launchpad and Finder find it, and it opens the settings window. It needs no admin password. If `~/Applications` does not exist, install creates it. If a file or folder named `Agent Screensaver.app` is already there and it is not ours, install leaves it alone and says so in the plan.
 
-From this version, install also puts the `agent-screensaver` command on your PATH. It needs no admin password, and the plan lists it:
+Install also puts the `agent-screensaver` command on your PATH. It needs no admin password, and the plan lists it:
 
 - It makes a link at `~/.local/bin/agent-screensaver` that points to the installed binary. If `~/.local/bin` does not exist, install creates it. If something that is not our link is already at that path, install leaves it alone and says so in the plan.
 - If `~/.local/bin` is not on your PATH yet and your shell is zsh or bash, install adds three lines to your shell profile (`~/.zprofile` for zsh, `~/.bash_profile` for bash). They sit between the markers `# >>> agent-screensaver >>>` and `# <<< agent-screensaver <<<`. If the profile exists, install first saves a copy of it next to it, with the ending `.agent-screensaver.bak`. If the lines are already there, install does not add them again.
@@ -63,9 +76,11 @@ From this version, install also puts the `agent-screensaver` command on your PAT
 
 Open a new Terminal window to use the command. See [In Terminal](#in-terminal).
 
+</details>
+
 ### Open Anyway (one time)
 
-The screen saver is not signed with an Apple Developer account. macOS blocks it the first time. To allow it:
+The screen saver is not signed with an Apple Developer account, which costs money every year. This is normal for free apps, and macOS blocks them the first time. To allow it:
 
 1. Open System Settings, then Privacy & Security.
 2. Find the message about AgentScreensaver and click "Open Anyway".
