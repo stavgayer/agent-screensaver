@@ -20,6 +20,7 @@ import (
 	"agent-screensaver/internal/nowplaying"
 	"agent-screensaver/internal/paths"
 	"agent-screensaver/internal/platform"
+	"agent-screensaver/internal/power"
 	"agent-screensaver/internal/spool"
 	"agent-screensaver/internal/state"
 	"agent-screensaver/internal/statefile"
@@ -94,6 +95,8 @@ type Daemon struct {
 	// MusicRunner runs one music read away from the step. It defaults to a
 	// new goroutine; tests pass one that runs it at once.
 	MusicRunner func(read func())
+	// Battery reads the battery. Without one, the file never shows it.
+	Battery BatteryReader
 
 	paths     paths.Paths
 	state     state.State
@@ -134,6 +137,12 @@ type Daemon struct {
 	musicReadOnce bool   // a read was started, so musicReadMs counts
 	musicErr      string // the last read error, to log only changes
 	musicResults  chan musicResult
+
+	batteryReading  power.Reading // the last good read, zero when none
+	batteryReadMs   int64
+	batteryReadOnce bool          // a read was made, so batteryReadMs counts
+	batteryErr      string        // the last read error, to log only changes
+	power           *power.Status // what the file shows, nil on a plug or no battery
 
 	restored       bool // the limits of the last run were read back
 	estimatedOnce  bool
@@ -202,14 +211,20 @@ func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	changed = d.readDueDetails(nowMs) || changed
 	changed = d.readMusic(nowMs) || changed
 	changed = d.tick(nowMs) || changed
+	d.readBattery(nowMs)
+	status := power.Evaluate(d.batteryReading, d.state.Cards)
+	changed = !power.Same(status, d.power) || changed
+	d.power = status
 
 	realAttention := d.state.NeedsAttention()
 	frame := d.demo.next(d.cfg, realAttention, saverActive, nowMs)
 	playing := frame != nil
 	// The sound follows the file the saver shows. Attention carries over
 	// only within the demo or within the real state, so a real approval
-	// that ends the demo plays the sound like any new approval.
-	attention := realAttention
+	// that ends the demo plays the sound like any new approval. A battery
+	// warning joins the real state only: it never ends or blocks the demo,
+	// and after an approval it adds no second sound.
+	attention := realAttention || d.batteryWarns()
 	if playing {
 		attention = frame.needsAttention()
 	}
@@ -338,13 +353,16 @@ func (d *Daemon) duePolls(nowMs int64, saverActive bool) []string {
 }
 
 // writeState writes the state file. A demo frame replaces the cards, the
-// limits and the song after Build, so privacy mode never masks the made-up
-// text, and marks the file so a restart never restores them. The demo song
-// shows only while now playing is on, like a real one.
+// limits, the song and the battery after Build, so privacy mode never masks
+// the made-up text, and marks the file so a restart never restores them. The
+// demo song shows only while now playing is on, like a real one. The battery
+// is not private, so privacy mode keeps it.
 func (d *Daemon) writeState(nowMs int64, frame *demoFrame, result *StepResult) {
 	file := statefile.Build(d.state, d.view, d.track, nowMs)
+	file.Power = d.power
 	if frame != nil {
 		file.Cards, file.Limits, file.Demo = frame.cards, frame.limits, true
+		file.Power = frame.power
 		file.NowPlaying = nil
 		if d.cfg.NowPlaying {
 			file.NowPlaying = &frame.track

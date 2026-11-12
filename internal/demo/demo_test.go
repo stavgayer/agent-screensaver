@@ -201,3 +201,17 @@ func TestSceneCardsShowWhere(t *testing.T) {
 		}
 	}
 }
+
+func TestPower(t *testing.T) {
+	cards, _ := Scene(0, totalMs, nowMs)
+	got := Power(cards)
+	if got.Percent != 64 || got.MinutesLeft == nil || *got.MinutesLeft != 110 {
+		t.Errorf("power = %+v, want 64%% with 110 minutes", got)
+	}
+	if got.Low || got.Warn || got.Charging {
+		t.Errorf("power = %+v, want it never low", got)
+	}
+	if got.Working != 3 {
+		t.Errorf("working = %d, want the 3 running cards", got.Working)
+	}
+}
