@@ -22,7 +22,7 @@ The full steps are in [Install](#install).
 
 ## What it does
 
-Each agent task gets a card: what it works on, for how long, its project, model and branch, and how full the context is. The rings show how much of your 5-hour and weekly limits is used and when they reset. When an agent waits for your approval, a large card says which agent, which project and what it wants to run. A sound plays when the screen saver is showing. With no tasks, you see the clock and your limits. A second display shows only the background and the clock. If you like, the idle screen also shows the song that Spotify or Music plays, with a progress bar (General, "Show what's playing", off by default).
+Each agent task gets a card: what it works on, for how long, its project, model and branch, and how full the context is. The rings show how much of your 5-hour and weekly limits is used and when they reset. When an agent waits for your approval, a large card says which agent, which project and what it wants to run. A sound plays when the screen saver is showing. With no tasks, you see the clock and your limits. When the Mac runs on battery, one more ring shows how much is left, and the screen tells you to plug in when the battery is low while agents still work. A second display shows only the background and the clock. If you like, the idle screen also shows the song that Spotify or Music plays, with a progress bar (General, "Show what's playing", off by default).
 
 The pictures are of the real screen saver with made-up data. First the Chrome theme:
 

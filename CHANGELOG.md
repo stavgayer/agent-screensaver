@@ -2,6 +2,22 @@
 
 The release notes of agent-screensaver, newest first. This file is where they are written: the message of each release tag is made from the section of its version, and CI refuses to release a version that has no section here. See the README for how to release.
 
+## v0.6.0 (unreleased)
+
+## The screen tells you when the battery runs low
+
+If your laptop is not plugged in, a long task can stop in the middle when the battery runs out and the Mac sleeps. Now the screen saver shows it:
+
+- **On battery:** a "Battery" ring after the usage rings shows how much is left, for example `64%`, and the time that is left, for example `1h 50m left`, when macOS gives it. The ring turns yellow at 30% or less and red at 20% or less. The Default, Calm and Chrome themes draw it.
+- **Low while an agent works:** at 20% or less, if at least one agent still works (a task that is not finished, one that waits for your approval, or a finished one with background jobs), the line `Battery 18%: plug in, 2 agents are working` shows under the rings. The menu bar icon shows the attention dot and the menu says `Battery low: plug in`. The attention sound plays once when the warning starts, if the screen saver is showing and sound is on. An approval still plays its own sound during a warning.
+- **Plugged in, or a desktop Mac:** nothing shows.
+
+The service reads the battery from macOS every 10 seconds. It asks for no permission and uses no network. There is no setting for the 20% level.
+
+## For theme makers
+
+- `state.power` is new: `{percent, minutes_left, charging, low, warn, working}`. It is there only while the Mac runs on battery, and `minutes_left` is left out when macOS does not know it. It is optional, so existing themes keep working, with no `api` or `requires` change. See `docs/extensions.md`.
+
 ## v0.5.2 (2026-11-09)
 
 ## The Claude weekly limit resets on time
