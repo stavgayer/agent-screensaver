@@ -38,8 +38,10 @@ const (
 // It is a variable so tests can shorten it.
 var tickInterval = 500 * time.Millisecond
 
-// ShouldPlaySound is true only when a card starts waiting for approval while
-// the saver is showing and the user wants the sound.
+// ShouldPlaySound is true on a rising edge: the condition was off before and
+// is on now, while the saver is showing and the user wants the sound. The
+// daemon uses it for a card that starts waiting for approval and for the
+// battery warning.
 func ShouldPlaySound(prevAttention, nowAttention, saverActive, soundEnabled bool) bool {
 	return !prevAttention && nowAttention && saverActive && soundEnabled
 }

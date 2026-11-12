@@ -26,10 +26,12 @@ static int readBattery(int *onBattery, int *charging, int *percent, int *minutes
         if ((n = CFDictionaryGetValue(ps, CFSTR(kIOPSTimeToEmptyKey)))) CFNumberGetValue(n, kCFNumberIntType, &minutes);
         CFStringRef state = CFDictionaryGetValue(ps, CFSTR(kIOPSPowerSourceStateKey));
         CFBooleanRef isCharging = CFDictionaryGetValue(ps, CFSTR(kIOPSIsChargingKey));
+        // No capacity keys means no usable battery, not an empty one.
+        if (max <= 0) break;
+        *percent = (current * 100 + max / 2) / max;
+        *minutesLeft = minutes;
         *onBattery = state != NULL && CFEqual(state, CFSTR(kIOPSBatteryPowerValue));
         *charging = isCharging != NULL && CFBooleanGetValue(isCharging);
-        *percent = max > 0 ? (current * 100 + max / 2) / max : 0;
-        *minutesLeft = minutes;
         found = 1;
     }
     CFRelease(list);

@@ -45,6 +45,12 @@ func TestEvaluate(t *testing.T) {
 			want:    &Status{Percent: 64, MinutesLeft: ptr(110), Working: 1},
 		},
 		{
+			name:    "zero minutes means unknown",
+			reading: Reading{HasBattery: true, OnBattery: true, Percent: 64, MinutesLeft: 0},
+			cards:   nil,
+			want:    &Status{Percent: 64},
+		},
+		{
 			name:    "unknown time",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 64, MinutesLeft: -1},
 			cards:   nil,

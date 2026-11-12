@@ -108,7 +108,9 @@ export function batteryLevel(percent: number): "ok" | "warn" | "high" {
 
 /** The battery as one more ring: the charge, and under it the time left or "Charging". */
 export function batteryView(power: Power): RingView {
-  const detail = power.charging ? "Charging" : power.minutes_left === undefined ? "" : `${formatCountdown(power.minutes_left * MS_PER_MINUTE)} left`;
+  // macOS does not report charging while on battery, so "Charging" shows only if that ever changes.
+  const hasTime = power.minutes_left !== undefined && power.minutes_left > 0;
+  const detail = power.charging ? "Charging" : hasTime ? `${formatCountdown(power.minutes_left! * MS_PER_MINUTE)} left` : "";
   return { look: "fresh", percent: power.percent, center: `${power.percent}%`, name: "Battery", detail };
 }
 

@@ -338,6 +338,10 @@ describe("batteryView", () => {
     assert.equal(batteryView(power()).detail, "");
   });
 
+  it("has_an_empty_detail_when_the_file_says_zero_minutes", () => {
+    assert.equal(batteryView(power({ minutes_left: 0 })).detail, "");
+  });
+
   it("says_charging_instead_of_the_time", () => {
     assert.equal(batteryView(power({ charging: true, minutes_left: 110 })).detail, "Charging");
   });

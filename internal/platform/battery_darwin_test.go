@@ -12,7 +12,7 @@ import (
 func TestBatteryReaderReads(t *testing.T) {
 	reading, err := BatteryReader{}.Read()
 	if err != nil {
-		t.Fatalf("Read() error = %v", err)
+		t.Skipf("no readable power source on this machine: %v", err)
 	}
 	if reading.HasBattery {
 		if reading.Percent < 0 || reading.Percent > 100 {

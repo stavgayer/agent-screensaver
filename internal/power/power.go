@@ -10,7 +10,7 @@ import "agent-screensaver/internal/state"
 // low.
 const LowAtPercent = 20
 
-// Reading is one sample of the battery. MinutesLeft is negative when the
+// Reading is one sample of the battery. MinutesLeft is 0 or less when the
 // system does not know the time left yet.
 type Reading struct {
 	HasBattery  bool
@@ -21,7 +21,7 @@ type Reading struct {
 }
 
 // Status is what the screen saver shows about the battery. MinutesLeft is
-// nil when the time is unknown. Warn means the battery is low and agents are
+// nil when the time is unknown (the reading gave 0 or less). Warn means the battery is low and agents are
 // still working, so the owner should save or stop them.
 type Status struct {
 	Percent     int  `json:"percent"`
@@ -59,7 +59,7 @@ func Evaluate(r Reading, cards []state.Card) *Status {
 		Warn:     low && working > 0,
 		Working:  working,
 	}
-	if r.MinutesLeft >= 0 {
+	if r.MinutesLeft > 0 {
 		minutes := r.MinutesLeft
 		status.MinutesLeft = &minutes
 	}
