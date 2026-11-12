@@ -111,6 +111,7 @@ type Daemon struct {
 	aerialsSyncedMs                          int64
 
 	attention    bool
+	warned       bool // the last step had a battery warning
 	demo         demoRun
 	demoShown    bool // the last step showed the scripted demo
 	written      bool
@@ -221,17 +222,22 @@ func (d *Daemon) Step(nowMs int64, saverActive bool) StepResult {
 	playing := frame != nil
 	// The sound follows the file the saver shows. Attention carries over
 	// only within the demo or within the real state, so a real approval
-	// that ends the demo plays the sound like any new approval. A battery
-	// warning joins the real state only: it never ends or blocks the demo,
-	// and after an approval it adds no second sound.
-	attention := realAttention || d.batteryWarns()
+	// that ends the demo plays the sound like any new approval.
+	attention := realAttention
 	if playing {
 		attention = frame.needsAttention()
 	}
+	// The battery warning has its own edge, so an approval that arrives
+	// during a warning still sounds. The warning sounds when it starts,
+	// unless an approval is already calling the user: then it adds none.
+	// It never sounds over the demo and never ends or blocks it.
+	warns := d.batteryWarns()
+	warnSound := !playing && ShouldPlaySound(d.warned || attention, warns, saverActive, d.cfg.Sound)
 	result := StepResult{
-		PlaySound:   ShouldPlaySound(d.attention && d.demoShown == playing, attention, saverActive, d.cfg.Sound),
+		PlaySound:   ShouldPlaySound(d.attention && d.demoShown == playing, attention, saverActive, d.cfg.Sound) || warnSound,
 		PollSources: d.duePolls(nowMs, saverActive),
 	}
+	d.warned = warns
 	d.attention = attention
 
 	// The demo scene moves with time, so it is written on every step.

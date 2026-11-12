@@ -143,3 +143,18 @@ func TestBatteryPrivacyKeepsPower(t *testing.T) {
 		t.Error("power is missing in privacy mode, want it kept")
 	}
 }
+
+func TestApprovalSoundsDuringBatteryWarning(t *testing.T) {
+	d, p := newBatteryDaemon(t, &fakeBattery{readings: []power.Reading{onBattery(18)}})
+	spoolEvent(t, p, "claude", "s1", event.KindStarted, 500)
+	if !d.Step(1_000, true).PlaySound {
+		t.Fatal("the warning did not sound when it started")
+	}
+	if d.Step(2_000, true).PlaySound {
+		t.Fatal("the warning sounded again")
+	}
+	spoolEvent(t, p, "claude", "s1", event.KindApproval, 2_500)
+	if !d.Step(3_000, true).PlaySound {
+		t.Error("an approval during a battery warning made no sound")
+	}
+}
