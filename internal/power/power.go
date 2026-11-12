@@ -32,9 +32,8 @@ type Status struct {
 	Working     int  `json:"working"`
 }
 
-// Working counts the cards whose agent is still busy: a running session, one
-// that waits for an approval, and a finished one that keeps background jobs.
-// Unknown and silent cards do not count, since their agent may be gone.
+// Working counts the cards whose agent has not finished, plus the finished
+// ones that still run background jobs.
 func Working(cards []state.Card) int {
 	count := 0
 	for _, card := range cards {
@@ -77,13 +76,8 @@ func Same(a, b *Status) bool {
 	return a.Percent == b.Percent && a.Low == b.Low && a.Warn == b.Warn && a.Charging == b.Charging
 }
 
+// isWorking is true for every card that is not finished, and for a finished
+// card that still has background jobs.
 func isWorking(card state.Card) bool {
-	switch card.Kind {
-	case state.KindRunning, state.KindApproval:
-		return true
-	case state.KindFinished:
-		return card.Background > 0
-	default:
-		return false
-	}
+	return card.Kind != state.KindFinished || card.Background > 0
 }

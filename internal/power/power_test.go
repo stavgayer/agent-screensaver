@@ -16,6 +16,7 @@ var (
 	done         = state.Card{Kind: state.KindFinished}
 	doneWithJobs = state.Card{Kind: state.KindFinished, Background: 2}
 	waiting      = state.Card{Kind: state.KindApproval}
+	unknown      = state.Card{Kind: state.KindUnknown}
 )
 
 func TestEvaluate(t *testing.T) {
@@ -96,6 +97,9 @@ func TestWorking(t *testing.T) {
 	}
 	if got := Working(nil); got != 0 {
 		t.Errorf("Working(nil) = %d, want 0", got)
+	}
+	if got := Working([]state.Card{unknown}); got != 1 {
+		t.Errorf("Working(unknown) = %d, want 1", got)
 	}
 }
 
