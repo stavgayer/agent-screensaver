@@ -1,12 +1,12 @@
-import type { ComponentExt, Limit, ViewState } from "../../api.ts";
+import type { ComponentExt, ViewState } from "../../api.ts";
 import { ringLevel } from "../../format.ts";
-import { orderLimits, ringView } from "../limit-rings/logic.ts";
+import { batteryLevel, batteryView, batteryWarning, orderLimits, ringView, type RingView } from "../limit-rings/logic.ts";
 
 /** What makes one set of limit rings look different from another. */
 export interface RingsLook {
   /** The component's stylesheet. */
   css: string;
-  /** Class of the row that holds the rings. Each ring is `.ring-item` with `.ring`, `.ring-name` and `.ring-detail`. */
+  /** Class of the row that holds the rings. Each ring is `.ring-item` with `.ring`, `.ring-name` and `.ring-detail`. The low-battery line, `.ring-warning`, sits under the row. */
   className: string;
   /** The element inside the ring that shows its text, for example "61%". */
   center(text: string): HTMLElement;
@@ -21,12 +21,11 @@ export function textLine(className: string, text: string): HTMLElement {
   return element;
 }
 
-function createRing(limit: Limit, nowMs: number, look: RingsLook): HTMLElement {
-  const { look: freshness, percent, center, name, detail } = ringView(limit, nowMs);
+function createRing({ look: freshness, percent, center, name, detail }: RingView, level: string, look: RingsLook): HTMLElement {
   const item = document.createElement("div");
   item.className = "ring-item";
   const ring = document.createElement("div");
-  ring.className = `ring ${ringLevel(percent)} ${freshness}`;
+  ring.className = `ring ${level} ${freshness}`;
   ring.style.setProperty("--pct", String(percent));
   ring.appendChild(look.center(center));
   item.append(ring, textLine("ring-name", name));
@@ -42,6 +41,7 @@ function createRing(limit: Limit, nowMs: number, look: RingsLook): HTMLElement {
  */
 export function createRingsComponent(look: RingsLook): ComponentExt {
   let rings: HTMLElement | undefined;
+  let warning: HTMLElement | undefined;
   let lastKey = "";
 
   function mount(root: HTMLElement): void {
@@ -49,23 +49,33 @@ export function createRingsComponent(look: RingsLook): ComponentExt {
     style.textContent = look.css;
     rings = document.createElement("div");
     rings.className = look.className;
-    root.append(style, rings);
+    warning = textLine("ring-warning", "");
+    root.append(style, rings, warning);
     lastKey = "";
     look.onMount?.();
   }
 
   function update(state: ViewState): void {
     const ordered = orderLimits(state.limits, state.agentOrder);
+    // The battery ring goes last, after the usage rings. Its low numbers are the bad ones, so it has its own level.
+    const items = ordered.map((limit) => {
+      const view = ringView(limit, state.nowMs);
+      return { view, level: ringLevel(view.percent) };
+    });
+    if (state.power !== undefined) items.push({ view: batteryView(state.power), level: batteryLevel(state.power.percent) });
+    const warningText = state.power === undefined ? "" : batteryWarning(state.power);
     // Rebuild only when something visible changed.
-    const key = JSON.stringify(ordered.map((limit) => ringView(limit, state.nowMs)));
+    const key = JSON.stringify([items, warningText]);
     if (key === lastKey) return;
     lastKey = key;
-    rings?.replaceChildren(...ordered.map((limit) => createRing(limit, state.nowMs, look)));
+    rings?.replaceChildren(...items.map(({ view, level }) => createRing(view, level, look)));
+    if (warning !== undefined) warning.textContent = warningText;
   }
 
   function unmount(): void {
     rings?.parentElement?.replaceChildren();
     rings = undefined;
+    warning = undefined;
   }
 
   return { mount, update, unmount };

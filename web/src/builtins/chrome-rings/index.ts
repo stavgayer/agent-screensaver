@@ -33,7 +33,10 @@ const STYLE = `
   color: var(--chrome-rings-ink); }
 .chrome-rings .ring-detail { margin-top: 0.4vmin; font-size: 1.85vmin; font-weight: 500;
   color: color-mix(in srgb, var(--accent, var(--chrome-rings-lime)) 55%, var(--chrome-rings-steel)); }
-.chrome-rings .ring-name, .chrome-rings .ring-detail { line-height: 1.25;
+.ring-warning { margin-top: 1.4vmin; text-align: right; font-family: var(--chrome-rings-mono); font-size: 2vmin; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--attention, var(--chrome-rings-pink)); }
+.ring-warning:empty { display: none; }
+.chrome-rings .ring-name, .chrome-rings .ring-detail, .ring-warning { line-height: 1.25;
   text-shadow: 0 0 0.8vmin var(--chrome-rings-shade), 0 0 0.3vmin var(--chrome-rings-shade); } /* taste-skill-ignore: a static dark halo keeps captions legible over the scene */
 `;
 

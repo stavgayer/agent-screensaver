@@ -174,6 +174,12 @@ describe("toViewState", () => {
     assert.deepEqual(toViewState(state({ now_playing: song }), "main", 5).nowPlaying, song);
     assert.equal("nowPlaying" in toViewState(state(), "main", 5), false);
   });
+
+  it("passes_the_power_on_only_while_on_battery", () => {
+    const power = { percent: 18, minutes_left: 34, charging: false, low: true, warn: true, working: 2 };
+    assert.deepEqual(toViewState(state({ power }), "main", 5).power, power);
+    assert.equal("power" in toViewState(state(), "main", 5), false);
+  });
 });
 
 describe("cssVariables", () => {
