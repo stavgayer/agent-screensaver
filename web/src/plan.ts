@@ -22,7 +22,7 @@ export interface StateFile {
   limits: Limit[];
   /** Left out when no song plays, now playing is off, or privacy is on. */
   now_playing?: NowPlaying;
-  /** Left out while the Mac is on power. */
+  /** Left out on a Mac without a battery. */
   power?: Power;
   view: {
     theme: string;

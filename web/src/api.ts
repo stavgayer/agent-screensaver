@@ -62,11 +62,13 @@ export interface NowPlaying {
 
 /** The battery as the service writes it to `state.json` (snake_case). */
 export interface Power {
+  /** False while the Mac runs on a power plug. Low and warn need battery power. */
+  on_battery: boolean;
   percent: number;
-  /** Left out when the system cannot tell yet. */
+  /** Left out on power, and when the system cannot tell yet. */
   minutes_left?: number;
   charging: boolean;
-  /** At or below the low-battery level. */
+  /** On battery at or below the low-battery level. */
   low: boolean;
   /** Low while agents work: the screen says to plug in. */
   warn: boolean;
@@ -87,7 +89,7 @@ export interface ViewState {
   display: "main" | "secondary";
   /** The song that plays, when the user has now playing on. Left out when none plays and in privacy mode. */
   nowPlaying?: NowPlaying;
-  /** The battery, only while the Mac runs on battery. Left out on power and on a Mac without one. */
+  /** The battery. Left out on a Mac without one. */
   power?: Power;
 }
 

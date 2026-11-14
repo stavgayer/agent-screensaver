@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Card, Limit, Power } from "../src/api.ts";
 import { displayName } from "../src/format.ts";
 import { approvalMoreLabel, approvalWaitingLabel } from "../src/builtins/approval-card/logic.ts";
-import { batteryLevel, batteryView, batteryWarning, orderLimits, ringCaption, ringPercent, ringView } from "../src/builtins/limit-rings/logic.ts";
+import { batteryLevel, batteryRingLevel, batteryView, batteryWarning, orderLimits, ringCaption, ringPercent, ringView } from "../src/builtins/limit-rings/logic.ts";
 import { advanceDrop, charsetFor, fadeAlpha } from "../src/builtins/matrix/logic.ts";
 import { songView } from "../src/builtins/shared/song.ts";
 import { numberOption } from "../src/builtins/shared/options.ts";
@@ -316,7 +316,7 @@ describe("ringPercent", () => {
   }
 });
 
-const power = (overrides: Partial<Power> = {}): Power => ({ percent: 64, charging: false, low: false, warn: false, working: 0, ...overrides });
+const power = (overrides: Partial<Power> = {}): Power => ({ on_battery: true, percent: 64, charging: false, low: false, warn: false, working: 0, ...overrides });
 
 describe("batteryLevel", () => {
   it("is_ok_above_30_warn_down_to_21_and_high_from_20", () => {
@@ -325,6 +325,19 @@ describe("batteryLevel", () => {
     assert.equal(batteryLevel(21), "warn");
     assert.equal(batteryLevel(20), "high");
     assert.equal(batteryLevel(5), "high");
+  });
+});
+
+describe("batteryRingLevel", () => {
+  it("follows_the_percent_on_battery", () => {
+    assert.equal(batteryRingLevel(power({ percent: 64 })), "ok");
+    assert.equal(batteryRingLevel(power({ percent: 25 })), "warn");
+    assert.equal(batteryRingLevel(power({ percent: 10 })), "high");
+  });
+
+  it("is_charging_on_power_at_any_percent", () => {
+    assert.equal(batteryRingLevel(power({ on_battery: false, charging: true, percent: 10 })), "charging");
+    assert.equal(batteryRingLevel(power({ on_battery: false, percent: 100 })), "charging");
   });
 });
 
@@ -342,8 +355,20 @@ describe("batteryView", () => {
     assert.equal(batteryView(power({ minutes_left: 0 })).detail, "");
   });
 
-  it("says_charging_instead_of_the_time", () => {
-    assert.equal(batteryView(power({ charging: true, minutes_left: 110 })).detail, "Charging");
+  it("says_charging_on_power", () => {
+    assert.equal(batteryView(power({ on_battery: false, charging: true, percent: 40 })).detail, "Charging");
+  });
+
+  it("says_full_on_power_at_100_percent", () => {
+    assert.equal(batteryView(power({ on_battery: false, percent: 100 })).detail, "Full");
+  });
+
+  it("says_plugged_in_on_power_when_not_charging", () => {
+    assert.equal(batteryView(power({ on_battery: false, percent: 80 })).detail, "Plugged in");
+  });
+
+  it("says_charging_at_100_percent_when_the_battery_still_charges", () => {
+    assert.equal(batteryView(power({ on_battery: false, charging: true, percent: 100 })).detail, "Charging");
   });
 });
 

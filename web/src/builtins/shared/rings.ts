@@ -1,6 +1,6 @@
 import type { ComponentExt, ViewState } from "../../api.ts";
 import { ringLevel } from "../../format.ts";
-import { batteryLevel, batteryView, batteryWarning, orderLimits, ringView, type RingView } from "../limit-rings/logic.ts";
+import { batteryRingLevel, batteryView, batteryWarning, orderLimits, ringView, type RingView } from "../limit-rings/logic.ts";
 
 /** What makes one set of limit rings look different from another. */
 export interface RingsLook {
@@ -58,11 +58,11 @@ export function createRingsComponent(look: RingsLook): ComponentExt {
   function update(state: ViewState): void {
     const ordered = orderLimits(state.limits, state.agentOrder);
     // The battery ring goes last, after the usage rings. Its low numbers are the bad ones, so it has its own level.
-    const items = ordered.map((limit) => {
+    const items: { view: RingView; level: string }[] = ordered.map((limit) => {
       const view = ringView(limit, state.nowMs);
       return { view, level: ringLevel(view.percent) };
     });
-    if (state.power !== undefined) items.push({ view: batteryView(state.power), level: batteryLevel(state.power.percent) });
+    if (state.power !== undefined) items.push({ view: batteryView(state.power), level: batteryRingLevel(state.power) });
     const warningText = state.power === undefined ? "" : batteryWarning(state.power);
     // Rebuild only when something visible changed.
     const key = JSON.stringify([items, warningText]);

@@ -106,12 +106,24 @@ export function batteryLevel(percent: number): "ok" | "warn" | "high" {
   return "ok";
 }
 
-/** The battery as one more ring: the charge, and under it the time left or "Charging". */
+/** The ring color of the battery. On power it has one color, because a low number is harmless there. */
+export function batteryRingLevel(power: Power): "ok" | "warn" | "high" | "charging" {
+  return power.on_battery ? batteryLevel(power.percent) : "charging";
+}
+
+/** What the battery ring says under its name: the time left on battery, else how it is on power. */
+function batteryDetail(power: Power): string {
+  if (power.on_battery) {
+    const hasTime = power.minutes_left !== undefined && power.minutes_left > 0;
+    return hasTime ? `${formatCountdown(power.minutes_left! * MS_PER_MINUTE)} left` : "";
+  }
+  if (power.charging) return "Charging";
+  return power.percent >= 100 ? "Full" : "Plugged in";
+}
+
+/** The battery as one more ring: the charge, and under it the time left or how it is on power. */
 export function batteryView(power: Power): RingView {
-  // macOS does not report charging while on battery, so "Charging" shows only if that ever changes.
-  const hasTime = power.minutes_left !== undefined && power.minutes_left > 0;
-  const detail = power.charging ? "Charging" : hasTime ? `${formatCountdown(power.minutes_left! * MS_PER_MINUTE)} left` : "";
-  return { look: "fresh", percent: power.percent, center: `${power.percent}%`, name: "Battery", detail };
+  return { look: "fresh", percent: power.percent, center: `${power.percent}%`, name: "Battery", detail: batteryDetail(power) };
 }
 
 /** The line that asks to plug in while agents work. Empty when there is nothing to warn about. */

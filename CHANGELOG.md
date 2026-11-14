@@ -8,15 +8,16 @@ The release notes of agent-screensaver, newest first. This file is where they ar
 
 If your laptop is not plugged in, a long task can stop in the middle when the battery runs out and the Mac sleeps. Now the screen saver shows it:
 
-- **On battery:** a "Battery" ring after the usage rings shows how much is left, for example `64%`, and the time that is left, for example `1h 50m left`, when macOS gives it. The ring changes to the theme's warning color at 30% or less and to its alert color at 20% or less. The Default, Calm and Chrome themes draw it.
+- **On any laptop:** a "Battery" ring after the usage rings shows how much is left, for example `64%`. On battery it also shows the time that is left, for example `1h 50m left`, when macOS gives it. On battery the ring changes to the theme's warning color at 30% or less and to its alert color at 20% or less. The Default, Calm and Chrome themes draw it.
 - **Low while an agent works:** at 20% or less, if at least one agent still works (a task that is not finished, one that waits for your approval, or a finished one with background jobs), the line `Battery 18%: plug in, 2 agents are working` shows under the rings. The menu bar icon shows the attention dot and the menu says `Battery low: plug in`. The attention sound plays once when the warning starts, if the screen saver is showing and sound is on. If an approval is already waiting, the warning adds no extra sound. An approval that comes during a warning still plays its own sound.
-- **Plugged in, or a desktop Mac:** nothing shows.
+- **On power:** the ring stays and says `Charging` while the battery charges, `Full` at 100%, and `Plugged in` otherwise. It has its own color: blue in the Default and Calm themes, the theme's accent in the Chrome theme. Low and the warning need battery power, so a plugged-in laptop at 15% shows no warning. Plugging in or out shows within 10 seconds.
+- **A desktop Mac:** nothing shows.
 
 The service reads the battery from macOS every 10 seconds. It asks for no permission and uses no network. There is no setting for the 20% level.
 
 ## For theme makers
 
-- `state.power` is new: `{percent, minutes_left, charging, low, warn, working}`. It is there only while the Mac runs on battery, and `minutes_left` is left out when macOS does not know it. It is optional, so existing themes keep working, with no `api` or `requires` change. See `docs/extensions.md`.
+- `state.power` is new: `{on_battery, percent, minutes_left, charging, low, warn, working}`. It is there whenever the Mac has a battery. `on_battery` is false on a power plug, and then `low` and `warn` are false and `minutes_left` is left out. On battery, `minutes_left` is left out when macOS does not know it. It is optional, so existing themes keep working, with no `api` or `requires` change. See `docs/extensions.md`.
 
 ## v0.5.2 (2026-11-09)
 

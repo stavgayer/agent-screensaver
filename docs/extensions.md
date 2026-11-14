@@ -130,7 +130,7 @@ Regions: `top-left`, `top-right`, `center`, `bottom`. Other names are refused. A
 
 A theme picks a background and a layout, and sets style values. It needs no entry file.
 
-Three themes are built in: `builtin.default` (Default, on the Matrix background), `builtin.calm` (Calm, on `builtin.aerials`; it shows Matrix until aerial videos are downloaded) and `builtin.chrome` (Chrome, on `builtin.chrome-scene`, with its own layout `builtin.chrome-layout` and the components `builtin.chrome-clock`, `builtin.chrome-rings`, `builtin.chrome-tasks`, `builtin.chrome-approval` and `builtin.chrome-now-playing`). The Chrome components show the data of `builtin.clock`, `builtin.limit-rings`, `builtin.task-row` and `builtin.approval-card` in the Chrome look, and each loads its fonts from its own folder. `builtin.chrome-tasks` leaves out the agent's name: the agent's mark and its sign in the scene name it. Besides `--accent`, `--attention` and `--done`, `builtin.chrome-rings` reads `--warn`, the color of a limit ring from 50% and of the battery ring at 30% or less (the Chrome theme sets it). `--attention` also colors the battery ring at 20% or less and the low-battery warning line. The Default and Calm themes do not set `--warn` and do not use these components.
+Three themes are built in: `builtin.default` (Default, on the Matrix background), `builtin.calm` (Calm, on `builtin.aerials`; it shows Matrix until aerial videos are downloaded) and `builtin.chrome` (Chrome, on `builtin.chrome-scene`, with its own layout `builtin.chrome-layout` and the components `builtin.chrome-clock`, `builtin.chrome-rings`, `builtin.chrome-tasks`, `builtin.chrome-approval` and `builtin.chrome-now-playing`). The Chrome components show the data of `builtin.clock`, `builtin.limit-rings`, `builtin.task-row` and `builtin.approval-card` in the Chrome look, and each loads its fonts from its own folder. `builtin.chrome-tasks` leaves out the agent's name: the agent's mark and its sign in the scene name it. Besides `--accent`, `--attention` and `--done`, `builtin.chrome-rings` reads `--warn`, the color of a limit ring from 50% and of the battery ring at 30% or less on battery (the Chrome theme sets it). `--attention` also colors the battery ring at 20% or less on battery and the low-battery warning line. The Default and Calm themes do not set `--warn` and do not use these components.
 
 | Field | Meaning |
 |---|---|
@@ -223,12 +223,14 @@ export interface NowPlaying {
 }
 
 /**
- * The battery, as the service last read it. `low` is true at 20% or less.
+ * The battery, as the service last read it. `on_battery` is false while the Mac
+ * runs on a power plug. `low` is true on battery at 20% or less.
  * `warn` is true when it is low and at least one agent works.
  */
 export interface Power {
+  on_battery: boolean;
   percent: number;
-  /** Left out when the system cannot tell yet. */
+  /** Left out on a power plug, and when the system cannot tell yet. */
   minutes_left?: number;
   charging: boolean;
   low: boolean;
@@ -250,7 +252,7 @@ export interface ViewState {
   display: "main" | "secondary";
   /** The song that plays, when the user has now playing on. Left out when none plays and in privacy mode. */
   nowPlaying?: NowPlaying;
-  /** The battery, only while the Mac runs on battery. Left out when it is plugged in and on a Mac without a battery. */
+  /** The battery. Left out on a Mac without a battery. */
   power?: Power;
 }
 
@@ -311,7 +313,7 @@ The built-in rings never show an old number as the current one. The caption unde
 
 Components that show limits should follow the same rule.
 
-`state.power` is there only while the Mac runs on battery. When it is plugged in, or has no battery, the field is left out. `low` is true at 20% or less. `warn` is true when it is low and at least one agent works, that is, a card that is not finished, or a finished card that still has background jobs. A card that waits for approval counts as working. The service works out `low` and `warn` one time, so a theme only reads them and does not repeat the rule. Privacy mode keeps the field, because the battery says nothing about your work. The field is optional, so an extension that does not know it keeps working, and it needs no `api` or `requires` change. A theme can draw the battery in its own style or leave it out. The built-in themes draw a "Battery" ring after the usage rings, and a line under the rings when `warn` is true.
+`state.power` is there whenever the Mac has a battery, on battery or on a power plug. On a Mac without a battery the field is left out. `on_battery` is false on a power plug, and then `low` and `warn` are false and `minutes_left` is left out. On battery, `low` is true at 20% or less. `warn` is true when it is low and at least one agent works, that is, a card that is not finished, or a finished card that still has background jobs. A card that waits for approval counts as working. The service works out `low` and `warn` one time, so a theme only reads them and does not repeat the rule. Privacy mode keeps the field, because the battery says nothing about your work. The field is optional, so an extension that does not know it keeps working, and it needs no `api` or `requires` change. A theme can draw the battery in its own style or leave it out. The built-in themes draw a "Battery" ring after the usage rings, and a line under the rings when `warn` is true. On a power plug the ring has the class `charging` and says `Charging`, `Full` (at 100%) or `Plugged in` under its name. The class `charging` is blue in the Default and Calm themes and uses `--accent` in the Chrome theme.
 
 The `entry` file is one classic script. It must not use `import` or `export`. If you use a bundler, bundle everything into this one file. The script calls `window.agentScreensaver.register(create)` with a `create` function. A background returns an object with `start` and `stop`. It can also have an `update` method. The runtime calls it with the view state after `start`, and on every new state, as it does for components. A background without `update` never gets the state. A component returns an object with `mount`, `update` and `unmount`. It can also have a `setOptions` method. It is called when the same component moves to a placement with other options. Without it, the component is mounted again. The types above describe each method and the data it receives.
 

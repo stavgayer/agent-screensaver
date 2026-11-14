@@ -27,6 +27,7 @@ const STYLE = `
   mask: radial-gradient(farthest-side, transparent calc(100% - 0.6vmin), var(--chrome-rings-shade) calc(100% - 0.55vmin)); } /* taste-skill-ignore: the conic fill is the ring's arc (the chart itself) */
 .chrome-rings .ring.warn { --ring: var(--warn, var(--chrome-rings-warn)); }
 .chrome-rings .ring.high { --ring: var(--attention, var(--chrome-rings-pink)); }
+.chrome-rings .ring.charging { --ring: var(--accent, var(--chrome-rings-lime)); }
 .chrome-rings .ring.stale { opacity: 0.45; }
 .chrome-rings .ring-value { position: relative; color: var(--chrome-rings-ink); font-size: 2.6vmin; font-weight: 600; letter-spacing: -0.02em; }
 .chrome-rings .ring-name { margin-top: 1.2vmin; font-size: 2vmin; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;

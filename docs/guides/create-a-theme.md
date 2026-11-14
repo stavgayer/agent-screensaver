@@ -46,9 +46,9 @@ The `style` keys that start with `--` are set as CSS variables on the page. Othe
 | Variable | Used for |
 |---|---|
 | `--accent` | The main color: working state, rings, clock tint. |
-| `--attention` | A waiting agent: the approval card and the "Check the terminal" state. In the Chrome rings it also colors the battery ring at 20% or less and the low-battery warning line. |
+| `--attention` | A waiting agent: the approval card and the "Check the terminal" state. In the Chrome rings it also colors the battery ring at 20% or less on battery and the low-battery warning line. |
 | `--done` | A finished task. |
-| `--warn` | A limit ring from 50% used, and the battery ring at 30% or less. Read by the Chrome rings (`builtin.chrome-rings`) only. |
+| `--warn` | A limit ring from 50% used, and the battery ring at 30% or less on battery. Read by the Chrome rings (`builtin.chrome-rings`) only. |
 | `--card-opacity` | How solid the cards are. |
 
 Your own widgets can read any variable you set. Give each a fallback value in your CSS.

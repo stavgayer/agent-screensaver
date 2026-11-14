@@ -11,6 +11,7 @@ const STYLE = `
   background: conic-gradient(var(--ring) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.16) 0); } /* taste-skill-ignore: the conic fill is the ring's arc (the chart itself) */
 .ring.warn { --ring: #e0c000; }
 .ring.high { --ring: #ff5040; }
+.ring.charging { --ring: #4aa8ff; }
 .ring.stale { opacity: 0.45; }
 .ring .inner { width: 80%; height: 80%; border-radius: 50%; background: #000; display: grid; place-items: center; }
 .ring-name { margin-top: 1.2vmin; font-size: 1.9vmin; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
