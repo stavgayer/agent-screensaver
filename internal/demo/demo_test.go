@@ -208,6 +208,9 @@ func TestPower(t *testing.T) {
 	if got.Percent != 64 || got.MinutesLeft == nil || *got.MinutesLeft != 110 {
 		t.Errorf("power = %+v, want 64%% with 110 minutes", got)
 	}
+	if !got.OnBattery {
+		t.Errorf("power = %+v, want it on battery so the demo shows the on-battery ring", got)
+	}
 	if got.Low || got.Warn || got.Charging {
 		t.Errorf("power = %+v, want it never low", got)
 	}

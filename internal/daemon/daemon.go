@@ -145,7 +145,7 @@ type Daemon struct {
 	batteryReadMs   int64
 	batteryReadOnce bool          // a read was made, so batteryReadMs counts
 	batteryErr      string        // the last read error, to log only changes
-	power           *power.Status // what the file shows, nil on a plug or no battery
+	power           *power.Status // what the file shows, nil when there is no battery
 
 	restored       bool // the limits of the last run were read back
 	estimatedOnce  bool

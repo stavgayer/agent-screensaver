@@ -33,58 +33,76 @@ func TestEvaluate(t *testing.T) {
 			want:    nil,
 		},
 		{
-			name:    "plugged in",
+			name:    "plugged in, charging",
 			reading: Reading{HasBattery: true, Percent: 15, Charging: true},
 			cards:   []state.Card{running},
-			want:    nil,
+			want:    &Status{Percent: 15, Charging: true, Working: 1},
+		},
+		{
+			name:    "plugged in, full",
+			reading: Reading{HasBattery: true, Percent: 100},
+			cards:   []state.Card{done},
+			want:    &Status{Percent: 100},
+		},
+		{
+			name:    "plugged in, low percent is not low",
+			reading: Reading{HasBattery: true, Percent: 10},
+			cards:   []state.Card{running},
+			want:    &Status{Percent: 10, Working: 1},
+		},
+		{
+			name:    "plugged in, time left is dropped",
+			reading: Reading{HasBattery: true, Percent: 60, Charging: true, MinutesLeft: 300},
+			cards:   nil,
+			want:    &Status{Percent: 60, Charging: true},
 		},
 		{
 			name:    "on battery, fine",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 64, MinutesLeft: 110},
 			cards:   []state.Card{running},
-			want:    &Status{Percent: 64, MinutesLeft: ptr(110), Working: 1},
+			want:    &Status{OnBattery: true, Percent: 64, MinutesLeft: ptr(110), Working: 1},
 		},
 		{
 			name:    "zero minutes means unknown",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 64, MinutesLeft: 0},
 			cards:   nil,
-			want:    &Status{Percent: 64},
+			want:    &Status{OnBattery: true, Percent: 64},
 		},
 		{
 			name:    "unknown time",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 64, MinutesLeft: -1},
 			cards:   nil,
-			want:    &Status{Percent: 64},
+			want:    &Status{OnBattery: true, Percent: 64},
 		},
 		{
 			name:    "low, nothing works",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 20, MinutesLeft: -1},
 			cards:   []state.Card{done},
-			want:    &Status{Percent: 20, Low: true},
+			want:    &Status{OnBattery: true, Percent: 20, Low: true},
 		},
 		{
 			name:    "low, one works",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 18, MinutesLeft: 34},
 			cards:   []state.Card{running, done},
-			want:    &Status{Percent: 18, MinutesLeft: ptr(34), Low: true, Warn: true, Working: 1},
+			want:    &Status{OnBattery: true, Percent: 18, MinutesLeft: ptr(34), Low: true, Warn: true, Working: 1},
 		},
 		{
 			name:    "low, background jobs",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 10, MinutesLeft: -1},
 			cards:   []state.Card{doneWithJobs},
-			want:    &Status{Percent: 10, Low: true, Warn: true, Working: 1},
+			want:    &Status{OnBattery: true, Percent: 10, Low: true, Warn: true, Working: 1},
 		},
 		{
 			name:    "low, approval waits",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 10, MinutesLeft: -1},
 			cards:   []state.Card{waiting},
-			want:    &Status{Percent: 10, Low: true, Warn: true, Working: 1},
+			want:    &Status{OnBattery: true, Percent: 10, Low: true, Warn: true, Working: 1},
 		},
 		{
 			name:    "21 percent is not low",
 			reading: Reading{HasBattery: true, OnBattery: true, Percent: 21, MinutesLeft: -1},
 			cards:   []state.Card{running},
-			want:    &Status{Percent: 21, Working: 1},
+			want:    &Status{OnBattery: true, Percent: 21, Working: 1},
 		},
 	}
 	for _, tt := range tests {
@@ -120,6 +138,7 @@ func TestSame(t *testing.T) {
 		{"same, different working", &Status{Percent: 50, Working: 1}, &Status{Percent: 50, Working: 2}, true},
 		{"different percent", &Status{Percent: 50}, &Status{Percent: 49}, false},
 		{"different warn", &Status{Warn: true}, &Status{Warn: false}, false},
+		{"different on battery", &Status{Percent: 50, OnBattery: true}, &Status{Percent: 50}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

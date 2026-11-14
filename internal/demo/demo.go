@@ -80,7 +80,7 @@ func Track(elapsedMs, nowMs int64) nowplaying.Track {
 // the demo never shows a warning. It counts the working cards of the scene.
 func Power(cards []state.Card) *power.Status {
 	minutesLeft := 110
-	return &power.Status{Percent: 64, MinutesLeft: &minutesLeft, Working: power.Working(cards)}
+	return &power.Status{OnBattery: true, Percent: 64, MinutesLeft: &minutesLeft, Working: power.Working(cards)}
 }
 
 func buildCard(item script, loopMs, demoStartMs, nowMs int64) state.Card {

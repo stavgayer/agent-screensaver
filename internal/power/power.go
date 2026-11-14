@@ -20,10 +20,13 @@ type Reading struct {
 	MinutesLeft int
 }
 
-// Status is what the screen saver shows about the battery. MinutesLeft is
-// nil when the time is unknown (the reading gave 0 or less). Warn means the battery is low and agents are
-// still working, so the owner should save or stop them.
+// Status is what the screen saver shows about the battery. OnBattery is false
+// while the Mac runs on a power plug. MinutesLeft is nil when the time is
+// unknown, and always on a plug, where the system's time to empty means
+// nothing. Low and Warn need battery power. Warn means the battery is low and
+// agents are still working, so the owner should save or stop them.
 type Status struct {
+	OnBattery   bool `json:"on_battery"`
 	Percent     int  `json:"percent"`
 	MinutesLeft *int `json:"minutes_left,omitempty"`
 	Charging    bool `json:"charging"`
@@ -45,21 +48,23 @@ func Working(cards []state.Card) int {
 }
 
 // Evaluate returns the battery status, or nil when there is nothing to show:
-// no battery, or a battery that is charging from a power plug.
+// a Mac without a battery. A plugged-in Mac is never low, because nothing is
+// lost when the battery runs down.
 func Evaluate(r Reading, cards []state.Card) *Status {
-	if !r.HasBattery || !r.OnBattery {
+	if !r.HasBattery {
 		return nil
 	}
 	working := Working(cards)
-	low := r.Percent <= LowAtPercent
+	low := r.OnBattery && r.Percent <= LowAtPercent
 	status := &Status{
-		Percent:  r.Percent,
-		Charging: r.Charging,
-		Low:      low,
-		Warn:     low && working > 0,
-		Working:  working,
+		OnBattery: r.OnBattery,
+		Percent:   r.Percent,
+		Charging:  r.Charging,
+		Low:       low,
+		Warn:      low && working > 0,
+		Working:   working,
 	}
-	if r.MinutesLeft > 0 {
+	if r.OnBattery && r.MinutesLeft > 0 {
 		minutes := r.MinutesLeft
 		status.MinutesLeft = &minutes
 	}
@@ -73,7 +78,7 @@ func Same(a, b *Status) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return a.Percent == b.Percent && a.Low == b.Low && a.Warn == b.Warn && a.Charging == b.Charging
+	return a.Percent == b.Percent && a.Low == b.Low && a.Warn == b.Warn && a.Charging == b.Charging && a.OnBattery == b.OnBattery
 }
 
 // isWorking is true for every card that is not finished, and for a finished

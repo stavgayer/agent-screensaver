@@ -37,8 +37,8 @@ type StateFile struct {
 	// NowPlaying is the song a music app plays, when the user has now
 	// playing on. Privacy mode leaves it out.
 	NowPlaying *nowplaying.Track `json:"now_playing,omitempty"`
-	// Power is the battery, only while the Mac runs on it. Privacy mode
-	// keeps it: it says nothing about the work.
+	// Power is the battery, whenever the Mac has one. Privacy mode keeps
+	// it: it says nothing about the work.
 	Power *power.Status `json:"power,omitempty"`
 	// Demo marks a file whose cards and limits are the made-up demo scene,
 	// so a restarted service never takes them back as real. Internal: the

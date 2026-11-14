@@ -45,12 +45,26 @@ func TestBatteryOnBatteryWritesPower(t *testing.T) {
 	}
 }
 
-func TestBatteryPluggedInWritesNoPower(t *testing.T) {
+func TestBatteryPluggedInWritesPower(t *testing.T) {
 	plugged := power.Reading{HasBattery: true, Percent: 15, Charging: true}
 	d, p := newBatteryDaemon(t, &fakeBattery{readings: []power.Reading{plugged}})
+	spoolEvent(t, p, "claude", "s1", event.KindStarted, 500)
 	d.Step(1_000, false)
-	if got := readStateFile(t, p).Power; got != nil {
-		t.Errorf("power = %+v, want none", got)
+	got := readStateFile(t, p).Power
+	if got == nil || got.OnBattery || !got.Charging || got.Percent != 15 || got.Low || got.Warn {
+		t.Errorf("power = %+v, want 15%% charging, not on battery, with no warning", got)
+	}
+}
+
+func TestBatteryPlugAndUnplugWritePower(t *testing.T) {
+	plugged := power.Reading{HasBattery: true, Percent: 64, Charging: true}
+	d, p := newBatteryDaemon(t, &fakeBattery{readings: []power.Reading{onBattery(64), plugged, onBattery(64)}})
+	for i, wantOnBattery := range []bool{true, false, true} {
+		d.Step(int64(i)*10_000, false)
+		got := readStateFile(t, p).Power
+		if got == nil || got.OnBattery != wantOnBattery {
+			t.Fatalf("read %d: power = %+v, want on_battery %v", i, got, wantOnBattery)
+		}
 	}
 }
 
