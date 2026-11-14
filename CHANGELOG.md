@@ -2,7 +2,7 @@
 
 The release notes of agent-screensaver, newest first. This file is where they are written: the message of each release tag is made from the section of its version, and CI refuses to release a version that has no section here. See the README for how to release.
 
-## v0.6.0 (unreleased)
+## v0.6.0 (2026-11-14)
 
 ## The screen tells you when the battery runs low
 
