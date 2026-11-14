@@ -1,4 +1,4 @@
-import type { Limit } from "../../api.ts";
+import type { Limit, Power } from "../../api.ts";
 import { displayName, formatCountdown, formatResetLabel, localUtcOffsetMinutes } from "../../format.ts";
 
 const MS_PER_MINUTE = 60_000;
@@ -93,4 +93,42 @@ export function ringCaption(limit: Limit, nowMs: number, offsetAt?: (atMs: numbe
 export function ringPercent(usedPercent: number): number {
   if (!Number.isFinite(usedPercent)) return 0;
   return Math.min(100, Math.max(0, Math.round(usedPercent)));
+}
+
+/** At or below this percent the battery ring is red. Above BATTERY_WARN_UNTIL it is calm. */
+const BATTERY_HIGH_UNTIL = 20;
+const BATTERY_WARN_UNTIL = 30;
+
+/** The ring color for a battery percent. Unlike a usage ring, a low number is the bad one. */
+export function batteryLevel(percent: number): "ok" | "warn" | "high" {
+  if (percent <= BATTERY_HIGH_UNTIL) return "high";
+  if (percent <= BATTERY_WARN_UNTIL) return "warn";
+  return "ok";
+}
+
+/** The ring color of the battery. On power it has one color, because a low number is harmless there. */
+export function batteryRingLevel(power: Power): "ok" | "warn" | "high" | "charging" {
+  return power.on_battery ? batteryLevel(power.percent) : "charging";
+}
+
+/** What the battery ring says under its name: the time left on battery, else how it is on power. */
+function batteryDetail(power: Power): string {
+  if (power.on_battery) {
+    const hasTime = power.minutes_left !== undefined && power.minutes_left > 0;
+    return hasTime ? `${formatCountdown(power.minutes_left! * MS_PER_MINUTE)} left` : "";
+  }
+  if (power.charging) return "Charging";
+  return power.percent >= 100 ? "Full" : "Plugged in";
+}
+
+/** The battery as one more ring: the charge, and under it the time left or how it is on power. */
+export function batteryView(power: Power): RingView {
+  return { look: "fresh", percent: power.percent, center: `${power.percent}%`, name: "Battery", detail: batteryDetail(power) };
+}
+
+/** The line that asks to plug in while agents work. Empty when there is nothing to warn about. */
+export function batteryWarning(power: Power): string {
+  if (!power.warn) return "";
+  const agents = power.working === 1 ? "1 agent is" : `${power.working} agents are`;
+  return `Battery ${power.percent}%: plug in, ${agents} working`;
 }

@@ -158,6 +158,7 @@ func runDaemon(args []string, stderr io.Writer) int {
 	service.Estimator = claudeEstimator(home, p, stderr)
 	service.LimitsProviders = limitsProviders(home)
 	service.Music = nowplaying.Reader{}
+	service.Battery = platform.BatteryReader{}
 	// The daemon runs beside the main goroutine, which must serve the main
 	// run loop for the screen saver notifications.
 	finished := make(chan struct{})

@@ -34,7 +34,9 @@ type Item struct {
 
 // Model is the whole menu and the icon to show with it.
 type Model struct {
-	Attention bool // an agent waits for approval: show the attention icon
+	// Attention: an agent waits for approval, or the battery is low while agents
+	// work. Either one shows the attention icon.
+	Attention bool
 	Items     []Item
 }
 
@@ -48,6 +50,7 @@ const (
 	limitStaleAfterMs = 15 * 60_000
 
 	serviceDownLine = "Service not running"
+	batteryLowLine  = "Battery low: plug in"
 )
 
 // BuildMenu turns the state file and the settings into the menu. It is pure:
@@ -61,14 +64,19 @@ func BuildMenu(f statefile.StateFile, cfg config.Config, nowMs int64) Model {
 	waiting := cardsOfKind(f.Cards, state.KindApproval)
 	running := cardsOfKind(f.Cards, state.KindRunning)
 
+	warn := f.Power != nil && f.Power.Warn
+
 	items := []Item{text(summaryLine(len(waiting), len(running)))}
+	if warn {
+		items = append(items, text(batteryLowLine))
+	}
 	for _, reading := range orderLimits(f.Limits, f.View.AgentOrder) {
 		items = append(items, text(limitLine(reading, nowMs)))
 	}
 	for _, card := range waiting {
 		items = append(items, text(approvalLine(card, cfg.Privacy, nowMs)))
 	}
-	return Model{Attention: len(waiting) > 0, Items: append(items, controls(cfg)...)}
+	return Model{Attention: len(waiting) > 0 || warn, Items: append(items, controls(cfg)...)}
 }
 
 func controls(cfg config.Config) []Item {

@@ -6,6 +6,7 @@ import (
 
 	"agent-screensaver/internal/config"
 	"agent-screensaver/internal/event"
+	"agent-screensaver/internal/power"
 	"agent-screensaver/internal/state"
 	"agent-screensaver/internal/statefile"
 	"agent-screensaver/internal/view"
@@ -209,6 +210,29 @@ func TestBuildMenu(t *testing.T) {
 			wantSound:   false,
 			wantPrivacy: true,
 		},
+		{
+			name: "battery warn with agents working",
+			file: statefile.StateFile{
+				Cards: []state.Card{runningCard("claude", "a")},
+				Power: &power.Status{Percent: 15, Low: true, Warn: true, Working: 1},
+			},
+			cfg:           soundOn,
+			wantAttention: true,
+			wantInfo: []Item{
+				plain("1 running"),
+				plain("Battery low: plug in"),
+			},
+			wantSound: true,
+		},
+		{
+			name: "battery low without warn has no battery line",
+			file: statefile.StateFile{Power: &power.Status{Percent: 15, Low: true}},
+			cfg:  soundOn,
+			wantInfo: []Item{
+				plain("All quiet"),
+			},
+			wantSound: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -231,6 +255,7 @@ func TestBuildMenuServiceDown(t *testing.T) {
 		{"file missing", statefile.StateFile{}},
 		{"service_ok false", statefile.StateFile{ServiceOK: false, GeneratedAtMs: nowMs, Cards: cards, Limits: limits}},
 		{"generated more than 120 s ago", statefile.StateFile{ServiceOK: true, GeneratedAtMs: nowMs - 120_001, Cards: cards, Limits: limits}},
+		{"battery warn in a stale file", statefile.StateFile{ServiceOK: true, GeneratedAtMs: nowMs - 120_001, Cards: cards, Power: &power.Status{Low: true, Warn: true, Working: 1}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

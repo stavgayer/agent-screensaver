@@ -11,11 +11,14 @@ const STYLE = `
   background: conic-gradient(var(--ring) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.16) 0); } /* taste-skill-ignore: the conic fill is the ring's arc (the chart itself) */
 .ring.warn { --ring: #e0c000; }
 .ring.high { --ring: #ff5040; }
+.ring.charging { --ring: #4aa8ff; }
 .ring.stale { opacity: 0.45; }
 .ring .inner { width: 80%; height: 80%; border-radius: 50%; background: #000; display: grid; place-items: center; }
 .ring-name { margin-top: 1.2vmin; font-size: 1.9vmin; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
 .ring-detail { margin-top: 0.3vmin; font-size: 1.7vmin; color: rgba(255, 255, 255, 0.68); font-variant-numeric: tabular-nums; }
-.ring-name, .ring-detail { line-height: 1.25; text-shadow: 0 0 0.8vmin #000, 0 0 0.3vmin #000; } /* taste-skill-ignore: a static dark halo keeps captions legible over the rain */
+.ring-warning { margin-top: 1.4vmin; text-align: right; font-size: 1.9vmin; font-weight: 500; color: #ff5040; }
+.ring-warning:empty { display: none; }
+.ring-name, .ring-detail, .ring-warning { line-height: 1.25; text-shadow: 0 0 0.8vmin #000, 0 0 0.3vmin #000; } /* taste-skill-ignore: a static dark halo keeps captions legible over the rain */
 `;
 
 function center(text: string): HTMLElement {

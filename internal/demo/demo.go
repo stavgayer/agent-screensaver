@@ -8,6 +8,7 @@ import (
 
 	"agent-screensaver/internal/event"
 	"agent-screensaver/internal/nowplaying"
+	"agent-screensaver/internal/power"
 	"agent-screensaver/internal/state"
 )
 
@@ -73,6 +74,13 @@ func Track(elapsedMs, nowMs int64) nowplaying.Track {
 	track.PositionMs = (demoSong.PositionMs + elapsedMs) % demoSong.DurationMs
 	track.AtMs = nowMs
 	return track
+}
+
+// Power returns the made-up battery of the demo: on battery, never low, so
+// the demo never shows a warning. It counts the working cards of the scene.
+func Power(cards []state.Card) *power.Status {
+	minutesLeft := 110
+	return &power.Status{OnBattery: true, Percent: 64, MinutesLeft: &minutesLeft, Working: power.Working(cards)}
 }
 
 func buildCard(item script, loopMs, demoStartMs, nowMs int64) state.Card {
