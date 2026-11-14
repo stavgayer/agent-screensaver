@@ -101,3 +101,16 @@ A new minor version, v0.6.0, because `state.json` gets a new field and themes ge
 - An approval card counts as working.
 - The battery shows in privacy mode.
 - IOKit through cgo, not `pmset -g batt`. It needs no process and no text parsing.
+
+## Owner change (2026-11-14): show the battery when plugged in
+
+The owner tested the build on battery and asked to keep the ring when the laptop is plugged in, and to say "Charging" while it charges. This replaces "Plugged in, or no battery: no ring, no line" above.
+
+- **Plugged in, charging:** the ring stays. The center shows the percent. The detail says `Charging`. The ring has the charging color: blue in Default and Calm, the theme accent in Chrome (Chrome has no blue in its palette).
+- **Plugged in, not charging** (full, or macOS holds the charge to protect the battery): the ring stays with the charging color. The detail says `Full` at 100%, else `Plugged in`.
+- **No battery (a desktop Mac):** no ring, as before.
+- **Low and warn need battery power.** A plugged-in Mac at 15% is not low and never warns, because nothing will be lost.
+- `state.json` `power` gets one more field, `on_battery` (bool). `power` is now written whenever the Mac has a battery.
+- The daemon writes the file again when `on_battery` or `charging` changes, so plugging in and out shows within 10 seconds.
+
+Calls I made: blue `#4aa8ff` for Default and Calm; Chrome uses its `--accent`; `Full` and `Plugged in` as the two non-charging captions.
